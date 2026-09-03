@@ -398,6 +398,7 @@ export default function App({ initialState, user, onLogout }: any) {
     );
   const firstSave = useRef(true),
     skipSave = useRef(false),
+    syncBlockedUntil = useRef(0),
     saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (skipSave.current) {
@@ -476,6 +477,7 @@ export default function App({ initialState, user, onLogout }: any) {
     let alive = true;
     const same = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b),
       sync = async () => {
+        if (Date.now() < syncBlockedUntil.current) return;
         try {
           const r = await fetch("/api/state", { cache: "no-store" });
           if (r.status === 401) {
@@ -484,7 +486,12 @@ export default function App({ initialState, user, onLogout }: any) {
           }
           const d = await r.json(),
             s = d.state;
-          if (!alive || !s) return;
+          if (
+            !alive ||
+            !s ||
+            Date.now() < syncBlockedUntil.current
+          )
+            return;
           let changed = false;
           const apply = (setter: any, current: any, next: any) => {
             if (next !== undefined && !same(current, next)) {
@@ -774,8 +781,11 @@ export default function App({ initialState, user, onLogout }: any) {
                   `ATENÇÃO: deseja realmente excluir ${a.type === "bloqueio" ? "esta ausência" : `o agendamento de ${a.client}`}?`,
                 )
               ) {
+                syncBlockedUntil.current = Date.now() + 4000;
                 setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
-                setAppointments(appointments.filter((x) => x.id !== a.id));
+                setAppointments((list) =>
+                  list.filter((x) => x.id !== a.id),
+                );
               }
             }}
             message={(text: string) => {
@@ -2030,6 +2040,7 @@ export default function App({ initialState, user, onLogout }: any) {
                   `ATENÇÃO: deseja realmente excluir o registro de ${a.client}? Esta ação não poderá ser desfeita.`,
                 )
               ) {
+                syncBlockedUntil.current = Date.now() + 4000;
                 setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
                 setAppointments((list) => list.filter((x) => x.id !== a.id));
               }
@@ -2080,6 +2091,7 @@ export default function App({ initialState, user, onLogout }: any) {
             currentUser={user.displayName}
             close={() => setModal(false)}
             remove={(a: Appt) => {
+              syncBlockedUntil.current = Date.now() + 4000;
               setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
               setAppointments((list) => list.filter((x) => x.id !== a.id));
               setModal(false);
