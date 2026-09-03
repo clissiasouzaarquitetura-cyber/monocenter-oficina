@@ -236,6 +236,24 @@ const titleCase = (value: string) =>
       /(^|[\s/()\-])(\p{L})/gu,
       (_, separator, letter) => separator + letter.toLocaleUpperCase("pt-BR"),
     );
+const quoteWaitingLabel = (appointment: Appt) => {
+  const reference = appointment.evaluationRecordedAt || appointment.createdAt;
+  if (!reference) return "⚠ Aguardando orçamento";
+
+  const started = new Date(reference);
+  if (Number.isNaN(started.getTime())) return "⚠ Aguardando orçamento";
+
+  const today = new Date();
+  started.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  const days = Math.max(
+    0,
+    Math.floor((today.getTime() - started.getTime()) / 86_400_000),
+  );
+
+  if (days === 0) return "⚠ Aguardando orçamento desde hoje";
+  return `⚠ Aguardando orçamento há ${days} ${days === 1 ? "dia" : "dias"}`;
+};
 const messagePartName = (value: string) =>
   titleCase(
     value
@@ -2714,6 +2732,13 @@ function Agenda({
                 ) : (
                   a.note && <small>{a.note}</small>
                 )}
+                {a.type === "cliente" &&
+                  a.status === "avaliou" &&
+                  a.budget?.processStatus !== "Finalizado" && (
+                    <small className="quote-waiting">
+                      {quoteWaitingLabel(a)}
+                    </small>
+                  )}
                 {a.scheduledBy && a.createdAt && (
                   <small className="schedule-meta">
                     Agendado por {a.scheduledBy} em{" "}

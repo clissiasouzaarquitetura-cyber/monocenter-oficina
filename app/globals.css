@@ -4577,6 +4577,18 @@ header > button {
   color: #17673a !important;
   font-weight: 700;
 }
+.day article .quote-waiting {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 7px;
+  padding: 5px 9px;
+  border: 1px solid #efc56c;
+  border-radius: 999px;
+  background: #fff3cd;
+  color: #7a5200 !important;
+  font-weight: 800;
+}
 .messagebox .sent-action {
   background: #1dab61;
   color: #fff;
@@ -4590,6 +4602,11 @@ header > button {
 .app.dark .day article .quote-sent {
   background: #174d33;
   color: #d9f7e6 !important;
+}
+.app.dark .day article .quote-waiting {
+  border-color: #9a7726;
+  background: #4a3812;
+  color: #ffe39a !important;
 }
 .app.dark .messagebox .sent-action {
   background: #16864b;
