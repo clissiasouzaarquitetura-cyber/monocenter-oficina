@@ -198,6 +198,12 @@ type Appt = {
   quoteSentBy?: string;
   scheduledBy?: string;
   createdAt?: string;
+  evaluationRecordedBy?: string;
+  evaluationRecordedAt?: string;
+  budgetEditedBy?: string;
+  budgetEditedAt?: string;
+  lastEditedBy?: string;
+  lastEditedAt?: string;
   startedAt?: string;
   inProgress?: boolean;
   _updatedAt?: number;
@@ -335,13 +341,20 @@ export default function App({ initialState, user, onLogout }: any) {
       checker: "",
     }),
     [custom, setCustom] = useState<string[]>([]),
-    [techs, setTechs] = useState<string[]>(shared.techs ?? ["Saulo", "Tiago"]),
+    [techs, setTechs] = useState<string[]>(
+      (shared.techs ?? ["Saulo", "Tiago"]).filter(
+        (name: string) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
+      ),
+    ),
     [holidays, setHolidays] = useState(
       shared.holidays ?? [
         { date: "2026-09-07", name: "Independência do Brasil" },
         { date: "2026-10-12", name: "Nossa Senhora Aparecida" },
       ],
     );
+  const availableTechs = techs.filter(
+    (name) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
+  );
   const [evaluator, setEvaluator] = useState(shared.evaluator ?? "Saulo"),
     [started, setStarted] = useState(shared.started ?? ""),
     [geometryOpen, setGeometryOpen] = useState(false),
@@ -690,6 +703,7 @@ export default function App({ initialState, user, onLogout }: any) {
                   : a;
               DISPLAY_APPT = opened;
               setActiveAppointment(opened);
+              setEvaluator(a.tech ?? availableTechs[0] ?? "");
               setStarted(opened.startedAt ?? "");
               if (shouldStart)
                 setAppointments((list) =>
@@ -774,9 +788,9 @@ export default function App({ initialState, user, onLogout }: any) {
           <section className="page">
             <Vehicle />
             <ReviewScreen
-              appointment={activeAppointment}
-              appointments={appointments}
-              techs={techs}
+            appointment={activeAppointment}
+            appointments={appointments}
+            techs={availableTechs}
               onBack={() => go("agenda")}
               onSave={(review: ReviewState) => {
                 const withService = !!activeAppointment.reviewWithService;
@@ -791,6 +805,8 @@ export default function App({ initialState, user, onLogout }: any) {
                       })
                     : activeAppointment.startedAt,
                   review,
+                  lastEditedBy: user.displayName,
+                  lastEditedAt: new Date().toISOString(),
                   _updatedAt: Date.now(),
                 };
                 DISPLAY_APPT = updated;
@@ -864,6 +880,20 @@ export default function App({ initialState, user, onLogout }: any) {
                           ? "avaliou"
                           : activeAppointment.status,
                       tech: evaluator,
+                      ...(view === "avaliacao"
+                        ? {
+                            evaluationRecordedBy: user.displayName,
+                            evaluationRecordedAt: new Date().toISOString(),
+                          }
+                        : {}),
+                      ...(["orcamento", "proposta"].includes(view)
+                        ? {
+                            budgetEditedBy: user.displayName,
+                            budgetEditedAt: new Date().toISOString(),
+                          }
+                        : {}),
+                      lastEditedBy: user.displayName,
+                      lastEditedAt: new Date().toISOString(),
                       evaluation,
                       budget,
                       conference:
@@ -907,7 +937,7 @@ export default function App({ initialState, user, onLogout }: any) {
                         value={evaluator}
                         onChange={(e) => setEvaluator(e.target.value)}
                       >
-                        {techs.map((x) => (
+                        {availableTechs.map((x) => (
                           <option key={x}>{x}</option>
                         ))}
                       </select>
@@ -1167,6 +1197,10 @@ export default function App({ initialState, user, onLogout }: any) {
                           startedAt: started || activeAppointment.startedAt,
                           status: "avaliou",
                           tech: evaluator,
+                          evaluationRecordedBy: user.displayName,
+                          evaluationRecordedAt: new Date().toISOString(),
+                          lastEditedBy: user.displayName,
+                          lastEditedAt: new Date().toISOString(),
                           evaluation: {
                             status,
                             quoteItems,
@@ -1623,6 +1657,10 @@ export default function App({ initialState, user, onLogout }: any) {
                             ...activeAppointment,
                             status: "avaliou",
                             budget,
+                            budgetEditedBy: user.displayName,
+                            budgetEditedAt: new Date().toISOString(),
+                            lastEditedBy: user.displayName,
+                            lastEditedAt: new Date().toISOString(),
                             _updatedAt: Date.now(),
                           };
                           DISPLAY_APPT = updated;
@@ -1663,6 +1701,10 @@ export default function App({ initialState, user, onLogout }: any) {
                             status: "servico",
                             inProgress: true,
                             budget,
+                            budgetEditedBy: user.displayName,
+                            budgetEditedAt: new Date().toISOString(),
+                            lastEditedBy: user.displayName,
+                            lastEditedAt: new Date().toISOString(),
                             _updatedAt: Date.now(),
                           };
                           DISPLAY_APPT = updated;
@@ -1878,6 +1920,8 @@ export default function App({ initialState, user, onLogout }: any) {
                           finalizedBy: user.displayName,
                           finalizedAt: new Date().toISOString(),
                         },
+                        lastEditedBy: user.displayName,
+                        lastEditedAt: new Date().toISOString(),
                         _updatedAt: Date.now(),
                       };
                       DISPLAY_APPT = updated;
@@ -1934,6 +1978,7 @@ export default function App({ initialState, user, onLogout }: any) {
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
+              setEvaluator(a.tech ?? availableTechs[0] ?? "");
               setStatus(a.evaluation?.status ?? {});
               setQuoteItems(a.evaluation?.quoteItems ?? {});
               setCustom(a.evaluation?.custom ?? []);
@@ -1996,8 +2041,15 @@ export default function App({ initialState, user, onLogout }: any) {
         {view === "config" && (
           <Config
             user={user}
-            techs={techs}
-            setTechs={setTechs}
+            techs={availableTechs}
+            setTechs={(names: string[]) =>
+              setTechs(
+                names.filter(
+                  (name) =>
+                    name.trim().toLocaleLowerCase("pt-BR") !== "anna",
+                ),
+              )
+            }
             holidays={holidays}
             setHolidays={setHolidays}
             templates={templates}
@@ -2027,11 +2079,18 @@ export default function App({ initialState, user, onLogout }: any) {
             initial={modal === true ? undefined : modal}
             currentUser={user.displayName}
             close={() => setModal(false)}
+            remove={(a: Appt) => {
+              setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
+              setAppointments((list) => list.filter((x) => x.id !== a.id));
+              setModal(false);
+            }}
             save={(a: Appt) => {
               const updated = {
                 ...a,
                 scheduledBy: a.scheduledBy || user.displayName,
                 createdAt: a.createdAt || new Date().toISOString(),
+                lastEditedBy: user.displayName,
+                lastEditedAt: new Date().toISOString(),
                 _updatedAt: Date.now(),
               };
               setDeletedAppointmentIds((ids) =>
@@ -2071,6 +2130,8 @@ export default function App({ initialState, user, onLogout }: any) {
                               ...a,
                               quoteSentAt,
                               quoteSentBy,
+                              lastEditedBy: user.displayName,
+                              lastEditedAt: quoteSentAt,
                               _updatedAt: Date.now(),
                             }
                           : a,
@@ -2653,6 +2714,37 @@ function Agenda({
                     })}
                   </small>
                 )}
+                {a.evaluationRecordedBy && (
+                  <small className="schedule-meta">
+                    Avaliação registrada no sistema por {a.evaluationRecordedBy}
+                    {a.evaluationRecordedAt
+                      ? ` em ${new Date(a.evaluationRecordedAt).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`
+                      : ""}
+                  </small>
+                )}
+                {a.budgetEditedBy && (
+                  <small className="schedule-meta">
+                    Orçamento preenchido por {a.budgetEditedBy}
+                    {a.budgetEditedAt
+                      ? ` em ${new Date(a.budgetEditedAt).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`
+                      : ""}
+                  </small>
+                )}
+                {a.lastEditedBy && (
+                  <small className="schedule-meta">
+                    Última edição por {a.lastEditedBy}
+                  </small>
+                )}
                 {a.quoteSentAt && (
                   <small className="quote-sent">
                     ✓ Orçamento enviado em{" "}
@@ -2957,7 +3049,7 @@ function ReviewScreen({
     </>
   );
 }
-function Modal({ initial, currentUser, close, save }: any) {
+function Modal({ initial, currentUser, close, save, remove }: any) {
   const schedulers = [
     ...new Set(["Anna", "Clissia", "Tiago", "Saulo", "Vitor", currentUser]),
   ].filter(Boolean);
@@ -3146,6 +3238,22 @@ function Modal({ initial, currentUser, close, save }: any) {
           antes
         </label>
         <footer>
+          {initial && (
+            <button
+              type="button"
+              className="danger"
+              onClick={() => {
+                if (
+                  confirm(
+                    `ATENÇÃO: deseja realmente excluir o agendamento de ${f.client}? Esta ação não poderá ser desfeita.`,
+                  )
+                )
+                  remove(f);
+              }}
+            >
+              Excluir agendamento
+            </button>
+          )}
           <button type="button" onClick={close}>
             Cancelar
           </button>
@@ -4010,6 +4118,24 @@ function AttendanceSummary({
         <strong>Atendimento concluído</strong>
       </div>
       <div className="summary-card">
+        <h2>Responsáveis pelo atendimento</h2>
+        <p><b>Técnico avaliador:</b> {appointment.tech || "Não informado"}</p>
+        <p>
+          <b>Avaliação registrada por:</b>{" "}
+          {appointment.evaluationRecordedBy || "Não informado"}
+        </p>
+        <p>
+          <b>Orçamento preenchido por:</b>{" "}
+          {appointment.budgetEditedBy || "Não informado"}
+        </p>
+        <p>
+          <b>Última edição:</b> {appointment.lastEditedBy || "Não informado"}
+          {appointment.lastEditedAt
+            ? ` em ${new Date(appointment.lastEditedAt).toLocaleString("pt-BR")}`
+            : ""}
+        </p>
+      </div>
+      <div className="summary-card">
         <h2>1. Avaliação do veículo</h2>
         {evaluated.length ? (
           <div className="summary-list">
@@ -4525,7 +4651,15 @@ function Reports({
                   >
                     {category(a)}
                   </span>
-                  <span>{a.tech || "Não informado"}</span>
+                  <span>
+                    {a.tech || "Não informado"}
+                    {a.budgetEditedBy && (
+                      <small>Orçamento: {a.budgetEditedBy}</small>
+                    )}
+                    {a.lastEditedBy && (
+                      <small>Última edição: {a.lastEditedBy}</small>
+                    )}
+                  </span>
                   <span className="report-actions">
                     <button onClick={() => open(a)}>
                       {a.budget?.processStatus === "Finalizado"

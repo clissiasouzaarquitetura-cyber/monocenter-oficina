@@ -4926,6 +4926,36 @@ header > button {
 .app.dark .day article .schedule-meta {
   color: #586473 !important;
 }
+
+/* Mantém horário/status separados dos dados do cliente na agenda. */
+.day article time {
+  min-width: 0;
+  padding-right: 10px;
+}
+.day article time small {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.day article > span {
+  min-width: 0;
+}
+.day article .schedule-meta {
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 701px) {
+  .day article {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .day article {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+}
 .app.dark .startbox .started-time input {
   background: #fff;
   color: #17202c;
