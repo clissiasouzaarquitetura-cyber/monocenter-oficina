@@ -4586,8 +4586,9 @@ header > button {
   border: 1px solid #efc56c;
   border-radius: 999px;
   background: #fff3cd;
-  color: #7a5200 !important;
+  color: #c1121f !important;
   font-weight: 800;
+  text-transform: uppercase;
 }
 .messagebox .sent-action {
   background: #1dab61;
@@ -4606,7 +4607,7 @@ header > button {
 .app.dark .day article .quote-waiting {
   border-color: #9a7726;
   background: #4a3812;
-  color: #ffe39a !important;
+  color: #ff8a94 !important;
 }
 .app.dark .messagebox .sent-action {
   background: #16864b;
