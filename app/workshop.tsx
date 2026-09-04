@@ -2487,6 +2487,7 @@ function Agenda({
           serviço <i className="dot red" /> Faltou <i className="dot purple" />{" "}
           Retorno <i className="dot orange" /> Garantia{" "}
           <i className="dot blue" /> Revisão 30 dias
+          <i className="dot completed" /> Concluído
           <i className="shop-line" /> Na oficina
         </span>
       </div>
@@ -2595,7 +2596,7 @@ function Agenda({
                     {holiday && <em title={holiday.name}>● {holiday.name}</em>}
                     {apps.map((a: Appt) => (
                       <span
-                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}`}
+                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}`}
                         key={a.id}
                       >
                         {a.time} {a.client.split(" ")[0]}
@@ -2625,7 +2626,7 @@ function Agenda({
           )}
           {list.map((a: Appt) => (
             <article
-              className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}`}
+              className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}`}
               key={a.id}
             >
               <time>

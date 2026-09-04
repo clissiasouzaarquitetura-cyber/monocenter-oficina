@@ -5007,6 +5007,46 @@ header > button {
 .app.dark .agenda-finalization > small {
   color: #c5ead8 !important;
 }
+
+/* Atendimento concluído: cartão inteiro com identificação própria. */
+.dot.completed {
+  background: #0891b2;
+}
+.days span.completed,
+.day article.completed {
+  border-left-color: #0891b2;
+  background: #cffafe;
+  color: #164e63;
+  box-shadow: inset 0 0 0 1px #67e8f9;
+}
+.day article.completed time > small:first-of-type {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #0891b2;
+  color: #fff;
+  font-weight: 900;
+}
+.day article.completed p,
+.day article.completed span > small {
+  color: #285d6d !important;
+}
+.app.dark .days span.completed,
+.app.dark .day article.completed {
+  border-left-color: #22d3ee;
+  background: #164e63;
+  color: #ecfeff;
+  box-shadow: inset 0 0 0 1px #0e7490;
+}
+.app.dark .day article.completed time > small:first-of-type {
+  background: #22d3ee;
+  color: #083344;
+}
+.app.dark .day article.completed p,
+.app.dark .day article.completed span > small {
+  color: #cffafe !important;
+}
 @media (max-width: 700px) {
   .startbox {
     grid-template-columns: 1fr 1fr;
