@@ -5047,6 +5047,38 @@ header > button {
 .app.dark .day article.completed span > small {
   color: #cffafe !important;
 }
+
+/* Botão de salvamento sempre acessível na parte inferior das etapas. */
+.stage-save-bottom {
+  position: fixed;
+  right: 24px;
+  bottom: 20px;
+  z-index: 80;
+  min-width: 130px;
+  padding: 13px 20px !important;
+  border-color: #15803d !important;
+  background: #15803d !important;
+  color: #fff !important;
+  box-shadow: 0 8px 24px #0003;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+}
+.stage-save-bottom:hover {
+  background: #166534 !important;
+}
+@media (max-width: 700px) {
+  .stage-save-bottom {
+    right: 12px;
+    bottom: 12px;
+    min-width: 112px;
+    padding: 12px 16px !important;
+  }
+}
+@media print {
+  .stage-save-bottom {
+    display: none !important;
+  }
+}
 @media (max-width: 700px) {
   .startbox {
     grid-template-columns: 1fr 1fr;

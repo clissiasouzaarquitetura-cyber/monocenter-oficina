@@ -2288,6 +2288,13 @@ function StageActions({
         </select>
       </label>
       <button onClick={save}>Salvar</button>
+      <button
+        className="stage-save-bottom"
+        onClick={save}
+        aria-label={`Salvar ${label}`}
+      >
+        Salvar
+      </button>
       <button onClick={() => printStage(view)}>Imprimir relatório A4</button>
       {["orcamento", "proposta"].includes(view) && (
         <button onClick={() => printNoValues(view)}>
@@ -2646,9 +2653,11 @@ function Agenda({
                             ? "CONCLUÍDO"
                             : a.inProgress
                               ? "EM ANDAMENTO"
-                              : a.status === "avaliou"
-                                ? "AGUARDANDO ORÇAMENTO"
-                                : a.status}
+                              : a.status === "avaliou" && a.quoteSentAt
+                                ? "ORÇAMENTO ENVIADO EM ABERTO"
+                                : a.status === "avaliou"
+                                  ? "AGUARDANDO ORÇAMENTO"
+                                  : a.status}
                 </small>
                 {a.type !== "bloqueio" && a.tech && (
                   <small className="card-tech">
@@ -2735,6 +2744,7 @@ function Agenda({
                 )}
                 {a.type === "cliente" &&
                   a.status === "avaliou" &&
+                  !a.quoteSentAt &&
                   a.budget?.processStatus !== "Finalizado" && (
                     <small className="quote-waiting">
                       {quoteWaitingLabel(a)}
@@ -2785,7 +2795,11 @@ function Agenda({
                 )}
                 {a.quoteSentAt && (
                   <small className="quote-sent">
-                    ✓ Orçamento enviado em{" "}
+                    ✓ Orçamento enviado
+                    {a.budget?.processStatus !== "Finalizado"
+                      ? " – EM ABERTO"
+                      : ""}{" "}
+                    em{" "}
                     {new Date(a.quoteSentAt).toLocaleString("pt-BR", {
                       day: "2-digit",
                       month: "2-digit",
