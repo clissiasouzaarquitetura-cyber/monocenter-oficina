@@ -196,6 +196,11 @@ type Appt = {
   };
   quoteSentAt?: string;
   quoteSentBy?: string;
+  serviceScheduled?: boolean;
+  serviceScheduledFor?: string;
+  serviceScheduledTime?: string;
+  sourceAppointmentId?: number;
+  serviceAppointmentId?: number;
   scheduledBy?: string;
   createdAt?: string;
   evaluationRecordedBy?: string;
@@ -293,15 +298,18 @@ const renderMessageTemplate = (template: string, appointment: Appt) =>
 const apptClass = (a: Appt) =>
   a.type === "bloqueio"
     ? "block"
-    : a.type === "retorno"
-      ? "retorno"
-      : a.type === "garantia"
-        ? "garantia"
-        : a.type === "revisao"
-          ? "revisao"
-          : a.inProgress && a.status !== "servico"
-            ? "inprogress"
-            : a.status;
+    : (a.serviceScheduled && a.status === "agendado") ||
+        !!a.serviceAppointmentId
+      ? "scheduled-service"
+      : a.type === "retorno"
+        ? "retorno"
+        : a.type === "garantia"
+          ? "garantia"
+          : a.type === "revisao"
+            ? "revisao"
+            : a.inProgress && a.status !== "servico"
+              ? "inprogress"
+              : a.status;
 const INITIAL: Appt[] = [];
 const EMPTY_APPT: Appt = {
   id: 0,
@@ -336,6 +344,8 @@ export default function App({ initialState, user, onLogout }: any) {
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
     [message, setMessage] = useState(""),
     [quoteMessageFor, setQuoteMessageFor] = useState<number | null>(null),
+    [serviceScheduleDate, setServiceScheduleDate] = useState(""),
+    [serviceScheduleTime, setServiceScheduleTime] = useState(""),
     [status, setStatus] = useState<Record<number, string>>({}),
     [quoteItems, setQuoteItems] = useState<Record<number, boolean>>({}),
     [evaluationNotes, setEvaluationNotes] = useState<Record<number, string>>(
@@ -504,12 +514,7 @@ export default function App({ initialState, user, onLogout }: any) {
           }
           const d = await r.json(),
             s = d.state;
-          if (
-            !alive ||
-            !s ||
-            Date.now() < syncBlockedUntil.current
-          )
-            return;
+          if (!alive || !s || Date.now() < syncBlockedUntil.current) return;
           let changed = false;
           const apply = (setter: any, current: any, next: any) => {
             if (next !== undefined && !same(current, next)) {
@@ -711,7 +716,9 @@ export default function App({ initialState, user, onLogout }: any) {
               scrollTo(0, 0);
             }}
             start={(a: Appt) => {
-              const shouldStart =
+              const shouldStartScheduled =
+                  !!a.serviceScheduled && a.status === "agendado",
+                shouldStart =
                   !a.startedAt &&
                   a.status === "agendado" &&
                   a.type !== "revisao" &&
@@ -723,11 +730,15 @@ export default function App({ initialState, user, onLogout }: any) {
                         hour: "2-digit",
                         minute: "2-digit",
                       }),
+                      status: shouldStartScheduled ? "servico" : a.status,
+                      inProgress: shouldStartScheduled ? true : a.inProgress,
                       _updatedAt: Date.now(),
                     }
                   : a;
               DISPLAY_APPT = opened;
               setActiveAppointment(opened);
+              setServiceScheduleDate(a.serviceScheduledFor ?? "");
+              setServiceScheduleTime(a.serviceScheduledTime ?? "");
               setEvaluator(a.tech ?? availableTechs[0] ?? "");
               setStarted(opened.startedAt ?? "");
               if (shouldStart)
@@ -784,9 +795,9 @@ export default function App({ initialState, user, onLogout }: any) {
                   ? "revisao"
                   : a.budget?.processStatus === "Finalizado"
                     ? "atendimento"
-                    : a.status === "servico"
+                    : opened.status === "servico"
                       ? "torque"
-                      : a.status === "avaliou"
+                      : opened.status === "avaliou"
                         ? "orcamento"
                         : "avaliacao",
               );
@@ -801,9 +812,7 @@ export default function App({ initialState, user, onLogout }: any) {
               ) {
                 syncBlockedUntil.current = Date.now() + 4000;
                 setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
-                setAppointments((list) =>
-                  list.filter((x) => x.id !== a.id),
-                );
+                setAppointments((list) => list.filter((x) => x.id !== a.id));
               }
             }}
             message={(text: string) => {
@@ -816,9 +825,9 @@ export default function App({ initialState, user, onLogout }: any) {
           <section className="page">
             <Vehicle />
             <ReviewScreen
-            appointment={activeAppointment}
-            appointments={appointments}
-            techs={availableTechs}
+              appointment={activeAppointment}
+              appointments={appointments}
+              techs={availableTechs}
               onBack={() => go("agenda")}
               onSave={(review: ReviewState) => {
                 const withService = !!activeAppointment.reviewWithService;
@@ -1659,6 +1668,110 @@ export default function App({ initialState, user, onLogout }: any) {
                       </label>
                     </div>
                   </div>
+                  <div className="schedule-service-box">
+                    <span>
+                      <b>Cliente trará o veículo em outro dia?</b>
+                      <small>
+                        Agende o serviço mantendo esta avaliação e o orçamento.
+                      </small>
+                    </span>
+                    <label>
+                      Data do serviço
+                      <input
+                        type="date"
+                        value={serviceScheduleDate}
+                        onChange={(e) => setServiceScheduleDate(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Horário
+                      <input
+                        type="time"
+                        value={serviceScheduleTime}
+                        onChange={(e) => setServiceScheduleTime(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      className="schedule-service-button"
+                      onClick={() => {
+                        if (!activeAppointment) return;
+                        if (!serviceScheduleDate || !serviceScheduleTime) {
+                          alert("Informe a data e o horário do serviço.");
+                          return;
+                        }
+                        const now = new Date().toISOString(),
+                          scheduledId =
+                            activeAppointment.serviceAppointmentId ??
+                            Date.now(),
+                          budget: BudgetState = {
+                            parts,
+                            selectedServices,
+                            serviceQty,
+                            manualServices,
+                            patioNotes,
+                            processStatus: "Em andamento",
+                          },
+                          source: Appt = {
+                            ...activeAppointment,
+                            status: "avaliou",
+                            budget,
+                            serviceScheduledFor: serviceScheduleDate,
+                            serviceScheduledTime: serviceScheduleTime,
+                            serviceAppointmentId: scheduledId,
+                            budgetEditedBy: user.displayName,
+                            budgetEditedAt: now,
+                            lastEditedBy: user.displayName,
+                            lastEditedAt: now,
+                            _updatedAt: Date.now(),
+                          },
+                          scheduled: Appt = {
+                            ...source,
+                            id: scheduledId,
+                            date: serviceScheduleDate,
+                            time: serviceScheduleTime,
+                            status: "agendado",
+                            serviceScheduled: true,
+                            sourceAppointmentId: activeAppointment.id,
+                            serviceAppointmentId: undefined,
+                            inProgress: false,
+                            startedAt: undefined,
+                            conference: undefined,
+                            scheduledBy: user.displayName,
+                            createdAt: now,
+                            lastEditedBy: user.displayName,
+                            lastEditedAt: now,
+                            _updatedAt: Date.now() + 1,
+                          };
+                        syncBlockedUntil.current = Date.now() + 4000;
+                        DISPLAY_APPT = source;
+                        setActiveAppointment(source);
+                        setAppointments((list) => {
+                          const exists = list.some((a) => a.id === scheduledId),
+                            updated = list.map((a) =>
+                              a.id === source.id
+                                ? source
+                                : a.id === scheduledId
+                                  ? scheduled
+                                  : a,
+                            );
+                          return exists ? updated : [...updated, scheduled];
+                        });
+                        setSavedAt(
+                          new Date().toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }),
+                        );
+                        alert(
+                          `Serviço agendado para ${new Date(`${serviceScheduleDate}T12:00:00`).toLocaleDateString("pt-BR")}, às ${serviceScheduleTime}.`,
+                        );
+                        setView("agenda");
+                        scrollTo(0, 0);
+                      }}
+                    >
+                      Agendar serviço
+                    </button>
+                  </div>
                   <div className="propactions">
                     <button onClick={() => go("orcamento")}>
                       ← Voltar e alterar
@@ -2074,8 +2187,7 @@ export default function App({ initialState, user, onLogout }: any) {
             setTechs={(names: string[]) =>
               setTechs(
                 names.filter(
-                  (name) =>
-                    name.trim().toLocaleLowerCase("pt-BR") !== "anna",
+                  (name) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
                 ),
               )
             }
@@ -2450,6 +2562,7 @@ function Agenda({
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     inProgressCount = (data as Appt[]).filter(
@@ -2495,6 +2608,7 @@ function Agenda({
           Retorno <i className="dot orange" /> Garantia{" "}
           <i className="dot blue" /> Revisão 30 dias
           <i className="dot completed" /> Concluído
+          <i className="dot scheduled-service-dot" /> Serviço agendado
           <i className="shop-line" /> Na oficina
         </span>
       </div>
@@ -2651,13 +2765,17 @@ function Agenda({
                             : "REVISÃO 30 DIAS"
                           : a.budget?.processStatus === "Finalizado"
                             ? "CONCLUÍDO"
-                            : a.inProgress
-                              ? "EM ANDAMENTO"
-                              : a.status === "avaliou" && a.quoteSentAt
-                                ? "ORÇAMENTO ENVIADO EM ABERTO"
-                                : a.status === "avaliou"
-                                  ? "AGUARDANDO ORÇAMENTO"
-                                  : a.status}
+                            : a.serviceScheduled && a.status === "agendado"
+                              ? "SERVIÇO AGENDADO"
+                              : a.serviceAppointmentId && a.serviceScheduledFor
+                                ? `SERVIÇO AGENDADO ${new Date(`${a.serviceScheduledFor}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`
+                                : a.inProgress
+                                  ? "EM ANDAMENTO"
+                                  : a.status === "avaliou" && a.quoteSentAt
+                                    ? "ORÇAMENTO ENVIADO EM ABERTO"
+                                    : a.status === "avaliou"
+                                      ? "AGUARDANDO ORÇAMENTO"
+                                      : a.status}
                 </small>
                 {a.type !== "bloqueio" && a.tech && (
                   <small className="card-tech">
@@ -2745,6 +2863,7 @@ function Agenda({
                 {a.type === "cliente" &&
                   a.status === "avaliou" &&
                   !a.quoteSentAt &&
+                  !a.serviceAppointmentId &&
                   a.budget?.processStatus !== "Finalizado" && (
                     <small className="quote-waiting">
                       {quoteWaitingLabel(a)}
@@ -2766,12 +2885,15 @@ function Agenda({
                   <small className="schedule-meta">
                     Avaliação registrada no sistema por {a.evaluationRecordedBy}
                     {a.evaluationRecordedAt
-                      ? ` em ${new Date(a.evaluationRecordedAt).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}`
+                      ? ` em ${new Date(a.evaluationRecordedAt).toLocaleString(
+                          "pt-BR",
+                          {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}`
                       : ""}
                   </small>
                 )}
@@ -2779,12 +2901,15 @@ function Agenda({
                   <small className="schedule-meta">
                     Orçamento preenchido por {a.budgetEditedBy}
                     {a.budgetEditedAt
-                      ? ` em ${new Date(a.budgetEditedAt).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}`
+                      ? ` em ${new Date(a.budgetEditedAt).toLocaleString(
+                          "pt-BR",
+                          {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}`
                       : ""}
                   </small>
                 )}
@@ -2796,9 +2921,13 @@ function Agenda({
                 {a.quoteSentAt && (
                   <small className="quote-sent">
                     ✓ Orçamento enviado
-                    {a.budget?.processStatus !== "Finalizado"
-                      ? " – EM ABERTO"
-                      : ""}{" "}
+                    {a.serviceScheduled && a.status === "agendado"
+                      ? " – SERVIÇO AGENDADO"
+                      : a.serviceAppointmentId && a.serviceScheduledFor
+                        ? ` – SERVIÇO AGENDADO PARA ${new Date(`${a.serviceScheduledFor}T12:00:00`).toLocaleDateString("pt-BR")}`
+                        : a.budget?.processStatus !== "Finalizado"
+                          ? " – EM ABERTO"
+                          : ""}{" "}
                     em{" "}
                     {new Date(a.quoteSentAt).toLocaleString("pt-BR", {
                       day: "2-digit",
@@ -2838,9 +2967,11 @@ function Agenda({
                             ? "Visualizar atendimento →"
                             : a.status === "servico"
                               ? "Abrir conferência →"
-                              : a.status === "avaliou"
-                                ? "Abrir orçamento →"
-                                : "Abrir avaliação →"}
+                              : a.serviceScheduled && a.status === "agendado"
+                                ? "Iniciar serviço →"
+                                : a.status === "avaliou"
+                                  ? "Abrir orçamento →"
+                                  : "Abrir avaliação →"}
                   </button>
                 )}
               </div>
@@ -4171,7 +4302,9 @@ function AttendanceSummary({
       </div>
       <div className="summary-card">
         <h2>Responsáveis pelo atendimento</h2>
-        <p><b>Técnico avaliador:</b> {appointment.tech || "Não informado"}</p>
+        <p>
+          <b>Técnico avaliador:</b> {appointment.tech || "Não informado"}
+        </p>
         <p>
           <b>Avaliação registrada por:</b>{" "}
           {appointment.evaluationRecordedBy || "Não informado"}
@@ -4371,6 +4504,7 @@ function Reports({
         (a) =>
           a.status === "avaliou" &&
           a.type === "cliente" &&
+          !a.serviceAppointmentId &&
           a.budget?.processStatus !== "Finalizado",
       ).length,
     ],
@@ -4388,6 +4522,7 @@ function Reports({
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
