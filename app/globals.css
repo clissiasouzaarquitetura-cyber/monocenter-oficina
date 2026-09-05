@@ -4991,6 +4991,11 @@ header > button {
 .agenda-finalization > b {
   font-size: 14px;
 }
+.agenda-finalization.compact {
+  display: block;
+  margin-top: 6px;
+  padding: 7px 10px;
+}
 .agenda-finalization > span,
 .agenda-finalization > small {
   display: block;
@@ -5129,34 +5134,50 @@ header > button {
   }
 }
 
-/* Botão de salvamento sempre acessível na parte inferior das etapas. */
-.stage-save-bottom {
+/* Ações sempre acessíveis na parte inferior das etapas. */
+.stage-bottom-actions {
   position: fixed;
   right: 24px;
   bottom: 20px;
   z-index: 80;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.stage-save-bottom,
+.stage-exit-bottom {
   min-width: 130px;
   padding: 13px 20px !important;
-  border-color: #15803d !important;
-  background: #15803d !important;
-  color: #fff !important;
   box-shadow: 0 8px 24px #0003;
   font-size: 14px !important;
   font-weight: 900 !important;
+}
+.stage-save-bottom {
+  border-color: #15803d !important;
+  background: #15803d !important;
+  color: #fff !important;
+}
+.stage-exit-bottom {
+  border-color: #475569 !important;
+  background: #fff !important;
+  color: #1e293b !important;
 }
 .stage-save-bottom:hover {
   background: #166534 !important;
 }
 @media (max-width: 700px) {
-  .stage-save-bottom {
+  .stage-bottom-actions {
     right: 12px;
     bottom: 12px;
+  }
+  .stage-save-bottom,
+  .stage-exit-bottom {
     min-width: 112px;
     padding: 12px 16px !important;
   }
 }
 @media print {
-  .stage-save-bottom {
+  .stage-bottom-actions {
     display: none !important;
   }
 }

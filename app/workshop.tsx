@@ -55,6 +55,7 @@ const ITEMS = [
   "Cilindro de Freio (Tras. Esq./Dir.) Mestre",
   "Sapata de freio Traseira",
   "Pastilha de freio Traseira",
+  "Válvula de Pneus (Bico)",
 ];
 const FRONT = [
     "Amortecedores dianteiros",
@@ -116,7 +117,15 @@ const SERVICES = [
   ["Montagem de pneu - aro 16, 17 ou 18", 25],
   ["Montagem especial de pneu", 50],
   ["Rodízio - cortesia", 0],
+  ["Mão de Obra Troca Amortecedores Dianteiros", 0],
+  ["Mão de Obra Troca Amortecedores Traseiros", 0],
+  ["Mão de Obra Dianteira", 0],
+  ["Mão de Obra Traseira", 0],
+  ["Alinhamento Técnico Longarinas", 0],
+  ["Alinhamento Técnico Eixo Traseiro", 0],
 ] as [string, number][];
+const serviceIsCourtesy = (index: number) =>
+  /cortesia/i.test(SERVICES[index]?.[0] ?? "");
 const REVIEW_ITEMS = [
   "Aperto das rodas",
   "Torque das peças substituídas",
@@ -625,7 +634,7 @@ export default function App({ initialState, user, onLogout }: any) {
         name: SERVICES[i][0],
         qty: serviceQty[i] ?? 0,
         total: SERVICES[i][1] * (serviceQty[i] ?? 0),
-        courtesy: SERVICES[i][1] === 0,
+        courtesy: serviceIsCourtesy(i),
       })),
       ...manualServices
         .filter((x: any) => x.name)
@@ -828,8 +837,16 @@ export default function App({ initialState, user, onLogout }: any) {
               appointment={activeAppointment}
               appointments={appointments}
               techs={availableTechs}
-              onBack={() => go("agenda")}
+              onBack={() => {
+                if (
+                  confirm(
+                    "Você já salvou a revisão?\n\nOK: sair para a agenda.\nCancelar: continuar nesta tela para salvar.",
+                  )
+                )
+                  go("agenda");
+              }}
               onSave={(review: ReviewState) => {
+                syncBlockedUntil.current = Date.now() + 4000;
                 const withService = !!activeAppointment.reviewWithService;
                 const updated: Appt = {
                   ...activeAppointment,
@@ -878,7 +895,17 @@ export default function App({ initialState, user, onLogout }: any) {
                 setStatus={setProcessStatus}
                 printNoValues={printNoValues}
                 printStage={printStage}
+                exit={() => {
+                  if (
+                    confirm(
+                      "Você já salvou as alterações?\n\nOK: sair para a agenda.\nCancelar: continuar nesta tela para salvar.",
+                    )
+                  ) {
+                    go("agenda");
+                  }
+                }}
                 save={() => {
+                  syncBlockedUntil.current = Date.now() + 4000;
                   setSavedAt(
                     new Date().toLocaleTimeString("pt-BR", {
                       hour: "2-digit",
@@ -1487,7 +1514,11 @@ export default function App({ initialState, user, onLogout }: any) {
                                 setServiceQty(next);
                               }}
                             />
-                            <b>{x[1] ? brl(x[1]) + "/ un." : "Cortesia"}</b>
+                            <b>
+                              {serviceIsCourtesy(i)
+                                ? "Cortesia"
+                                : brl(x[1]) + "/ un."}
+                            </b>
                           </label>
                         ))}
                       </div>
@@ -1632,13 +1663,15 @@ export default function App({ initialState, user, onLogout }: any) {
                           <b>{SERVICES[i][0]}</b>
                           <small>
                             Unitário:{" "}
-                            {SERVICES[i][1] ? brl(SERVICES[i][1]) : "Cortesia"}
+                            {serviceIsCourtesy(i)
+                              ? "Cortesia"
+                              : brl(SERVICES[i][1])}
                           </small>
                         </span>
                         <strong>
-                          {SERVICES[i][1]
-                            ? brl(SERVICES[i][1] * (serviceQty[i] ?? 0))
-                            : "Cortesia"}
+                          {serviceIsCourtesy(i)
+                            ? "Cortesia"
+                            : brl(SERVICES[i][1] * (serviceQty[i] ?? 0))}
                         </strong>
                       </div>
                     ))}
@@ -2378,6 +2411,7 @@ function StageActions({
   setStatus,
   printNoValues,
   printStage,
+  exit,
   save,
   savedAt,
 }: any) {
@@ -2400,13 +2434,21 @@ function StageActions({
         </select>
       </label>
       <button onClick={save}>Salvar</button>
-      <button
-        className="stage-save-bottom"
-        onClick={save}
-        aria-label={`Salvar ${label}`}
-      >
-        Salvar
+      <button className="stage-exit" onClick={exit}>
+        Sair para a agenda
       </button>
+      <div className="stage-bottom-actions">
+        <button className="stage-exit-bottom" onClick={exit}>
+          Sair
+        </button>
+        <button
+          className="stage-save-bottom"
+          onClick={save}
+          aria-label={`Salvar ${label}`}
+        >
+          Salvar
+        </button>
+      </div>
       <button onClick={() => printStage(view)}>Imprimir relatório A4</button>
       {["orcamento", "proposta"].includes(view) && (
         <button onClick={() => printNoValues(view)}>
@@ -2800,62 +2842,8 @@ function Agenda({
                   )}
                 </p>
                 {a.budget?.processStatus === "Finalizado" ? (
-                  <div className="agenda-finalization">
+                  <div className="agenda-finalization compact">
                     <b>✓ Atendimento finalizado</b>
-                    {a.conference?.finalization && (
-                      <span>
-                        {[
-                          a.conference.finalization.serviceCompleted &&
-                            "Serviço concluído",
-                          a.conference.finalization.vehicleReleased &&
-                            "Veículo liberado",
-                          a.conference.finalization.clientOriented &&
-                            "Cliente orientado",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || "Finalização registrada"}
-                      </span>
-                    )}
-                    {a.conference?.finalization?.note && (
-                      <span>{a.conference.finalization.note}</span>
-                    )}
-                    <small>
-                      Finalizado por{" "}
-                      {a.conference?.finalizedBy || "não informado"}
-                      {a.conference?.finalizedAt
-                        ? ` em ${new Date(
-                            a.conference.finalizedAt,
-                          ).toLocaleString("pt-BR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}`
-                        : ""}
-                    </small>
-                    {a.conference?.finalization &&
-                      [
-                        ["Técnico", a.conference.finalization.technician],
-                        ["Executado por", a.conference.finalization.executor],
-                        ["Conferido por", a.conference.finalization.checker],
-                      ].some(([, name]) => name) && (
-                        <small>
-                          {[
-                            ["Técnico", a.conference.finalization.technician],
-                            [
-                              "Executado por",
-                              a.conference.finalization.executor,
-                            ],
-                            [
-                              "Conferido por",
-                              a.conference.finalization.checker,
-                            ],
-                          ]
-                            .filter(([, name]) => name)
-                            .map(([label, name]) => `${label}: ${name}`)
-                            .join(" · ")}
-                        </small>
-                      )}
                   </div>
                 ) : (
                   a.note && <small>{a.note}</small>
@@ -4354,9 +4342,9 @@ function AttendanceSummary({
             <b>{budget.serviceQty[index] ?? 0}x</b>
             <span>{SERVICES[index][0]}</span>
             <strong>
-              {SERVICES[index][1]
-                ? brl(SERVICES[index][1] * (budget.serviceQty[index] ?? 0))
-                : "Cortesia"}
+              {serviceIsCourtesy(index)
+                ? "Cortesia"
+                : brl(SERVICES[index][1] * (budget.serviceQty[index] ?? 0))}
             </strong>
           </div>
         ))}
