@@ -126,6 +126,12 @@ const SERVICES = [
 ] as [string, number][];
 const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
+const normalizeSearch = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
 const REVIEW_ITEMS = [
   "Aperto das rodas",
   "Torque das peças substituídas",
@@ -396,6 +402,7 @@ export default function App({ initialState, user, onLogout }: any) {
       checker: "",
     }),
     [custom, setCustom] = useState<string[]>([]),
+    [evaluationSearch, setEvaluationSearch] = useState(""),
     [techs, setTechs] = useState<string[]>(
       (shared.techs ?? ["Saulo", "Tiago"]).filter(
         (name: string) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
@@ -410,6 +417,23 @@ export default function App({ initialState, user, onLogout }: any) {
   const availableTechs = techs.filter(
     (name) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
   );
+  const evaluationRows = useMemo(() => {
+    const search = normalizeSearch(evaluationSearch);
+    return [...ITEMS, ...custom]
+      .map((name, index) => ({ name, index }))
+      .sort((a, b) => {
+        if (!search) return a.index - b.index;
+        const aName = normalizeSearch(a.name),
+          bName = normalizeSearch(b.name),
+          aStarts = aName.startsWith(search),
+          bStarts = bName.startsWith(search),
+          aIncludes = aName.includes(search),
+          bIncludes = bName.includes(search);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        if (aIncludes !== bIncludes) return aIncludes ? -1 : 1;
+        return a.index - b.index;
+      });
+  }, [custom, evaluationSearch]);
   const [evaluator, setEvaluator] = useState(shared.evaluator ?? "Saulo"),
     [started, setStarted] = useState(shared.started ?? ""),
     [geometryOpen, setGeometryOpen] = useState(false),
@@ -1084,6 +1108,19 @@ export default function App({ initialState, user, onLogout }: any) {
                     set={() => setCheckOpen(!checkOpen)}
                   >
                     <div className="inspection-tools">
+                      <label className="inspection-search">
+                        <b>Pesquisar peça na avaliação</b>
+                        <input
+                          type="search"
+                          value={evaluationSearch}
+                          onChange={(e) => setEvaluationSearch(e.target.value)}
+                          placeholder="Digite, por exemplo: amortecedor, pneu ou pivô"
+                        />
+                        <small>
+                          As peças encontradas sobem para o início. A lista
+                          completa permanece abaixo.
+                        </small>
+                      </label>
                       <button
                         className="additem"
                         onClick={() =>
@@ -1127,7 +1164,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       </span>
                     </div>
                     <div className="inspection">
-                      {[...ITEMS, ...custom].map((x, i) => (
+                      {evaluationRows.map(({ name: x, index: i }) => (
                         <div
                           className={
                             quoteItems[i + 1] ? "row quote-selected" : "row"

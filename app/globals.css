@@ -3639,6 +3639,42 @@ header > button {
 .inspection-tools .additem {
   margin: 0;
 }
+.inspection-search {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #9cb8d6;
+  border-radius: 9px;
+  background: #f2f7fc;
+}
+.inspection-search b {
+  font-size: 13px;
+  color: #173d63;
+}
+.inspection-search input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #8caac8;
+  border-radius: 7px;
+  padding: 9px 11px;
+  background: #fff;
+  color: #17202c;
+  font-size: 13px;
+}
+.inspection-search small {
+  color: #5b6d80;
+  font-size: 10px;
+}
+.app.dark .inspection-search {
+  border-color: #49647f;
+  background: #172536;
+}
+.app.dark .inspection-search b,
+.app.dark .inspection-search small {
+  color: #d8e7f5;
+}
 .inspection-bottom-actions {
   display: flex;
   justify-content: flex-end;
