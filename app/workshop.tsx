@@ -319,6 +319,24 @@ const apptClass = (a: Appt) =>
             : a.inProgress && a.status !== "servico"
               ? "inprogress"
               : a.status;
+const agendaStatusLabel = (a: Appt) => {
+  if (a.type === "bloqueio") return "AUSENTE";
+  if (a.type === "retorno") return "RETORNO";
+  if (a.type === "garantia") return "GARANTIA";
+  if (a.type === "revisao")
+    return a.reviewWithService ? "REVISÃO + SERVIÇO" : "REVISÃO 30 DIAS";
+  if (a.budget?.processStatus === "Finalizado") return "ATENDIMENTO FINALIZADO";
+  if (a.serviceScheduled && a.status === "agendado") return "SERVIÇO AGENDADO";
+  if (a.serviceAppointmentId && a.serviceScheduledFor)
+    return `SERVIÇO AGENDADO ${new Date(
+      `${a.serviceScheduledFor}T12:00:00`,
+    ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+  if (a.inProgress) return "EM ANDAMENTO";
+  if (a.status === "avaliou" && a.quoteSentAt)
+    return "ORÇAMENTO ENVIADO EM ABERTO";
+  if (a.status === "avaliou") return "AGUARDANDO ORÇAMENTO";
+  return a.status.toUpperCase();
+};
 const INITIAL: Appt[] = [];
 const EMPTY_APPT: Appt = {
   id: 0,
@@ -2576,7 +2594,8 @@ function Agenda({
       new Date(today.getFullYear(), today.getMonth(), 1),
     ),
     [mode, setMode] = useState<"dia" | "semana" | "mes">("mes"),
-    [openCal, setOpenCal] = useState(true);
+    [openCal, setOpenCal] = useState(true),
+    [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
   const selectedDate = new Date(date + "T12:00:00"),
     calendarDays = useMemo(() => {
       if (mode === "dia") return [new Date(date + "T12:00:00")];
@@ -2787,184 +2806,203 @@ function Agenda({
               Nenhum agendamento. Clique em “Novo agendamento” para incluir.
             </div>
           )}
-          {list.map((a: Appt) => (
-            <article
-              className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}`}
-              key={a.id}
-            >
-              <time>
-                <b>{a.time}</b>
-                <small>
-                  {a.type === "bloqueio"
-                    ? "AUSENTE"
-                    : a.type === "retorno"
-                      ? "RETORNO"
-                      : a.type === "garantia"
-                        ? "GARANTIA"
-                        : a.type === "revisao"
-                          ? a.reviewWithService
-                            ? "REVISÃO + SERVIÇO"
-                            : "REVISÃO 30 DIAS"
-                          : a.budget?.processStatus === "Finalizado"
-                            ? "CONCLUÍDO"
-                            : a.serviceScheduled && a.status === "agendado"
-                              ? "SERVIÇO AGENDADO"
-                              : a.serviceAppointmentId && a.serviceScheduledFor
-                                ? `SERVIÇO AGENDADO ${new Date(`${a.serviceScheduledFor}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`
-                                : a.inProgress
-                                  ? "EM ANDAMENTO"
-                                  : a.status === "avaliou" && a.quoteSentAt
-                                    ? "ORÇAMENTO ENVIADO EM ABERTO"
-                                    : a.status === "avaliou"
-                                      ? "AGUARDANDO ORÇAMENTO"
-                                      : a.status}
-                </small>
-                {a.type !== "bloqueio" && a.tech && (
-                  <small className="card-tech">
-                    {a.status === "avaliou" ? "Avaliado por" : "Téc."} {a.tech}
+          {list.map((a: Appt) => {
+            const expanded = expandedAppointments.includes(a.id);
+            return (
+              <article
+                className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}`}
+                key={a.id}
+              >
+                <time>
+                  <b>{a.time}</b>
+                  <small>
+                    {a.budget?.processStatus === "Finalizado"
+                      ? "FINALIZADO"
+                      : agendaStatusLabel(a)}
                   </small>
-                )}
-                {a.type !== "bloqueio" && a.startedAt && (
-                  <small className="card-start">Início: {a.startedAt}</small>
-                )}
-              </time>
-              <span>
-                <h3>{a.client}</h3>
-                <p>
-                  {a.type === "bloqueio"
-                    ? "Ausência de funcionário"
-                    : a.vehicle}
-                  {a.plate && (
-                    <>
-                      {" "}
-                      · <b>{a.plate}</b>
-                    </>
-                  )}
-                </p>
-                {a.budget?.processStatus === "Finalizado" ? (
-                  <div className="agenda-finalization compact">
-                    <b>✓ Atendimento finalizado</b>
-                  </div>
-                ) : (
-                  a.note && <small>{a.note}</small>
-                )}
-                {a.type === "cliente" &&
-                  a.status === "avaliou" &&
-                  !a.quoteSentAt &&
-                  !a.serviceAppointmentId &&
-                  a.budget?.processStatus !== "Finalizado" && (
-                    <small className="quote-waiting">
-                      {quoteWaitingLabel(a)}
+                  {expanded && a.type !== "bloqueio" && a.tech && (
+                    <small className="card-tech">
+                      {a.status === "avaliou" ? "Avaliado por" : "Téc."}{" "}
+                      {a.tech}
                     </small>
                   )}
-                {a.scheduledBy && a.createdAt && (
-                  <small className="schedule-meta">
-                    Agendado por {a.scheduledBy} em{" "}
-                    {new Date(a.createdAt).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </small>
-                )}
-                {a.evaluationRecordedBy && (
-                  <small className="schedule-meta">
-                    Avaliação registrada no sistema por {a.evaluationRecordedBy}
-                    {a.evaluationRecordedAt
-                      ? ` em ${new Date(a.evaluationRecordedAt).toLocaleString(
-                          "pt-BR",
-                          {
-                            day: "2-digit",
-                            month: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
-                        )}`
-                      : ""}
-                  </small>
-                )}
-                {a.budgetEditedBy && (
-                  <small className="schedule-meta">
-                    Orçamento preenchido por {a.budgetEditedBy}
-                    {a.budgetEditedAt
-                      ? ` em ${new Date(a.budgetEditedAt).toLocaleString(
-                          "pt-BR",
-                          {
-                            day: "2-digit",
-                            month: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
-                        )}`
-                      : ""}
-                  </small>
-                )}
-                {a.lastEditedBy && (
-                  <small className="schedule-meta">
-                    Última edição por {a.lastEditedBy}
-                  </small>
-                )}
-                {a.quoteSentAt && (
-                  <small className="quote-sent">
-                    ✓ Orçamento enviado
-                    {a.serviceScheduled && a.status === "agendado"
-                      ? " – SERVIÇO AGENDADO"
-                      : a.serviceAppointmentId && a.serviceScheduledFor
-                        ? ` – SERVIÇO AGENDADO PARA ${new Date(`${a.serviceScheduledFor}T12:00:00`).toLocaleDateString("pt-BR")}`
-                        : a.budget?.processStatus !== "Finalizado"
+                  {expanded && a.type !== "bloqueio" && a.startedAt && (
+                    <small className="card-start">Início: {a.startedAt}</small>
+                  )}
+                </time>
+                <span>
+                  <div className="appointment-heading">
+                    <h3>{a.client}</h3>
+                    <button
+                      className="appointment-toggle"
+                      onClick={() =>
+                        setExpandedAppointments((current) =>
+                          current.includes(a.id)
+                            ? current.filter((id) => id !== a.id)
+                            : [...current, a.id],
+                        )
+                      }
+                      aria-expanded={expanded}
+                      aria-label={
+                        expanded
+                          ? `Recolher atendimento de ${a.client}`
+                          : `Ver atendimento completo de ${a.client}`
+                      }
+                      title={expanded ? "Recolher" : "Ver atendimento completo"}
+                    >
+                      {expanded ? "⌃" : "⌄"}
+                    </button>
+                  </div>
+                  <p>
+                    {a.type === "bloqueio"
+                      ? "Ausência de funcionário"
+                      : a.vehicle}
+                    {a.plate && (
+                      <>
+                        {" "}
+                        · <b>{a.plate}</b>
+                      </>
+                    )}
+                  </p>
+                  {a.budget?.processStatus === "Finalizado" ? (
+                    <div className="agenda-finalization compact">
+                      <b>✓ Atendimento finalizado</b>
+                    </div>
+                  ) : null}
+                  {a.type === "cliente" &&
+                    a.status === "avaliou" &&
+                    !a.quoteSentAt &&
+                    !a.serviceAppointmentId &&
+                    a.budget?.processStatus !== "Finalizado" && (
+                      <small className="quote-waiting">
+                        {quoteWaitingLabel(a)}
+                      </small>
+                    )}
+                  {a.quoteSentAt &&
+                    a.budget?.processStatus !== "Finalizado" && (
+                      <small className="quote-sent">
+                        ✓ Orçamento enviado
+                        {a.budget?.processStatus !== "Finalizado"
                           ? " – EM ABERTO"
-                          : ""}{" "}
-                    em{" "}
-                    {new Date(a.quoteSentAt).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {a.quoteSentBy ? ` · por ${a.quoteSentBy}` : ""}
-                  </small>
+                          : ""}
+                      </small>
+                    )}
+                  {a.budget?.processStatus !== "Finalizado" &&
+                    !(a.type === "cliente" && a.status === "avaliou") && (
+                      <small className="appointment-stage">
+                        {agendaStatusLabel(a)}
+                      </small>
+                    )}
+                  {expanded && (
+                    <div className="appointment-details">
+                      {a.note && <small>{a.note}</small>}
+                      {a.scheduledBy && a.createdAt && (
+                        <small className="schedule-meta">
+                          Agendado por {a.scheduledBy} em{" "}
+                          {new Date(a.createdAt).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </small>
+                      )}
+                      {a.evaluationRecordedBy && (
+                        <small className="schedule-meta">
+                          Avaliação registrada no sistema por{" "}
+                          {a.evaluationRecordedBy}
+                          {a.evaluationRecordedAt
+                            ? ` em ${new Date(
+                                a.evaluationRecordedAt,
+                              ).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}`
+                            : ""}
+                        </small>
+                      )}
+                      {a.budgetEditedBy && (
+                        <small className="schedule-meta">
+                          Orçamento preenchido por {a.budgetEditedBy}
+                          {a.budgetEditedAt
+                            ? ` em ${new Date(a.budgetEditedAt).toLocaleString(
+                                "pt-BR",
+                                {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}`
+                            : ""}
+                        </small>
+                      )}
+                      {a.lastEditedBy && (
+                        <small className="schedule-meta">
+                          Última edição por {a.lastEditedBy}
+                        </small>
+                      )}
+                      {a.quoteSentAt && (
+                        <small className="schedule-meta">
+                          Enviado em{" "}
+                          {new Date(a.quoteSentAt).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                          {a.quoteSentBy ? ` por ${a.quoteSentBy}` : ""}
+                        </small>
+                      )}
+                    </div>
+                  )}
+                </span>
+                {expanded && (
+                  <div className="appointment-actions">
+                    {a.type !== "bloqueio" && (
+                      <button
+                        onClick={() =>
+                          message(
+                            `Olá, ${a.client}! Passando para lembrar do seu agendamento na Monocenter em ${fmt(a.date)}, às ${a.time}. Aguardamos você!`,
+                          )
+                        }
+                      >
+                        Mensagem
+                      </button>
+                    )}
+                    <button onClick={() => edit(a)}>Editar</button>
+                    <button className="danger" onClick={() => remove(a)}>
+                      Excluir
+                    </button>
+                    {a.type !== "bloqueio" && (
+                      <button onClick={() => start(a)}>
+                        {a.type === "revisao" &&
+                        (!a.reviewWithService || !a.review)
+                          ? "Abrir revisão →"
+                          : a.type === "retorno" && a.status === "agendado"
+                            ? "Abrir retorno →"
+                            : a.type === "garantia" && a.status === "agendado"
+                              ? "Abrir garantia →"
+                              : a.budget?.processStatus === "Finalizado"
+                                ? "Visualizar atendimento →"
+                                : a.status === "servico"
+                                  ? "Abrir conferência →"
+                                  : a.serviceScheduled &&
+                                      a.status === "agendado"
+                                    ? "Iniciar serviço →"
+                                    : a.status === "avaliou"
+                                      ? "Abrir orçamento →"
+                                      : "Abrir avaliação →"}
+                      </button>
+                    )}
+                  </div>
                 )}
-              </span>
-              <div>
-                {a.type !== "bloqueio" && (
-                  <button
-                    onClick={() =>
-                      message(
-                        `Olá, ${a.client}! Passando para lembrar do seu agendamento na Monocenter em ${fmt(a.date)}, às ${a.time}. Aguardamos você!`,
-                      )
-                    }
-                  >
-                    Mensagem
-                  </button>
-                )}
-                <button onClick={() => edit(a)}>Editar</button>
-                <button className="danger" onClick={() => remove(a)}>
-                  Excluir
-                </button>
-                {a.type !== "bloqueio" && (
-                  <button onClick={() => start(a)}>
-                    {a.type === "revisao" && (!a.reviewWithService || !a.review)
-                      ? "Abrir revisão →"
-                      : a.type === "retorno" && a.status === "agendado"
-                        ? "Abrir retorno →"
-                        : a.type === "garantia" && a.status === "agendado"
-                          ? "Abrir garantia →"
-                          : a.budget?.processStatus === "Finalizado"
-                            ? "Visualizar atendimento →"
-                            : a.status === "servico"
-                              ? "Abrir conferência →"
-                              : a.serviceScheduled && a.status === "agendado"
-                                ? "Iniciar serviço →"
-                                : a.status === "avaliou"
-                                  ? "Abrir orçamento →"
-                                  : "Abrir avaliação →"}
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </div>
       <div className="agenda-followups">

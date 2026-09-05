@@ -274,6 +274,55 @@ header > button {
   font-size: 12px;
   margin: 0;
 }
+.appointment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.day article div .appointment-toggle {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px solid #aab4c0 !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  color: #17202c !important;
+  font-size: 18px !important;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+.appointment-details {
+  margin-top: 8px;
+  padding-top: 2px;
+}
+.appointment-details > small {
+  display: block;
+}
+.day article .appointment-stage {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 7px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e8edf3;
+  color: #334155 !important;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.app.dark .day article .appointment-stage {
+  background: #283548;
+  color: #e7eef7 !important;
+}
+.app.dark .day article div .appointment-toggle {
+  border-color: #607087 !important;
+  background: #111b28 !important;
+  color: #fff !important;
+}
 .day article p,
 .day article span > small {
   font-size: 9px;
