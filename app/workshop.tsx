@@ -1176,6 +1176,19 @@ export default function App({ initialState, user, onLogout }: any) {
                           }
                         >
                           <small>{String(i + 1).padStart(2, "0")}</small>
+                          <label className="quote-check">
+                            <input
+                              type="checkbox"
+                              checked={!!quoteItems[i + 1]}
+                              onChange={(e) =>
+                                setQuoteItems({
+                                  ...quoteItems,
+                                  [i + 1]: e.target.checked,
+                                })
+                              }
+                            />{" "}
+                            Orçar
+                          </label>
                           {i >= ITEMS.length ? (
                             <input
                               className="manual-item-name"
@@ -1232,19 +1245,6 @@ export default function App({ initialState, user, onLogout }: any) {
                               })
                             }
                           />
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={!!quoteItems[i + 1]}
-                              onChange={(e) =>
-                                setQuoteItems({
-                                  ...quoteItems,
-                                  [i + 1]: e.target.checked,
-                                })
-                              }
-                            />{" "}
-                            Orçar
-                          </label>
                           {i >= ITEMS.length && (
                             <button
                               className="trash"

@@ -455,7 +455,7 @@ header > button {
 }
 .row {
   display: grid;
-  grid-template-columns: 32px minmax(220px, 1.2fr) 140px 1fr 58px;
+  grid-template-columns: 32px 64px minmax(220px, 1.2fr) 140px 1fr;
   gap: 9px;
   align-items: center;
   min-height: 45px;
@@ -486,6 +486,13 @@ header > button {
 }
 .row > label {
   font-size: 8px;
+}
+.row > .quote-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 800;
+  cursor: pointer;
 }
 .lights {
   display: flex;
@@ -4133,7 +4140,7 @@ header > button {
 
 /* Checklist com quatro estados e preferências do orçamento. */
 .row {
-  grid-template-columns: 32px minmax(220px, 1.2fr) 185px 1fr 58px;
+  grid-template-columns: 32px 64px minmax(220px, 1.2fr) 185px 1fr;
 }
 .lights .na i {
   width: 12px;
@@ -4185,16 +4192,24 @@ header > button {
 
 @media (max-width: 700px) {
   .row {
-    grid-template-columns: 26px 1fr;
+    grid-template-columns: 26px 64px minmax(0, 1fr);
+  }
+  .row > .quote-check {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .row > b,
+  .row > .manual-item-name {
+    grid-column: 3;
+    grid-row: 1;
   }
   .lights {
-    grid-column: 2;
+    grid-column: 3;
     display: grid;
     grid-template-columns: repeat(4, 42px);
   }
-  .row > input,
-  .row > label {
-    grid-column: 2;
+  .row > input:not(.manual-item-name) {
+    grid-column: 3;
   }
   .round-setting {
     align-items: flex-start;
