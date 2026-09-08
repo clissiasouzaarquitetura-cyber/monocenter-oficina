@@ -5293,3 +5293,67 @@ header > button {
     min-width: 0;
   }
 }
+
+/* Orçamento: diferencia descrições dos campos que precisam ser preenchidos. */
+.budget-field-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 12px;
+}
+.budget-field-legend span {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.budget-field-legend .description-swatch,
+.prow > label:first-child > input:first-child,
+.servicegrid label > span,
+.manualservices > div > input:first-child {
+  background: #e8edf2 !important;
+  color: #263442 !important;
+}
+.budget-field-legend .entry-swatch,
+.prow input:not(.prow > label:first-child > input:first-child),
+.servicegrid .qty,
+.manualservices label input {
+  border-color: #82add3 !important;
+  background: #e8f4ff !important;
+  color: #102f4c !important;
+  box-shadow: inset 0 0 0 1px #c3ddf3;
+}
+.prow > label:first-child > input:first-child,
+.manualservices > div > input:first-child {
+  font-weight: 800;
+}
+.servicegrid label > span {
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-weight: 700;
+}
+.app.dark .budget-field-legend .description-swatch,
+.app.dark .prow > label:first-child > input:first-child,
+.app.dark .servicegrid label > span,
+.app.dark .manualservices > div > input:first-child {
+  border-color: #536273 !important;
+  background: #303b48 !important;
+  color: #f1f5f9 !important;
+}
+.app.dark .budget-field-legend .entry-swatch,
+.app.dark .prow input:not(.prow > label:first-child > input:first-child),
+.app.dark .servicegrid .qty,
+.app.dark .manualservices label input {
+  border-color: #5687b2 !important;
+  background: #193751 !important;
+  color: #f0f8ff !important;
+  box-shadow: inset 0 0 0 1px #315f87;
+}
+@media (max-width: 700px) {
+  .budget-field-legend span {
+    flex: 1;
+    text-align: center;
+    font-size: 11px;
+  }
+}

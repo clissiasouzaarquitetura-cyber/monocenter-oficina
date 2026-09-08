@@ -1377,6 +1377,14 @@ export default function App({ initialState, user, onLogout }: any) {
                           + Inserir peça manual
                         </button>
                       </div>
+                      <div className="budget-field-legend">
+                        <span className="description-swatch">
+                          Descrição da peça
+                        </span>
+                        <span className="entry-swatch">
+                          Campos para preencher
+                        </span>
+                      </div>
                       <div className="parts">
                         <div className="phead">
                           <span>Item / Marca</span>
@@ -1536,6 +1544,14 @@ export default function App({ initialState, user, onLogout }: any) {
                         >
                           + Inserir serviço manual
                         </button>
+                      </div>
+                      <div className="budget-field-legend">
+                        <span className="description-swatch">
+                          Descrição do serviço
+                        </span>
+                        <span className="entry-swatch">
+                          Campos para preencher
+                        </span>
                       </div>
                       <div className="servicegrid">
                         {SERVICES.map((x, i) => (
