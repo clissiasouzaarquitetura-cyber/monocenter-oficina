@@ -942,6 +942,49 @@ header > button {
   background: #fff;
   padding: 12px 0 20px;
 }
+.evaluation-start-modal {
+  width: min(620px, 94%);
+}
+.evaluation-start-client {
+  display: grid !important;
+  gap: 3px;
+  margin: 14px 0;
+  border-left: 4px solid #e31b23;
+  border-radius: 7px;
+  padding: 11px 13px;
+  background: #f4f6f8;
+}
+.evaluation-start-client b,
+.evaluation-start-client small {
+  display: block;
+}
+.evaluation-start-client small,
+.evaluation-start-help {
+  color: var(--muted);
+  font-size: 11px;
+}
+.evaluation-start-modal label {
+  font-size: 12px;
+  font-weight: 800;
+}
+.evaluation-start-modal input,
+.evaluation-start-modal select {
+  border: 2px solid #8eb7dc;
+  background: #edf6ff;
+  font-size: 14px;
+}
+.evaluation-start-help {
+  margin: 12px 0 0;
+}
+.app.dark .evaluation-start-client {
+  background: #202c3b;
+}
+.app.dark .evaluation-start-modal input,
+.app.dark .evaluation-start-modal select {
+  border-color: #5784ac;
+  background: #17212d;
+  color: #fff;
+}
 
 .patio-notes-field {
   margin-top: 12px;

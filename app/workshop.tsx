@@ -396,6 +396,7 @@ export default function App({ initialState, user, onLogout }: any) {
       shared.deletedAppointmentIds ?? [],
     ),
     [modal, setModal] = useState<Appt | boolean>(false),
+    [evaluationEntry, setEvaluationEntry] = useState<Appt | null>(null),
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
@@ -428,7 +429,7 @@ export default function App({ initialState, user, onLogout }: any) {
     [custom, setCustom] = useState<string[]>([]),
     [evaluationSearch, setEvaluationSearch] = useState(""),
     [techs, setTechs] = useState<string[]>(
-      (shared.techs ?? ["Saulo", "Tiago"]).filter(
+      (shared.techs ?? ["Saulo", "Tiago", "Vitor"]).filter(
         (name: string) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
       ),
     ),
@@ -817,6 +818,16 @@ export default function App({ initialState, user, onLogout }: any) {
               scrollTo(0, 0);
             }}
             start={(a: Appt) => {
+              if (
+                a.type !== "bloqueio" &&
+                a.type !== "revisao" &&
+                a.status === "agendado" &&
+                !a.serviceScheduled &&
+                a.budget?.processStatus !== "Finalizado"
+              ) {
+                setEvaluationEntry(a);
+                return;
+              }
               const shouldStartScheduled =
                   !!a.serviceScheduled && a.status === "agendado",
                 shouldStart =
@@ -2581,6 +2592,79 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
+        {evaluationEntry && (
+          <EvaluationStartModal
+            appointment={evaluationEntry}
+            techs={availableTechs}
+            currentUser={user.displayName}
+            close={() => setEvaluationEntry(null)}
+            proceed={({
+              evaluator: selectedEvaluator,
+              startedAt,
+              vehicle,
+              plate,
+            }: any) => {
+              syncBlockedUntil.current = Date.now() + 4000;
+              const opened: Appt = {
+                ...evaluationEntry,
+                vehicle: vehicle.trim(),
+                plate: plate.trim().toLocaleUpperCase("pt-BR"),
+                tech: selectedEvaluator,
+                startedAt,
+                lastEditedBy: user.displayName,
+                lastEditedAt: new Date().toISOString(),
+                _updatedAt: Date.now(),
+              };
+              DISPLAY_APPT = opened;
+              setActiveAppointment(opened);
+              setAppointments((list) =>
+                list.map((item) => (item.id === opened.id ? opened : item)),
+              );
+              setEvaluator(selectedEvaluator);
+              setStarted(startedAt);
+              setStatus(opened.evaluation?.status ?? {});
+              setQuoteItems(opened.evaluation?.quoteItems ?? {});
+              setCustom(opened.evaluation?.custom ?? []);
+              setEvaluationNotes(opened.evaluation?.notes ?? {});
+              setChecks(opened.conference?.checks ?? {});
+              setFinalization(
+                opened.conference?.finalization ?? {
+                  serviceCompleted: false,
+                  vehicleReleased: false,
+                  clientOriented: false,
+                  note: "",
+                  technician: selectedEvaluator,
+                  executor: "",
+                  checker: "",
+                },
+              );
+              if (opened.budget) {
+                setParts(opened.budget.parts ?? []);
+                setSelectedServices(opened.budget.selectedServices ?? []);
+                setServiceQty(opened.budget.serviceQty ?? {});
+                setServicePrices(opened.budget.servicePrices ?? {});
+                setManualServices(opened.budget.manualServices ?? []);
+                setPatioNotes(opened.budget.patioNotes ?? "");
+                setProcessStatus(opened.budget.processStatus ?? "Em andamento");
+              } else {
+                setParts([]);
+                setSelectedServices([]);
+                setServiceQty({});
+                setServicePrices({});
+                setManualServices([]);
+                setPatioNotes("");
+                setProcessStatus("Em andamento");
+              }
+              setGeometryOpen(false);
+              setCheckOpen(false);
+              setPartsOpen(false);
+              setServicesOpen(false);
+              setEvaluationEntry(null);
+              setView("avaliacao");
+              scrollTo(0, 0);
+            }}
+          />
+        )}
         {message && (
           <Message
             text={message}
@@ -3566,6 +3650,118 @@ function ReviewScreen({
     </>
   );
 }
+function EvaluationStartModal({
+  appointment,
+  techs,
+  currentUser,
+  close,
+  proceed,
+}: any) {
+  const now = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    [form, setForm] = useState({
+      evaluator: appointment.tech || techs[0] || "",
+      startedAt: appointment.startedAt || now,
+      vehicle: appointment.vehicle || "",
+      plate: appointment.plate || "",
+    });
+  return (
+    <div className="backdrop">
+      <form
+        className="modal evaluation-start-modal"
+        onSubmit={(event) => {
+          event.preventDefault();
+          proceed(form);
+        }}
+      >
+        <div>
+          <span>
+            <h2>Iniciar avaliação</h2>
+            <p>Confirme os dados antes de abrir a ficha de avaliação.</p>
+          </span>
+          <button type="button" onClick={close} aria-label="Fechar">
+            ×
+          </button>
+        </div>
+        <div className="evaluation-start-client">
+          <b>{appointment.client}</b>
+          <small>
+            Agendado para {appointment.time} · Preenchendo agora: {currentUser}
+          </small>
+        </div>
+        <section>
+          <label>
+            Quem está avaliando
+            <select
+              required
+              value={form.evaluator}
+              onChange={(event) =>
+                setForm({ ...form, evaluator: event.target.value })
+              }
+            >
+              <option value="">Selecione o avaliador</option>
+              {techs.map((name: string) => (
+                <option key={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Horário de início
+            <input
+              required
+              type="time"
+              value={form.startedAt}
+              onChange={(event) =>
+                setForm({ ...form, startedAt: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Veículo
+            <input
+              required
+              value={form.vehicle}
+              placeholder="Informe o veículo"
+              onChange={(event) =>
+                setForm({ ...form, vehicle: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Placa
+            <input
+              required
+              value={form.plate}
+              placeholder="Informe a placa"
+              maxLength={8}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  plate: event.target.value.toLocaleUpperCase("pt-BR"),
+                })
+              }
+            />
+          </label>
+        </section>
+        <p className="evaluation-start-help">
+          O avaliador ficará registrado separadamente do usuário que está
+          preenchendo o sistema.
+        </p>
+        <footer>
+          <button type="button" onClick={close}>
+            Cancelar
+          </button>
+          <button type="submit" className="primary">
+            Confirmar e abrir avaliação →
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 function Modal({ initial, currentUser, close, save, remove }: any) {
   const schedulers = [
     ...new Set(["Anna", "Clissia", "Tiago", "Saulo", "Vitor", currentUser]),
