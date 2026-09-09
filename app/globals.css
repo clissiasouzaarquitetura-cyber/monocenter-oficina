@@ -599,6 +599,15 @@ header > button {
   font-size: 9px;
   color: var(--muted);
 }
+.totals .tire-total-comparison {
+  border-left: 3px solid #e8a514;
+  padding-left: 10px;
+  color: #6f4b00;
+  font-weight: 800;
+}
+.app.dark .totals .tire-total-comparison {
+  color: #ffe09a;
+}
 .totals b {
   color: var(--ink);
 }
@@ -3381,6 +3390,33 @@ header > button {
 .day article.vehicle-in-shop {
   border-right: 6px solid #009c9c;
 }
+.days span.carried-over {
+  border-top: 1px dashed #008b8b;
+  border-bottom: 1px dashed #008b8b;
+  background-image: linear-gradient(90deg, #e6fffb, transparent);
+  font-weight: 800;
+}
+.day article.carried-over {
+  border-top: 2px dashed #009c9c;
+  border-bottom: 2px dashed #009c9c;
+}
+.carry-over-notice {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 7px;
+  border-radius: 5px;
+  padding: 5px 8px;
+  background: #dff8f5;
+  color: #006b6b !important;
+  font-size: 11px;
+  font-weight: 900;
+}
+.app.dark .days span.carried-over,
+.app.dark .carry-over-notice {
+  background: #123f3f;
+  color: #b8fffa !important;
+}
 .review-banner {
   display: flex;
   align-items: center;
@@ -4102,9 +4138,85 @@ header > button {
   font-weight: 700;
   color: var(--r);
 }
+.tire-payment-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 10px 0 12px;
+  border: 1px solid #e8b64b;
+  border-left: 5px solid #e8a514;
+  border-radius: 8px;
+  padding: 11px 13px;
+  background: #fff9e8;
+}
+.tire-payment-panel span,
+.tire-payment-panel small {
+  display: block;
+}
+.tire-payment-panel small {
+  margin-top: 3px;
+  color: #665324;
+  font-size: 10px;
+}
+.tire-payment-panel > div {
+  display: flex;
+  gap: 7px;
+}
+.tire-payment-panel button {
+  border: 1px solid #bd8610;
+  border-radius: 7px;
+  padding: 8px 11px;
+  background: #fff;
+  color: #6f4b00;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.tire-payment-panel button.active {
+  background: #a96700;
+  color: #fff;
+}
+.tire-price-preview {
+  grid-column: 1 / -1;
+  color: #7a5300;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.app.dark .tire-payment-panel {
+  border-color: #a97917;
+  background: #382c13;
+}
+.app.dark .tire-payment-panel small,
+.app.dark .tire-price-preview {
+  color: #ffe09a;
+}
+.app.dark .tire-payment-panel button {
+  background: #1c2735;
+  color: #ffe09a;
+}
+.app.dark .tire-payment-panel button.active {
+  background: #d39413;
+  color: #211600;
+}
 .app.dark .sale-field button {
   background: #1c2735;
   color: #ff6b70;
+}
+@media (max-width: 700px) {
+  .tire-payment-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .tire-payment-panel > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .tire-payment-panel button,
+  .tire-payment-panel small,
+  .tire-price-preview {
+    font-size: 12px !important;
+  }
 }
 .quote-selected > label:last-of-type {
   font-weight: 800;

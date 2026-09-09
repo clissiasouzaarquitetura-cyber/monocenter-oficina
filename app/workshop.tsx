@@ -49,7 +49,7 @@ const ITEMS = [
   "Junta Homocinética Externa",
   "Coifa",
   "Semi-eixo",
-  "Pneus (Desgaste/Condição)",
+  "Pneu",
   "Pastilha de Freio",
   "Disco de freio",
   "Cilindro de Freio (Tras. Esq./Dir.) Mestre",
@@ -124,6 +124,9 @@ const SERVICES = [
   ["Alinhamento Técnico Longarinas", 0],
   ["Alinhamento Técnico Eixo Traseiro", 0],
 ] as [string, number][];
+const SERVICE_DISPLAY_ORDER = [
+  6, 7, 8, 3, 4, 5, 9, 0, 1, 2, 10, 11, 12, 13, 14, 15,
+];
 const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
 const servicePrice = (index: number, prices?: Record<number, number>) =>
@@ -241,10 +244,17 @@ const iso = (d: Date) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
   roundUp = (n: number, step: number) =>
     Math.ceil(n / Math.max(1, step)) * Math.max(1, step),
-  saleOf = (p: any, step = 5) =>
+  cashSaleOf = (p: any, step = 5) =>
     p.saleOverride === undefined || p.saleOverride === null
       ? roundUp(p.cost * (1 + p.margin / 100), step)
       : p.saleOverride,
+  isTirePart = (p: any) => /^pneus?\b/i.test((p.item ?? "").trim()),
+  tireInstallmentSaleOf = (p: any, step = 5) =>
+    Math.round(cashSaleOf(p, step) * 1.1 * 100) / 100,
+  saleOf = (p: any, step = 5) =>
+    isTirePart(p) && p.tirePayment === "installment"
+      ? tireInstallmentSaleOf(p, step)
+      : cashSaleOf(p, step),
   fmt = (s: string) =>
     new Date(s + "T12:00:00").toLocaleDateString("pt-BR", {
       weekday: "long",
@@ -640,7 +650,26 @@ export default function App({ initialState, user, onLogout }: any) {
     roundStep,
     onLogout,
   ]);
-  const pieces = parts.reduce(
+  const tireParts = parts.filter(isTirePart),
+    tirePaymentMode = tireParts.some(
+      (part: any) => part.tirePayment === "installment",
+    )
+      ? "installment"
+      : "cash",
+    piecesCash = parts.reduce(
+      (sum: number, part: any) => sum + part.qty * cashSaleOf(part, roundStep),
+      0,
+    ),
+    piecesInstallment = parts.reduce(
+      (sum: number, part: any) =>
+        sum +
+        part.qty *
+          (isTirePart(part)
+            ? tireInstallmentSaleOf(part, roundStep)
+            : cashSaleOf(part, roundStep)),
+      0,
+    ),
+    pieces = parts.reduce(
       (s: number, p: any) => s + p.qty * saleOf(p, roundStep),
       0,
     ),
@@ -650,7 +679,9 @@ export default function App({ initialState, user, onLogout }: any) {
           s + servicePrice(i, servicePrices) * (serviceQty[i] ?? 0),
         0,
       ) + manualServices.reduce((s: number, x: any) => s + x.qty * x.value, 0),
-    total = pieces + serviceTotal;
+    total = pieces + serviceTotal,
+    totalCash = piecesCash + serviceTotal,
+    totalInstallment = piecesInstallment + serviceTotal;
   const updateRequiredVehicleField = (
     field: "vehicle" | "plate" | "km",
     value: string,
@@ -759,7 +790,11 @@ export default function App({ initialState, user, onLogout }: any) {
             )
             .join("\n")
         : "Nenhum serviço"
-    }\n\nTOTAL: ${brl(total)}\n\nPagamento:\n• Pix com 5% de desconto: ${brl(total * 0.95)}\n• Cartão: até 5x sem juros de ${brl(total / 5)}`;
+    }\n\n${
+      tireParts.length
+        ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)`
+        : `TOTAL: ${brl(total)}\n\nPagamento:\n• Pix com 5% de desconto: ${brl(total * 0.95)}\n• Cartão: até 5x sem juros de ${brl(total / 5)}`
+    }`;
   return (
     <div className={darkMode ? "app dark" : "app"}>
       <aside>
@@ -1486,6 +1521,55 @@ export default function App({ initialState, user, onLogout }: any) {
                           Campos para preencher
                         </span>
                       </div>
+                      {tireParts.length > 0 && (
+                        <div className="tire-payment-panel">
+                          <span>
+                            <b>Forma de pagamento dos pneus</b>
+                            <small>
+                              No parcelado, o sistema acrescenta automaticamente
+                              10% somente ao valor dos pneus.
+                            </small>
+                          </span>
+                          <div>
+                            <button
+                              type="button"
+                              className={
+                                tirePaymentMode === "cash" ? "active" : ""
+                              }
+                              onClick={() =>
+                                setParts(
+                                  parts.map((part: any) =>
+                                    isTirePart(part)
+                                      ? { ...part, tirePayment: "cash" }
+                                      : part,
+                                  ),
+                                )
+                              }
+                            >
+                              À vista
+                            </button>
+                            <button
+                              type="button"
+                              className={
+                                tirePaymentMode === "installment"
+                                  ? "active"
+                                  : ""
+                              }
+                              onClick={() =>
+                                setParts(
+                                  parts.map((part: any) =>
+                                    isTirePart(part)
+                                      ? { ...part, tirePayment: "installment" }
+                                      : part,
+                                  ),
+                                )
+                              }
+                            >
+                              Parcelado (+10%)
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="parts">
                         <div className="phead">
                           <span>Item / Marca</span>
@@ -1596,9 +1680,7 @@ export default function App({ initialState, user, onLogout }: any) {
                                 inputMode="decimal"
                                 placeholder="0,00"
                                 aria-label={`Venda unitária de ${p.item || "peça"} em reais`}
-                                value={
-                                  (p.saleOverride ?? saleOf(p, roundStep)) || ""
-                                }
+                                value={cashSaleOf(p, roundStep) || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
                                   const value = +e.target.value;
@@ -1623,6 +1705,14 @@ export default function App({ initialState, user, onLogout }: any) {
                               >
                                 Auto
                               </button>
+                              {isTirePart(p) && (
+                                <small className="tire-price-preview">
+                                  À vista: {brl(cashSaleOf(p, roundStep))}
+                                  <br />
+                                  Parcelado:{" "}
+                                  {brl(tireInstallmentSaleOf(p, roundStep))}
+                                </small>
+                              )}
                             </label>
                             <b>{brl(p.qty * saleOf(p, roundStep))}</b>
                             <button
@@ -1677,90 +1767,98 @@ export default function App({ initialState, user, onLogout }: any) {
                         </span>
                       </div>
                       <div className="servicegrid">
-                        {SERVICES.map((x, i) => (
-                          <div
-                            className={
-                              "service-row " +
-                              (selectedServices.includes(i) ? "selected" : "") +
-                              (selectedServices.includes(i) &&
-                              (activeAppointment?.status === "servico" ||
-                                activeAppointment?.budget?.processStatus ===
-                                  "Finalizado")
-                                ? " approved"
-                                : "")
-                            }
-                            key={x[0]}
-                          >
-                            <input
-                              type="checkbox"
-                              aria-label={`Selecionar ${x[0]}`}
-                              checked={selectedServices.includes(i)}
-                              onChange={() => {
-                                const selecting = !selectedServices.includes(i);
-                                setSelectedServices(
-                                  selecting
-                                    ? [...selectedServices, i]
-                                    : selectedServices.filter((v) => v !== i),
-                                );
-                                if (selecting && !serviceQty[i])
-                                  setServiceQty({ ...serviceQty, [i]: 1 });
-                              }}
-                            />
-                            <span>
-                              {x[0]}
-                              {selectedServices.includes(i) &&
+                        {SERVICE_DISPLAY_ORDER.map((i) => {
+                          const x = SERVICES[i];
+                          return (
+                            <div
+                              className={
+                                "service-row " +
+                                (selectedServices.includes(i)
+                                  ? "selected"
+                                  : "") +
+                                (selectedServices.includes(i) &&
                                 (activeAppointment?.status === "servico" ||
                                   activeAppointment?.budget?.processStatus ===
-                                    "Finalizado") && (
-                                  <small className="approved-service-badge">
-                                    ✓ Aprovado
-                                  </small>
-                                )}
-                            </span>
-                            <div className="service-entry-fields">
-                              <label>
-                                <small>Qtd.</small>
-                                <input
-                                  className="qty"
-                                  type="number"
-                                  min="1"
-                                  inputMode="numeric"
-                                  value={serviceQty[i] ?? ""}
-                                  onChange={(e) => {
-                                    const next = { ...serviceQty };
-                                    if (e.target.value === "") delete next[i];
-                                    else next[i] = +e.target.value;
-                                    setServiceQty(next);
-                                  }}
-                                />
-                              </label>
-                              {!serviceIsCourtesy(i) && (
+                                    "Finalizado")
+                                  ? " approved"
+                                  : "")
+                              }
+                              key={x[0]}
+                            >
+                              <input
+                                type="checkbox"
+                                aria-label={`Selecionar ${x[0]}`}
+                                checked={selectedServices.includes(i)}
+                                onChange={() => {
+                                  const selecting =
+                                    !selectedServices.includes(i);
+                                  setSelectedServices(
+                                    selecting
+                                      ? [...selectedServices, i]
+                                      : selectedServices.filter((v) => v !== i),
+                                  );
+                                  if (selecting && !serviceQty[i])
+                                    setServiceQty({ ...serviceQty, [i]: 1 });
+                                }}
+                              />
+                              <span>
+                                {x[0]}
+                                {selectedServices.includes(i) &&
+                                  (activeAppointment?.status === "servico" ||
+                                    activeAppointment?.budget?.processStatus ===
+                                      "Finalizado") && (
+                                    <small className="approved-service-badge">
+                                      ✓ Aprovado
+                                    </small>
+                                  )}
+                              </span>
+                              <div className="service-entry-fields">
                                 <label>
-                                  <small>Valor unitário R$</small>
+                                  <small>Qtd.</small>
                                   <input
-                                    className="service-value"
+                                    className="qty"
                                     type="number"
-                                    min="0"
-                                    step="0.01"
-                                    inputMode="decimal"
-                                    value={servicePrice(i, servicePrices) || ""}
-                                    placeholder="0,00"
+                                    min="1"
+                                    inputMode="numeric"
+                                    value={serviceQty[i] ?? ""}
                                     onChange={(e) => {
-                                      const next = { ...servicePrices };
-                                      next[i] = Number(e.target.value);
-                                      setServicePrices(next);
+                                      const next = { ...serviceQty };
+                                      if (e.target.value === "") delete next[i];
+                                      else next[i] = +e.target.value;
+                                      setServiceQty(next);
                                     }}
                                   />
                                 </label>
-                              )}
+                                {!serviceIsCourtesy(i) && (
+                                  <label>
+                                    <small>Valor unitário R$</small>
+                                    <input
+                                      className="service-value"
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      inputMode="decimal"
+                                      value={
+                                        servicePrice(i, servicePrices) || ""
+                                      }
+                                      placeholder="0,00"
+                                      onChange={(e) => {
+                                        const next = { ...servicePrices };
+                                        next[i] = Number(e.target.value);
+                                        setServicePrices(next);
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                              <b>
+                                {serviceIsCourtesy(i)
+                                  ? "Cortesia"
+                                  : `${brl(servicePrice(i, servicePrices))}/ un.`}
+                              </b>
                             </div>
-                            <b>
-                              {serviceIsCourtesy(i)
-                                ? "Cortesia"
-                                : `${brl(servicePrice(i, servicePrices))}/ un.`}
-                            </b>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <div className="manualservices">
                         {manualServices.map((x, i) => (
@@ -1826,6 +1924,12 @@ export default function App({ initialState, user, onLogout }: any) {
                     <span>
                       Serviços <b>{brl(serviceTotal)}</b>
                     </span>
+                    {tireParts.length > 0 && (
+                      <span className="tire-total-comparison">
+                        Pneus: total à vista <b>{brl(totalCash)}</b> · total
+                        parcelado <b>{brl(totalInstallment)}</b>
+                      </span>
+                    )}
                     <strong>
                       Total <em>{brl(total)}</em>
                     </strong>
@@ -1890,7 +1994,15 @@ export default function App({ initialState, user, onLogout }: any) {
                           <b>
                             {p.item} {p.brand}
                           </b>
-                          <small>Unitário: {brl(saleOf(p, roundStep))}</small>
+                          <small>
+                            Unitário
+                            {isTirePart(p)
+                              ? p.tirePayment === "installment"
+                                ? " parcelado"
+                                : " à vista"
+                              : ""}
+                            : {brl(saleOf(p, roundStep))}
+                          </small>
                         </span>
                         <strong>{brl(p.qty * saleOf(p, roundStep))}</strong>
                       </div>
@@ -2611,6 +2723,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 plate: plate.trim().toLocaleUpperCase("pt-BR"),
                 tech: selectedEvaluator,
                 startedAt,
+                inProgress: true,
                 lastEditedBy: user.displayName,
                 lastEditedAt: new Date().toISOString(),
                 _updatedAt: Date.now(),
@@ -2987,6 +3100,21 @@ function Agenda({
     [mode, setMode] = useState<"dia" | "semana" | "mes">("mes"),
     [openCal, setOpenCal] = useState(true),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
+  const carryLimit = new Date(today);
+  carryLimit.setDate(carryLimit.getDate() + 1);
+  const carryLimitIso = iso(carryLimit),
+    isCarriedInto = (appointment: Appt, targetDate: string) =>
+      appointment.type !== "bloqueio" &&
+      !!appointment.inProgress &&
+      appointment.budget?.processStatus !== "Finalizado" &&
+      appointment.date < targetDate &&
+      targetDate <= carryLimitIso,
+    appointmentsForDate = (targetDate: string) =>
+      (data as Appt[]).filter(
+        (appointment) =>
+          appointment.date === targetDate ||
+          isCarriedInto(appointment, targetDate),
+      );
   const selectedDate = new Date(date + "T12:00:00"),
     calendarDays = useMemo(() => {
       if (mode === "dia") return [new Date(date + "T12:00:00")];
@@ -3009,7 +3137,7 @@ function Agenda({
         return d;
       });
     }, [cursor, date, mode]);
-  const list = data.filter((a: Appt) => a.date === date),
+  const list = appointmentsForDate(date),
     openQuotesCount = (data as Appt[]).filter(
       (a) =>
         a.type === "cliente" &&
@@ -3153,7 +3281,7 @@ function Agenda({
             <div className="days">
               {calendarDays.map((d) => {
                 const ds = iso(d),
-                  apps = data.filter((a: Appt) => a.date === ds),
+                  apps = appointmentsForDate(ds),
                   holiday = holidays.find((h: any) => h.date === ds);
                 return (
                   <button
@@ -3171,10 +3299,11 @@ function Agenda({
                     {holiday && <em title={holiday.name}>● {holiday.name}</em>}
                     {apps.map((a: Appt) => (
                       <span
-                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}`}
+                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
                         key={a.id}
                       >
-                        {a.time} {a.client.split(" ")[0]}
+                        {isCarriedInto(a, ds) ? "↳ " : `${a.time} `}
+                        {a.client.split(" ")[0]}
                         {a.quoteSentAt ? " ✓" : ""}
                       </span>
                     ))}
@@ -3203,7 +3332,7 @@ function Agenda({
             const expanded = expandedAppointments.includes(a.id);
             return (
               <article
-                className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}`}
+                className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
                 key={a.id}
               >
                 <time>
@@ -3257,6 +3386,11 @@ function Agenda({
                       </>
                     )}
                   </p>
+                  {isCarriedInto(a, date) && (
+                    <small className="carry-over-notice">
+                      ↳ Permanece na oficina desde {fmt(a.date)}
+                    </small>
+                  )}
                   {a.budget?.processStatus === "Finalizado" ? (
                     <div className="agenda-finalization compact">
                       <b>✓ {completedAttendanceLabel(a)}</b>
