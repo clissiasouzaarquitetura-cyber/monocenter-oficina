@@ -6058,3 +6058,81 @@ header > button {
     white-space: normal;
   }
 }
+
+/* Serviços em sequência vertical e separados por categoria. */
+.servicegrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 13px;
+}
+.service-group {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #d9e0e7;
+  border-radius: 9px;
+  padding: 9px;
+  background: #f8fafc;
+}
+.service-group > h3 {
+  margin: 0 0 2px;
+  border-left: 5px solid #e31b23;
+  border-radius: 4px;
+  padding: 7px 10px;
+  background: #eef1f4;
+  color: #263442;
+  font-size: 13px;
+}
+.servicegrid .service-group .service-row {
+  grid-template-columns: 28px minmax(260px, 1fr) 250px 115px;
+  min-height: 62px;
+  padding: 8px 10px;
+  background: #fff;
+}
+.servicegrid .service-group .service-row > span {
+  padding: 7px 9px;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.servicegrid .service-group .service-entry-fields {
+  grid-template-columns: 75px 165px;
+}
+.servicegrid .service-group .service-entry-fields input {
+  min-height: 36px;
+  font-variant-numeric: tabular-nums;
+}
+.servicegrid .service-group .service-row > b {
+  text-align: right;
+  font-size: 12px;
+}
+.app.dark .service-group {
+  border-color: #465466;
+  background: #141e2a;
+}
+.app.dark .service-group > h3 {
+  background: #293645;
+  color: #f1f5f9;
+}
+.app.dark .servicegrid .service-group .service-row {
+  background: #1b2633;
+}
+@media (max-width: 700px) {
+  .service-group {
+    padding: 7px;
+  }
+  .service-group > h3 {
+    font-size: 14px;
+  }
+  .servicegrid .service-group .service-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+    padding: 10px;
+  }
+  .servicegrid .service-group .service-entry-fields {
+    grid-column: 2;
+    grid-template-columns: 82px minmax(145px, 1fr);
+    width: 100%;
+  }
+  .servicegrid .service-group .service-row > b {
+    grid-column: 2;
+    text-align: left;
+  }
+}

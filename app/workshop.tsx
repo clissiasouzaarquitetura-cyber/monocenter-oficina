@@ -124,8 +124,15 @@ const SERVICES = [
   ["Alinhamento Técnico Longarinas", 0],
   ["Alinhamento Técnico Eixo Traseiro", 0],
 ] as [string, number][];
-const SERVICE_DISPLAY_ORDER = [
-  6, 7, 8, 3, 4, 5, 9, 0, 1, 2, 10, 11, 12, 13, 14, 15,
+const SERVICE_GROUPS = [
+  { title: "1. Montagem de pneus", indexes: [6, 7, 8] },
+  { title: "2. Balanceamento", indexes: [3, 4, 5] },
+  { title: "3. Rodízio", indexes: [9] },
+  { title: "4. Alinhamento de direção", indexes: [0, 1, 2] },
+  {
+    title: "5. Mãos de obra e alinhamentos técnicos",
+    indexes: [10, 11, 12, 13, 14, 15],
+  },
 ];
 const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
@@ -251,6 +258,17 @@ const iso = (d: Date) =>
     ].join("-"),
   brl = (n: number) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
+  decimalValue = (n: number) =>
+    Number(n || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
+  parseDecimalValue = (value: string) => {
+    const normalized = value.includes(",")
+      ? value.replace(/\./g, "").replace(",", ".")
+      : value;
+    return Number(normalized.replace(/[^0-9.-]/g, "")) || 0;
+  },
   roundUp = (n: number, step: number) =>
     Math.ceil(n / Math.max(1, step)) * Math.max(1, step),
   cashSaleOf = (p: any, step = 5) =>
@@ -447,6 +465,9 @@ export default function App({ initialState, user, onLogout }: any) {
     }),
     [custom, setCustom] = useState<string[]>([]),
     [evaluationSearch, setEvaluationSearch] = useState(""),
+    [serviceValueDrafts, setServiceValueDrafts] = useState<
+      Record<string, string>
+    >({}),
     [techs, setTechs] = useState<string[]>(
       (shared.techs ?? ["Saulo", "Tiago", "Vitor"]).filter(
         (name: string) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
@@ -1785,98 +1806,141 @@ export default function App({ initialState, user, onLogout }: any) {
                         </span>
                       </div>
                       <div className="servicegrid">
-                        {SERVICE_DISPLAY_ORDER.map((i) => {
-                          const x = SERVICES[i];
-                          return (
-                            <div
-                              className={
-                                "service-row " +
-                                (selectedServices.includes(i)
-                                  ? "selected"
-                                  : "") +
-                                (selectedServices.includes(i) &&
-                                (activeAppointment?.status === "servico" ||
-                                  activeAppointment?.budget?.processStatus ===
-                                    "Finalizado")
-                                  ? " approved"
-                                  : "")
-                              }
-                              key={x[0]}
-                            >
-                              <input
-                                type="checkbox"
-                                aria-label={`Selecionar ${x[0]}`}
-                                checked={selectedServices.includes(i)}
-                                onChange={() => {
-                                  const selecting =
-                                    !selectedServices.includes(i);
-                                  setSelectedServices(
-                                    selecting
-                                      ? [...selectedServices, i]
-                                      : selectedServices.filter((v) => v !== i),
-                                  );
-                                  if (selecting && !serviceQty[i])
-                                    setServiceQty({ ...serviceQty, [i]: 1 });
-                                }}
-                              />
-                              <span>
-                                {x[0]}
-                                {selectedServices.includes(i) &&
-                                  (activeAppointment?.status === "servico" ||
-                                    activeAppointment?.budget?.processStatus ===
-                                      "Finalizado") && (
-                                    <small className="approved-service-badge">
-                                      ✓ Aprovado
-                                    </small>
-                                  )}
-                              </span>
-                              <div className="service-entry-fields">
-                                <label>
-                                  <small>Qtd.</small>
+                        {SERVICE_GROUPS.map((group) => (
+                          <section className="service-group" key={group.title}>
+                            <h3>{group.title}</h3>
+                            {group.indexes.map((i) => {
+                              const x = SERVICES[i];
+                              return (
+                                <div
+                                  className={
+                                    "service-row " +
+                                    (selectedServices.includes(i)
+                                      ? "selected"
+                                      : "") +
+                                    (selectedServices.includes(i) &&
+                                    (activeAppointment?.status === "servico" ||
+                                      activeAppointment?.budget
+                                        ?.processStatus === "Finalizado")
+                                      ? " approved"
+                                      : "")
+                                  }
+                                  key={x[0]}
+                                >
                                   <input
-                                    className="qty"
-                                    type="number"
-                                    min="1"
-                                    inputMode="numeric"
-                                    value={serviceQty[i] ?? ""}
-                                    onChange={(e) => {
-                                      const next = { ...serviceQty };
-                                      if (e.target.value === "") delete next[i];
-                                      else next[i] = +e.target.value;
-                                      setServiceQty(next);
+                                    type="checkbox"
+                                    aria-label={`Selecionar ${x[0]}`}
+                                    checked={selectedServices.includes(i)}
+                                    onChange={() => {
+                                      const selecting =
+                                        !selectedServices.includes(i);
+                                      setSelectedServices(
+                                        selecting
+                                          ? [...selectedServices, i]
+                                          : selectedServices.filter(
+                                              (v) => v !== i,
+                                            ),
+                                      );
+                                      if (selecting && !serviceQty[i])
+                                        setServiceQty({
+                                          ...serviceQty,
+                                          [i]: 1,
+                                        });
                                     }}
                                   />
-                                </label>
-                                {!serviceIsCourtesy(i) && (
-                                  <label>
-                                    <small>Valor unitário R$</small>
-                                    <input
-                                      className="service-value"
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      inputMode="decimal"
-                                      value={
-                                        servicePrice(i, servicePrices) || ""
-                                      }
-                                      placeholder="0,00"
-                                      onChange={(e) => {
-                                        const next = { ...servicePrices };
-                                        next[i] = Number(e.target.value);
-                                        setServicePrices(next);
-                                      }}
-                                    />
-                                  </label>
-                                )}
-                              </div>
-                              <b>
-                                {serviceIsCourtesy(i)
-                                  ? "Cortesia"
-                                  : `${brl(servicePrice(i, servicePrices))}/ un.`}
-                              </b>
-                            </div>
-                          );
-                        })}
+                                  <span>
+                                    {x[0]}
+                                    {selectedServices.includes(i) &&
+                                      (activeAppointment?.status ===
+                                        "servico" ||
+                                        activeAppointment?.budget
+                                          ?.processStatus === "Finalizado") && (
+                                        <small className="approved-service-badge">
+                                          ✓ Aprovado
+                                        </small>
+                                      )}
+                                  </span>
+                                  <div className="service-entry-fields">
+                                    <label>
+                                      <small>Qtd.</small>
+                                      <input
+                                        className="qty"
+                                        type="number"
+                                        min="1"
+                                        inputMode="numeric"
+                                        value={serviceQty[i] ?? ""}
+                                        onChange={(e) => {
+                                          const next = { ...serviceQty };
+                                          if (e.target.value === "")
+                                            delete next[i];
+                                          else next[i] = +e.target.value;
+                                          setServiceQty(next);
+                                        }}
+                                      />
+                                    </label>
+                                    {!serviceIsCourtesy(i) && (
+                                      <label>
+                                        <small>Valor unitário R$</small>
+                                        <input
+                                          className="service-value"
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={
+                                            serviceValueDrafts[
+                                              `service-${i}`
+                                            ] ??
+                                            decimalValue(
+                                              servicePrice(i, servicePrices),
+                                            )
+                                          }
+                                          placeholder="0,00"
+                                          onFocus={(event) => {
+                                            setServiceValueDrafts(
+                                              (current) => ({
+                                                ...current,
+                                                [`service-${i}`]: decimalValue(
+                                                  servicePrice(
+                                                    i,
+                                                    servicePrices,
+                                                  ),
+                                                ),
+                                              }),
+                                            );
+                                            event.currentTarget.select();
+                                          }}
+                                          onChange={(e) => {
+                                            const typed = e.target.value;
+                                            setServiceValueDrafts(
+                                              (current) => ({
+                                                ...current,
+                                                [`service-${i}`]: typed,
+                                              }),
+                                            );
+                                            const next = { ...servicePrices };
+                                            next[i] = parseDecimalValue(typed);
+                                            setServicePrices(next);
+                                          }}
+                                          onBlur={() =>
+                                            setServiceValueDrafts((current) => {
+                                              const next = { ...current };
+                                              delete next[`service-${i}`];
+                                              return next;
+                                            })
+                                          }
+                                        />
+                                      </label>
+                                    )}
+                                  </div>
+                                  <b>
+                                    {serviceIsCourtesy(i)
+                                      ? "Cortesia"
+                                      : `${brl(servicePrice(i, servicePrices))}/ un.`}
+                                  </b>
+                                </div>
+                              );
+                            })}
+                          </section>
+                        ))}
                       </div>
                       <div className="manualservices">
                         {manualServices.map((x, i) => (
@@ -1906,13 +1970,36 @@ export default function App({ initialState, user, onLogout }: any) {
                             <label>
                               Valor unitário R$
                               <input
-                                type="number"
-                                value={x.value}
+                                type="text"
+                                inputMode="decimal"
+                                value={
+                                  serviceValueDrafts[`manual-${i}`] ??
+                                  decimalValue(x.value)
+                                }
+                                onFocus={(event) => {
+                                  setServiceValueDrafts((current) => ({
+                                    ...current,
+                                    [`manual-${i}`]: decimalValue(x.value),
+                                  }));
+                                  event.currentTarget.select();
+                                }}
                                 onChange={(e) => {
+                                  const typed = e.target.value;
+                                  setServiceValueDrafts((current) => ({
+                                    ...current,
+                                    [`manual-${i}`]: typed,
+                                  }));
                                   const a = [...manualServices];
-                                  a[i].value = +e.target.value;
+                                  a[i].value = parseDecimalValue(typed);
                                   setManualServices(a);
                                 }}
+                                onBlur={() =>
+                                  setServiceValueDrafts((current) => {
+                                    const next = { ...current };
+                                    delete next[`manual-${i}`];
+                                    return next;
+                                  })
+                                }
                               />
                             </label>
                             <b>{brl(x.qty * x.value)}</b>
