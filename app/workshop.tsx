@@ -126,6 +126,8 @@ const SERVICES = [
 ] as [string, number][];
 const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
+const servicePrice = (index: number, prices?: Record<number, number>) =>
+  prices?.[index] ?? SERVICES[index]?.[1] ?? 0;
 const normalizeSearch = (value: string) =>
   value
     .normalize("NFD")
@@ -163,6 +165,7 @@ type BudgetState = {
   parts: any[];
   selectedServices: number[];
   serviceQty: Record<number, number>;
+  servicePrices?: Record<number, number>;
   manualServices: any[];
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
@@ -470,6 +473,9 @@ export default function App({ initialState, user, onLogout }: any) {
     [serviceQty, setServiceQty] = useState<Record<number, number>>(
       shared.serviceQty ?? {},
     ),
+    [servicePrices, setServicePrices] = useState<Record<number, number>>(
+      shared.servicePrices ?? {},
+    ),
     [manualServices, setManualServices] = useState(shared.manualServices ?? []),
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
@@ -507,6 +513,7 @@ export default function App({ initialState, user, onLogout }: any) {
         parts,
         selectedServices,
         serviceQty,
+        servicePrices,
         manualServices,
         patioNotes,
         processStatus,
@@ -548,6 +555,7 @@ export default function App({ initialState, user, onLogout }: any) {
     parts,
     selectedServices,
     serviceQty,
+    servicePrices,
     manualServices,
     patioNotes,
     processStatus,
@@ -616,7 +624,8 @@ export default function App({ initialState, user, onLogout }: any) {
     ),
     serviceTotal =
       selectedServices.reduce(
-        (s: number, i: number) => s + SERVICES[i][1] * (serviceQty[i] ?? 0),
+        (s: number, i: number) =>
+          s + servicePrice(i, servicePrices) * (serviceQty[i] ?? 0),
         0,
       ) + manualServices.reduce((s: number, x: any) => s + x.qty * x.value, 0),
     total = pieces + serviceTotal;
@@ -675,7 +684,7 @@ export default function App({ initialState, user, onLogout }: any) {
       ...selectedServices.map((i: number) => ({
         name: SERVICES[i][0],
         qty: serviceQty[i] ?? 0,
-        total: SERVICES[i][1] * (serviceQty[i] ?? 0),
+        total: servicePrice(i, servicePrices) * (serviceQty[i] ?? 0),
         courtesy: serviceIsCourtesy(i),
       })),
       ...manualServices
@@ -827,6 +836,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setParts(a.budget.parts ?? []);
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
+                setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
@@ -837,6 +847,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setParts([]);
                 setSelectedServices([]);
                 setServiceQty({});
+                setServicePrices({});
                 setManualServices([]);
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
@@ -971,6 +982,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             parts,
                             selectedServices,
                             serviceQty,
+                            servicePrices,
                             manualServices,
                             patioNotes,
                             processStatus,
@@ -1307,6 +1319,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           parts: nextParts,
                           selectedServices,
                           serviceQty,
+                          servicePrices,
                           manualServices,
                           patioNotes,
                           processStatus,
@@ -1532,7 +1545,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="sectiontitle">
                         <Title
                           a="Serviços e mão de obra"
-                          b="Selecione, informe a quantidade ou adicione manualmente."
+                          b="Selecione e informe a quantidade e o valor unitário."
                         />
                         <button
                           onClick={() =>
@@ -1555,42 +1568,72 @@ export default function App({ initialState, user, onLogout }: any) {
                       </div>
                       <div className="servicegrid">
                         {SERVICES.map((x, i) => (
-                          <label
+                          <div
                             className={
-                              selectedServices.includes(i) ? "selected" : ""
+                              "service-row " +
+                              (selectedServices.includes(i) ? "selected" : "")
                             }
                             key={x[0]}
                           >
                             <input
                               type="checkbox"
+                              aria-label={`Selecionar ${x[0]}`}
                               checked={selectedServices.includes(i)}
-                              onChange={() =>
+                              onChange={() => {
+                                const selecting = !selectedServices.includes(i);
                                 setSelectedServices(
-                                  selectedServices.includes(i)
-                                    ? selectedServices.filter((v) => v !== i)
-                                    : [...selectedServices, i],
-                                )
-                              }
-                            />
-                            <span>{x[0]}</span>
-                            <input
-                              className="qty"
-                              type="number"
-                              min="1"
-                              value={serviceQty[i] ?? ""}
-                              onChange={(e) => {
-                                const next = { ...serviceQty };
-                                if (e.target.value === "") delete next[i];
-                                else next[i] = +e.target.value;
-                                setServiceQty(next);
+                                  selecting
+                                    ? [...selectedServices, i]
+                                    : selectedServices.filter((v) => v !== i),
+                                );
+                                if (selecting && !serviceQty[i])
+                                  setServiceQty({ ...serviceQty, [i]: 1 });
                               }}
                             />
+                            <span>{x[0]}</span>
+                            <div className="service-entry-fields">
+                              <label>
+                                <small>Qtd.</small>
+                                <input
+                                  className="qty"
+                                  type="number"
+                                  min="1"
+                                  inputMode="numeric"
+                                  value={serviceQty[i] ?? ""}
+                                  onChange={(e) => {
+                                    const next = { ...serviceQty };
+                                    if (e.target.value === "") delete next[i];
+                                    else next[i] = +e.target.value;
+                                    setServiceQty(next);
+                                  }}
+                                />
+                              </label>
+                              {!serviceIsCourtesy(i) && (
+                                <label>
+                                  <small>Valor unitário R$</small>
+                                  <input
+                                    className="service-value"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    inputMode="decimal"
+                                    value={servicePrice(i, servicePrices) || ""}
+                                    placeholder="0,00"
+                                    onChange={(e) => {
+                                      const next = { ...servicePrices };
+                                      next[i] = Number(e.target.value);
+                                      setServicePrices(next);
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
                             <b>
                               {serviceIsCourtesy(i)
                                 ? "Cortesia"
-                                : brl(x[1]) + "/ un."}
+                                : `${brl(servicePrice(i, servicePrices))}/ un.`}
                             </b>
-                          </label>
+                          </div>
                         ))}
                       </div>
                       <div className="manualservices">
@@ -1736,13 +1779,16 @@ export default function App({ initialState, user, onLogout }: any) {
                             Unitário:{" "}
                             {serviceIsCourtesy(i)
                               ? "Cortesia"
-                              : brl(SERVICES[i][1])}
+                              : brl(servicePrice(i, servicePrices))}
                           </small>
                         </span>
                         <strong>
                           {serviceIsCourtesy(i)
                             ? "Cortesia"
-                            : brl(SERVICES[i][1] * (serviceQty[i] ?? 0))}
+                            : brl(
+                                servicePrice(i, servicePrices) *
+                                  (serviceQty[i] ?? 0),
+                              )}
                         </strong>
                       </div>
                     ))}
@@ -1811,6 +1857,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             parts,
                             selectedServices,
                             serviceQty,
+                            servicePrices,
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
@@ -1894,6 +1941,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             parts,
                             selectedServices,
                             serviceQty,
+                            servicePrices,
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
@@ -1937,6 +1985,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             parts,
                             selectedServices,
                             serviceQty,
+                            servicePrices,
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
@@ -2155,6 +2204,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           parts,
                           selectedServices,
                           serviceQty,
+                          servicePrices,
                           manualServices,
                           patioNotes,
                           processStatus: "Finalizado",
@@ -2244,6 +2294,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setParts(a.budget.parts ?? []);
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
+                setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
@@ -2251,6 +2302,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setParts([]);
                 setSelectedServices([]);
                 setServiceQty({});
+                setServicePrices({});
                 setManualServices([]);
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
@@ -2402,6 +2454,7 @@ export default function App({ initialState, user, onLogout }: any) {
           parts={parts}
           selectedServices={selectedServices}
           serviceQty={serviceQty}
+          servicePrices={servicePrices}
           manualServices={manualServices}
           patioNotes={patioNotes}
           checks={checks}
@@ -3569,6 +3622,7 @@ function PrintDocuments({
   parts,
   selectedServices,
   serviceQty,
+  servicePrices,
   manualServices,
   patioNotes,
   checks,
@@ -3703,7 +3757,9 @@ function PrintDocuments({
           <div className="a4-line" key={i}>
             <b>{serviceQty[i] ?? 0}x</b>
             <span>{SERVICES[i][0]}</span>
-            <em>{brl(SERVICES[i][1] * (serviceQty[i] ?? 0))}</em>
+            <em>
+              {brl(servicePrice(i, servicePrices) * (serviceQty[i] ?? 0))}
+            </em>
           </div>
         ))}
         {manualServices
@@ -4331,7 +4387,9 @@ function AttendanceSummary({
     servicesTotal =
       budget.selectedServices.reduce(
         (sum: number, index: number) =>
-          sum + SERVICES[index][1] * (budget.serviceQty[index] ?? 0),
+          sum +
+          servicePrice(index, budget.servicePrices) *
+            (budget.serviceQty[index] ?? 0),
         0,
       ) +
       budget.manualServices.reduce(
@@ -4435,7 +4493,10 @@ function AttendanceSummary({
             <strong>
               {serviceIsCourtesy(index)
                 ? "Cortesia"
-                : brl(SERVICES[index][1] * (budget.serviceQty[index] ?? 0))}
+                : brl(
+                    servicePrice(index, budget.servicePrices) *
+                      (budget.serviceQty[index] ?? 0),
+                  )}
             </strong>
           </div>
         ))}
