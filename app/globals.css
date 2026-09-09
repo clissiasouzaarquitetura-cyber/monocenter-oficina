@@ -2471,6 +2471,28 @@ header > button {
   font-style: normal;
   font-weight: 700;
 }
+.print-approval-banner {
+  margin: 8px 0;
+  border: 2px solid #15803d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #dcfce7 !important;
+  color: #166534 !important;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+.print-approved {
+  display: inline-block;
+  margin-left: 8px;
+  border-radius: 999px;
+  padding: 2px 6px;
+  background: #dcfce7 !important;
+  color: #15803d !important;
+  font-size: 8px;
+  font-weight: 900;
+}
 .budget-a4 .print-notes {
   background: #f3f5f7 !important;
   border-left: 4px solid #d71920;

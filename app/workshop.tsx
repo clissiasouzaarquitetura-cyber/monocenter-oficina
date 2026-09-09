@@ -3696,6 +3696,8 @@ function PrintDocuments({
   roundStep,
 }: any) {
   const a = DISPLAY_APPT,
+    budgetApproved =
+      a.status === "servico" || a.budget?.processStatus === "Finalizado",
     state = (i: number) =>
       status[i + 1] === "g"
         ? "Bom estado"
@@ -3803,6 +3805,9 @@ function PrintDocuments({
             {a.km || "Não informado"}
           </span>
         </div>
+        {budgetApproved && (
+          <div className="print-approval-banner">✓ ORÇAMENTO APROVADO</div>
+        )}
         <h3>Peças</h3>
         {parts.map((p: any, i: number) => (
           <div className="a4-line" key={i}>
@@ -3817,7 +3822,12 @@ function PrintDocuments({
         {selectedServices.map((i: number) => (
           <div className="a4-line" key={i}>
             <b>{serviceQty[i] ?? 0}x</b>
-            <span>{SERVICES[i][0]}</span>
+            <span>
+              {SERVICES[i][0]}
+              {budgetApproved && (
+                <small className="print-approved">✓ APROVADO</small>
+              )}
+            </span>
             <em>
               {brl(servicePrice(i, servicePrices) * (serviceQty[i] ?? 0))}
             </em>
@@ -3828,7 +3838,12 @@ function PrintDocuments({
           .map((service: any, i: number) => (
             <div className="a4-line" key={`manual-budget-${i}`}>
               <b>{service.qty || 0}x</b>
-              <span>{service.name}</span>
+              <span>
+                {service.name}
+                {budgetApproved && (
+                  <small className="print-approved">✓ APROVADO</small>
+                )}
+              </span>
               <em>{brl((service.qty || 0) * (service.value || 0))}</em>
             </div>
           ))}
@@ -3871,6 +3886,9 @@ function PrintDocuments({
             {a.plate || "Não informada"}
           </span>
         </div>
+        {budgetApproved && (
+          <div className="print-approval-banner">✓ SERVIÇOS APROVADOS</div>
+        )}
         <h3>Peças e materiais</h3>
         {parts.map((p: any, i: number) => (
           <div className="a4-line no-price" key={i}>
@@ -3884,7 +3902,12 @@ function PrintDocuments({
         {selectedServices.map((i: number) => (
           <div className="a4-line no-price" key={i}>
             <b>{serviceQty[i] ?? 0}x</b>
-            <span>{SERVICES[i][0]}</span>
+            <span>
+              {SERVICES[i][0]}
+              {budgetApproved && (
+                <small className="print-approved">✓ APROVADO</small>
+              )}
+            </span>
           </div>
         ))}
         {manualServices
@@ -3892,7 +3915,12 @@ function PrintDocuments({
           .map((service: any, i: number) => (
             <div className="a4-line no-price" key={`manual-proposal-${i}`}>
               <b>{service.qty || 0}x</b>
-              <span>{service.name}</span>
+              <span>
+                {service.name}
+                {budgetApproved && (
+                  <small className="print-approved">✓ APROVADO</small>
+                )}
+              </span>
             </div>
           ))}
         <div
