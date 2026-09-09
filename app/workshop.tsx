@@ -3126,7 +3126,7 @@ function Agenda({
                   <b>{a.time}</b>
                   <small>
                     {a.budget?.processStatus === "Finalizado"
-                      ? completedAttendanceLabel(a).toLocaleUpperCase("pt-BR")
+                      ? "FINALIZADO"
                       : agendaStatusLabel(a)}
                   </small>
                   {expanded && a.type !== "bloqueio" && a.tech && (
