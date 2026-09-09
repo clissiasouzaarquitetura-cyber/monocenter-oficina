@@ -853,7 +853,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setProcessStatus("Em andamento");
               }
               setView(
-                a.type === "revisao" && (!a.reviewWithService || !a.review)
+                a.type === "revisao" && !a.review
                   ? "revisao"
                   : a.budget?.processStatus === "Finalizado"
                     ? "atendimento"
@@ -900,10 +900,26 @@ export default function App({ initialState, user, onLogout }: any) {
               }}
               onSave={(review: ReviewState) => {
                 syncBlockedUntil.current = Date.now() + 4000;
-                const withService = !!activeAppointment.reviewWithService;
+                const withService = !!activeAppointment.reviewWithService,
+                  finishedAt = new Date().toISOString(),
+                  finishedBudget: BudgetState = {
+                    parts: activeAppointment.budget?.parts ?? [],
+                    selectedServices:
+                      activeAppointment.budget?.selectedServices ?? [],
+                    serviceQty: activeAppointment.budget?.serviceQty ?? {},
+                    servicePrices:
+                      activeAppointment.budget?.servicePrices ?? {},
+                    manualServices:
+                      activeAppointment.budget?.manualServices ?? [],
+                    patioNotes: activeAppointment.budget?.patioNotes ?? "",
+                    processStatus: "Finalizado",
+                  };
                 const updated: Appt = {
                   ...activeAppointment,
                   status: withService ? "agendado" : "servico",
+                  inProgress: withService
+                    ? activeAppointment.inProgress
+                    : false,
                   startedAt: withService
                     ? activeAppointment.startedAt ||
                       new Date().toLocaleTimeString("pt-BR", {
@@ -912,8 +928,27 @@ export default function App({ initialState, user, onLogout }: any) {
                       })
                     : activeAppointment.startedAt,
                   review,
+                  budget: withService
+                    ? activeAppointment.budget
+                    : finishedBudget,
+                  conference: withService
+                    ? activeAppointment.conference
+                    : {
+                        checks: activeAppointment.conference?.checks ?? {},
+                        finalizedAt: finishedAt,
+                        finalizedBy: user.displayName,
+                        finalization: {
+                          serviceCompleted: true,
+                          vehicleReleased: true,
+                          clientOriented: true,
+                          note: review.notes,
+                          technician: review.reviewer,
+                          executor: review.reviewer,
+                          checker: user.displayName,
+                        },
+                      },
                   lastEditedBy: user.displayName,
-                  lastEditedAt: new Date().toISOString(),
+                  lastEditedAt: finishedAt,
                   _updatedAt: Date.now(),
                 };
                 DISPLAY_APPT = updated;
@@ -928,6 +963,7 @@ export default function App({ initialState, user, onLogout }: any) {
                   }),
                 );
                 setStarted(updated.startedAt ?? "");
+                if (!withService) setProcessStatus("Finalizado");
                 setView(withService ? "avaliacao" : "agenda");
                 scrollTo(0, 0);
               }}
@@ -2346,7 +2382,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setProcessStatus("Em andamento");
               }
               setView(
-                a.type === "revisao" && (!a.reviewWithService || !a.review)
+                a.type === "revisao" && !a.review
                   ? "revisao"
                   : a.budget?.processStatus === "Finalizado"
                     ? "atendimento"
@@ -3146,8 +3182,7 @@ function Agenda({
                     </button>
                     {a.type !== "bloqueio" && (
                       <button onClick={() => start(a)}>
-                        {a.type === "revisao" &&
-                        (!a.reviewWithService || !a.review)
+                        {a.type === "revisao" && !a.review
                           ? "Abrir revisão →"
                           : a.type === "retorno" && a.status === "agendado"
                             ? "Abrir retorno →"
