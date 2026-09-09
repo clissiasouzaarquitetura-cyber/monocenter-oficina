@@ -5772,3 +5772,203 @@ header > button {
     min-width: 125px;
   }
 }
+
+/* Pedido de compra */
+.purchase-page {
+  max-width: 1400px;
+}
+.purchase-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 9px;
+  margin-bottom: 12px;
+}
+.purchase-summary button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 11px 13px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 800;
+}
+.purchase-summary button b {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #e8edf3;
+}
+.purchase-summary button.active {
+  border-color: #263442;
+  box-shadow: inset 0 0 0 1px #263442;
+}
+.purchase-summary button.active.pending {
+  border-color: #d59600;
+  background: #fff7df;
+}
+.purchase-summary button.active.ordered {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+.purchase-summary button.active.received {
+  border-color: #178448;
+  background: #edfff4;
+}
+.purchase-guidance {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 12px;
+  border-left: 5px solid #e31b23;
+  border-radius: 8px;
+  padding: 11px 13px;
+  background: #fff;
+}
+.purchase-guidance span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.purchase-list {
+  display: grid;
+  gap: 11px;
+}
+.purchase-list article {
+  border: 1px solid var(--line);
+  border-left: 6px solid #d59600;
+  border-radius: 10px;
+  padding: 14px;
+  background: #fffdf7;
+}
+.purchase-list article.ordered {
+  border-left-color: #2563eb;
+  background: #f4f8ff;
+}
+.purchase-list article.received {
+  border-left-color: #178448;
+  background: #effcf4;
+}
+.purchase-part-heading,
+.purchase-data,
+.purchase-checks {
+  display: grid;
+  gap: 10px;
+}
+.purchase-part-heading {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+.purchase-part-heading span,
+.purchase-part-heading small,
+.purchase-data small,
+.purchase-checks label span,
+.purchase-checks label small {
+  display: block;
+}
+.purchase-part-heading b {
+  font-size: 15px;
+}
+.purchase-part-heading small,
+.purchase-data small,
+.purchase-checks label small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.purchase-part-heading strong {
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #fff0bd;
+  color: #805900;
+  font-size: 10px;
+}
+.purchase-list article.ordered .purchase-part-heading strong {
+  background: #dbeafe;
+  color: #174ea6;
+}
+.purchase-list article.received .purchase-part-heading strong {
+  background: #d7f8e3;
+  color: #116a39;
+}
+.purchase-data {
+  grid-template-columns: 0.45fr 1fr 1.5fr 0.8fr;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 11px 0;
+}
+.purchase-checks {
+  grid-template-columns: 0.8fr 1fr 1.6fr;
+  align-items: end;
+  margin-top: 12px;
+}
+.purchase-checks > label:not(.purchase-note) {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px;
+  background: #fff;
+}
+.purchase-checks input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  accent-color: #178448;
+}
+.purchase-note {
+  font-size: 10px;
+  font-weight: 800;
+}
+.purchase-note input {
+  width: 100%;
+  margin-top: 4px;
+  border: 2px solid #8eb7dc;
+  border-radius: 7px;
+  padding: 10px;
+  background: #edf6ff;
+}
+.app.dark .purchase-summary button,
+.app.dark .purchase-guidance,
+.app.dark .purchase-checks > label:not(.purchase-note) {
+  background: #1b2634;
+  color: #fff;
+}
+.app.dark .purchase-list article {
+  background: #302918;
+}
+.app.dark .purchase-list article.ordered {
+  background: #172b48;
+}
+.app.dark .purchase-list article.received {
+  background: #163524;
+}
+.app.dark .purchase-note input {
+  border-color: #5784ac;
+  background: #17212d;
+  color: #fff;
+}
+@media (max-width: 700px) {
+  .purchase-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .purchase-part-heading,
+  .purchase-data,
+  .purchase-checks {
+    grid-template-columns: 1fr;
+  }
+  .purchase-part-heading strong {
+    width: fit-content;
+  }
+  .purchase-guidance span,
+  .purchase-part-heading small,
+  .purchase-data small,
+  .purchase-checks label small,
+  .purchase-note {
+    font-size: 12px !important;
+  }
+  .purchase-note input {
+    font-size: 14px;
+  }
+}

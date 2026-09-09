@@ -173,6 +173,14 @@ type BudgetState = {
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
 };
+type PurchaseCheck = {
+  ordered: boolean;
+  received: boolean;
+  note: string;
+  orderedBy?: string;
+  receivedBy?: string;
+  updatedAt?: string;
+};
 type View =
   | "agenda"
   | "atendimento"
@@ -181,6 +189,7 @@ type View =
   | "proposta"
   | "torque"
   | "revisao"
+  | "compras"
   | "relatorios"
   | "historico"
   | "config";
@@ -512,7 +521,10 @@ export default function App({ initialState, user, onLogout }: any) {
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
       shared.processStatus ?? "Em andamento",
-    );
+    ),
+    [purchaseChecks, setPurchaseChecks] = useState<
+      Record<string, PurchaseCheck>
+    >(shared.purchaseChecks ?? {});
   const firstSave = useRef(true),
     skipSave = useRef(false),
     syncBlockedUntil = useRef(0),
@@ -549,6 +561,7 @@ export default function App({ initialState, user, onLogout }: any) {
         manualServices,
         patioNotes,
         processStatus,
+        purchaseChecks,
       };
       fetch("/api/state", {
         method: "POST",
@@ -591,6 +604,7 @@ export default function App({ initialState, user, onLogout }: any) {
     manualServices,
     patioNotes,
     processStatus,
+    purchaseChecks,
   ]);
   useEffect(() => {
     let alive = true;
@@ -622,6 +636,7 @@ export default function App({ initialState, user, onLogout }: any) {
           apply(setTechs, techs, s.techs);
           apply(setHolidays, holidays, s.holidays);
           apply(setTemplates, templates, s.templates);
+          apply(setPurchaseChecks, purchaseChecks, s.purchaseChecks);
           if (s.footerSize !== undefined && s.footerSize !== footerSize) {
             changed = true;
             setFooterSize(s.footerSize);
@@ -646,6 +661,7 @@ export default function App({ initialState, user, onLogout }: any) {
     techs,
     holidays,
     templates,
+    purchaseChecks,
     footerSize,
     roundStep,
     onLogout,
@@ -708,6 +724,7 @@ export default function App({ initialState, user, onLogout }: any) {
     ["orcamento", "Orçamento", "$"],
     ["proposta", "Proposta", "▤"],
     ["torque", "Conferência", "◇"],
+    ["compras", "Pedido de compra", "☑"],
     ["relatorios", "Relatórios", "▥"],
     ["historico", "Histórico", "↺"],
     ["config", "Configurações", "⚙"],
@@ -1061,7 +1078,8 @@ export default function App({ initialState, user, onLogout }: any) {
           view !== "historico" &&
           view !== "config" &&
           view !== "atendimento" &&
-          view !== "revisao" && (
+          view !== "revisao" &&
+          view !== "compras" && (
             <section className="page">
               <Vehicle />
               <Steps view={view} />
@@ -2636,6 +2654,17 @@ export default function App({ initialState, user, onLogout }: any) {
             message={setMessage}
           />
         )}{" "}
+        {view === "compras" && (
+          <PurchaseOrders
+            appointments={appointments}
+            checks={purchaseChecks}
+            currentUser={user.displayName}
+            setChecks={(updater: any) => {
+              syncBlockedUntil.current = Date.now() + 4000;
+              setPurchaseChecks(updater);
+            }}
+          />
+        )}
         {view === "historico" && <History />}
         {view === "config" && (
           <Config
@@ -4866,6 +4895,250 @@ function UserRow({ account, current, act }: any) {
   );
 }
 
+function PurchaseOrders({ appointments, checks, setChecks, currentUser }: any) {
+  const [filter, setFilter] = useState<
+    "all" | "pending" | "ordered" | "received"
+  >("all");
+  const rows = useMemo(() => {
+    const unique = new Map<string, any>();
+    for (const appointment of appointments as Appt[]) {
+      if (
+        !appointment.budget ||
+        appointment.budget.processStatus === "Finalizado" ||
+        appointment.status === "faltou" ||
+        (appointment.status !== "servico" && !appointment.serviceScheduled)
+      )
+        continue;
+      const ownerId = appointment.sourceAppointmentId ?? appointment.id;
+      appointment.budget.parts.forEach((part: any, index: number) => {
+        if (!part.item?.trim() || Number(part.qty) <= 0) return;
+        const key = `${ownerId}:${index}`;
+        if (!unique.has(key))
+          unique.set(key, {
+            key,
+            appointment,
+            part,
+            serviceDate:
+              appointment.serviceScheduledFor || appointment.date || "",
+          });
+      });
+    }
+    return [...unique.values()].sort((a, b) => {
+      const aState = checks[a.key]?.received
+          ? 2
+          : checks[a.key]?.ordered
+            ? 1
+            : 0,
+        bState = checks[b.key]?.received ? 2 : checks[b.key]?.ordered ? 1 : 0;
+      return (
+        aState - bState ||
+        a.serviceDate.localeCompare(b.serviceDate) ||
+        a.part.item.localeCompare(b.part.item, "pt-BR")
+      );
+    });
+  }, [appointments, checks]);
+  const counts = {
+      pending: rows.filter((row) => !checks[row.key]?.ordered).length,
+      ordered: rows.filter(
+        (row) => checks[row.key]?.ordered && !checks[row.key]?.received,
+      ).length,
+      received: rows.filter((row) => checks[row.key]?.received).length,
+    },
+    visibleRows = rows.filter((row) => {
+      const state = checks[row.key];
+      if (filter === "pending") return !state?.ordered;
+      if (filter === "ordered") return state?.ordered && !state?.received;
+      if (filter === "received") return state?.received;
+      return true;
+    }),
+    update = (key: string, patch: Partial<PurchaseCheck>) =>
+      setChecks((current: Record<string, PurchaseCheck>) => ({
+        ...current,
+        [key]: {
+          ordered: false,
+          received: false,
+          note: "",
+          ...current[key],
+          ...patch,
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+  return (
+    <section className="page purchase-page">
+      <div className="purchase-summary">
+        <button
+          className={filter === "all" ? "active" : ""}
+          onClick={() => setFilter("all")}
+        >
+          Todos <b>{rows.length}</b>
+        </button>
+        <button
+          className={filter === "pending" ? "active pending" : ""}
+          onClick={() => setFilter("pending")}
+        >
+          A comprar <b>{counts.pending}</b>
+        </button>
+        <button
+          className={filter === "ordered" ? "active ordered" : ""}
+          onClick={() => setFilter("ordered")}
+        >
+          Comprados <b>{counts.ordered}</b>
+        </button>
+        <button
+          className={filter === "received" ? "active received" : ""}
+          onClick={() => setFilter("received")}
+        >
+          Conferidos <b>{counts.received}</b>
+        </button>
+      </div>
+      <div className="purchase-guidance">
+        <b>Conferência do pedido</b>
+        <span>
+          Primeiro marque “Comprado”. Quando a peça chegar, marque “Recebido e
+          conferido”. As alterações são salvas automaticamente.
+        </span>
+      </div>
+      {visibleRows.length === 0 ? (
+        <div className="emptyday">
+          Nenhuma peça encontrada nesta situação. Os itens aparecerão após o
+          orçamento ser aprovado ou o serviço ser agendado.
+        </div>
+      ) : (
+        <div className="purchase-list">
+          {visibleRows.map(({ key, appointment, part, serviceDate }) => {
+            const state: PurchaseCheck = checks[key] ?? {
+                ordered: false,
+                received: false,
+                note: "",
+              },
+              status = state.received
+                ? "RECEBIDO E CONFERIDO"
+                : state.ordered
+                  ? "COMPRADO — AGUARDANDO CHEGADA"
+                  : "A COMPRAR";
+            return (
+              <article
+                key={key}
+                className={
+                  state.received
+                    ? "received"
+                    : state.ordered
+                      ? "ordered"
+                      : "pending"
+                }
+              >
+                <div className="purchase-part-heading">
+                  <span>
+                    <b>{part.item}</b>
+                    <small>
+                      {part.brand || "Marca não informada"} · Código:{" "}
+                      {part.code || "não informado"}
+                    </small>
+                  </span>
+                  <strong>{status}</strong>
+                </div>
+                <div className="purchase-data">
+                  <span>
+                    <small>Quantidade</small>
+                    <b>{part.qty}</b>
+                  </span>
+                  <span>
+                    <small>Fornecedor</small>
+                    <b>{part.supplier || "Não informado"}</b>
+                  </span>
+                  <span>
+                    <small>Cliente / veículo</small>
+                    <b>
+                      {appointment.client} ·{" "}
+                      {appointment.vehicle || "Veículo não informado"}
+                    </b>
+                  </span>
+                  <span>
+                    <small>Data do serviço</small>
+                    <b>
+                      {serviceDate
+                        ? new Date(
+                            `${serviceDate}T12:00:00`,
+                          ).toLocaleDateString("pt-BR")
+                        : "Não informada"}
+                    </b>
+                  </span>
+                </div>
+                <div className="purchase-checks">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={state.ordered}
+                      onChange={(event) =>
+                        update(key, {
+                          ordered: event.target.checked,
+                          received: event.target.checked
+                            ? state.received
+                            : false,
+                          orderedBy: event.target.checked
+                            ? currentUser
+                            : undefined,
+                          receivedBy: event.target.checked
+                            ? state.receivedBy
+                            : undefined,
+                        })
+                      }
+                    />
+                    <span>
+                      <b>Comprado</b>
+                      <small>
+                        {state.orderedBy
+                          ? `Marcado por ${state.orderedBy}`
+                          : "Marcar após fazer o pedido"}
+                      </small>
+                    </span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={state.received}
+                      onChange={(event) =>
+                        update(key, {
+                          ordered: event.target.checked ? true : state.ordered,
+                          received: event.target.checked,
+                          orderedBy: event.target.checked
+                            ? state.orderedBy || currentUser
+                            : state.orderedBy,
+                          receivedBy: event.target.checked
+                            ? currentUser
+                            : undefined,
+                        })
+                      }
+                    />
+                    <span>
+                      <b>Recebido e conferido</b>
+                      <small>
+                        {state.receivedBy
+                          ? `Conferido por ${state.receivedBy}`
+                          : "Marcar após conferir a peça"}
+                      </small>
+                    </span>
+                  </label>
+                  <label className="purchase-note">
+                    Observação da compra
+                    <input
+                      value={state.note}
+                      placeholder="Prazo, pedido, diferença ou observação"
+                      onChange={(event) =>
+                        update(key, { note: event.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function History() {
   const [events, setEvents] = useState<any[]>([]),
     [query, setQuery] = useState("");
@@ -5669,6 +5942,10 @@ const TITLES: Record<View, [string, string]> = {
   revisao: [
     "Revisão de 30 dias",
     "Conferência cortesia do serviço executado anteriormente.",
+  ],
+  compras: [
+    "Pedido de compra",
+    "Acompanhe as peças compradas, recebidas e conferidas.",
   ],
   relatorios: [
     "Relatórios de avaliações",
