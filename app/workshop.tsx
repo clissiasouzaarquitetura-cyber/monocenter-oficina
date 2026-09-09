@@ -1432,8 +1432,12 @@ export default function App({ initialState, user, onLogout }: any) {
                             </label>
                             <input
                               type="number"
-                              min="1"
-                              value={p.qty}
+                              min="0"
+                              step="1"
+                              inputMode="numeric"
+                              placeholder="0"
+                              aria-label={`Quantidade de ${p.item || "peça"}`}
+                              value={p.qty || ""}
                               onChange={(e) => {
                                 const a = [...parts];
                                 a[i].qty = +e.target.value;
@@ -1463,7 +1467,12 @@ export default function App({ initialState, user, onLogout }: any) {
                             </label>
                             <input
                               type={costs ? "number" : "password"}
-                              value={p.cost}
+                              min="0"
+                              step="0.01"
+                              inputMode="decimal"
+                              placeholder={costs ? "0,00" : ""}
+                              aria-label={`Custo de ${p.item || "peça"} em reais`}
+                              value={p.cost || ""}
                               onChange={(e) => {
                                 const a = [...parts];
                                 a[i].cost = +e.target.value;
@@ -1473,10 +1482,18 @@ export default function App({ initialState, user, onLogout }: any) {
                             <label>
                               <input
                                 type={costs ? "number" : "password"}
-                                value={p.margin}
+                                min="0"
+                                step="1"
+                                inputMode="numeric"
+                                placeholder={costs ? "0" : ""}
+                                aria-label={`Margem de ${p.item || "peça"} em porcentagem`}
+                                value={p.margin || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
-                                  a[i].margin = +e.target.value;
+                                  a[i].margin = Math.max(
+                                    0,
+                                    Math.trunc(Number(e.target.value)),
+                                  );
                                   a[i].saleOverride = null;
                                   setParts(a);
                                 }}
@@ -1488,7 +1505,12 @@ export default function App({ initialState, user, onLogout }: any) {
                                 type="number"
                                 min="0"
                                 step="0.01"
-                                value={p.saleOverride ?? saleOf(p, roundStep)}
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                aria-label={`Venda unitária de ${p.item || "peça"} em reais`}
+                                value={
+                                  (p.saleOverride ?? saleOf(p, roundStep)) || ""
+                                }
                                 onChange={(e) => {
                                   const a = [...parts];
                                   const value = +e.target.value;
@@ -1496,8 +1518,8 @@ export default function App({ initialState, user, onLogout }: any) {
                                   a[i].margin =
                                     a[i].cost > 0
                                       ? Math.round(
-                                          (value / a[i].cost - 1) * 10000,
-                                        ) / 100
+                                          (value / a[i].cost - 1) * 100,
+                                        )
                                       : 0;
                                   setParts(a);
                                 }}
@@ -1571,7 +1593,13 @@ export default function App({ initialState, user, onLogout }: any) {
                           <div
                             className={
                               "service-row " +
-                              (selectedServices.includes(i) ? "selected" : "")
+                              (selectedServices.includes(i) ? "selected" : "") +
+                              (selectedServices.includes(i) &&
+                              (activeAppointment?.status === "servico" ||
+                                activeAppointment?.budget?.processStatus ===
+                                  "Finalizado")
+                                ? " approved"
+                                : "")
                             }
                             key={x[0]}
                           >
@@ -1590,7 +1618,17 @@ export default function App({ initialState, user, onLogout }: any) {
                                   setServiceQty({ ...serviceQty, [i]: 1 });
                               }}
                             />
-                            <span>{x[0]}</span>
+                            <span>
+                              {x[0]}
+                              {selectedServices.includes(i) &&
+                                (activeAppointment?.status === "servico" ||
+                                  activeAppointment?.budget?.processStatus ===
+                                    "Finalizado") && (
+                                  <small className="approved-service-badge">
+                                    ✓ Aprovado
+                                  </small>
+                                )}
+                            </span>
                             <div className="service-entry-fields">
                               <label>
                                 <small>Qtd.</small>
@@ -2539,6 +2577,22 @@ function StageActions({
   save,
   savedAt,
 }: any) {
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
+      "idle",
+    ),
+    handleSave = () => {
+      if (saveState === "saving") return;
+      setSaveState("saving");
+      save();
+      window.setTimeout(() => setSaveState("saved"), 900);
+      window.setTimeout(() => setSaveState("idle"), 3000);
+    },
+    saveLabel =
+      saveState === "saving"
+        ? "Salvando…"
+        : saveState === "saved"
+          ? "Salvo ✓"
+          : "Salvar";
   if (!["avaliacao", "orcamento", "proposta", "torque"].includes(view))
     return null;
   const label = {
@@ -2557,7 +2611,13 @@ function StageActions({
           <option>Finalizado</option>
         </select>
       </label>
-      <button onClick={save}>Salvar</button>
+      <button
+        className={saveState === "saved" ? "save-confirmed" : ""}
+        onClick={handleSave}
+        disabled={saveState === "saving"}
+      >
+        {saveLabel}
+      </button>
       <button className="stage-exit" onClick={exit}>
         Sair para a agenda
       </button>
@@ -2567,10 +2627,11 @@ function StageActions({
         </button>
         <button
           className="stage-save-bottom"
-          onClick={save}
+          onClick={handleSave}
+          disabled={saveState === "saving"}
           aria-label={`Salvar ${label}`}
         >
-          Salvar
+          {saveLabel}
         </button>
       </div>
       <button onClick={() => printStage(view)}>Imprimir relatório A4</button>
