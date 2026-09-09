@@ -319,6 +319,13 @@ const conferenceStarted = (a: Appt) =>
   !!a.conference?.finalization?.vehicleReleased ||
   !!a.conference?.finalization?.clientOriented ||
   !!a.conference?.finalization?.note?.trim();
+const completedAttendanceLabel = (a: Appt) => {
+  if (a.type === "revisao" && !a.reviewWithService)
+    return "Atendimento finalizado (Revisão 30 dias)";
+  if (a.status === "servico")
+    return "Atendimento finalizado (Serviço executado)";
+  return "Atendimento finalizado (Avaliação)";
+};
 const apptClass = (a: Appt) =>
   a.type === "bloqueio"
     ? "block"
@@ -338,7 +345,8 @@ const apptClass = (a: Appt) =>
                 : a.status;
 const agendaStatusLabel = (a: Appt) => {
   if (a.type === "bloqueio") return "AUSENTE";
-  if (a.budget?.processStatus === "Finalizado") return "ATENDIMENTO FINALIZADO";
+  if (a.budget?.processStatus === "Finalizado")
+    return completedAttendanceLabel(a).toLocaleUpperCase("pt-BR");
   if (a.type === "retorno") return "RETORNO";
   if (a.type === "garantia") return "GARANTIA";
   if (a.type === "revisao" && !a.review)
@@ -642,6 +650,26 @@ export default function App({ initialState, user, onLogout }: any) {
         0,
       ) + manualServices.reduce((s: number, x: any) => s + x.qty * x.value, 0),
     total = pieces + serviceTotal;
+  const updateRequiredVehicleField = (
+    field: "vehicle" | "plate" | "km",
+    value: string,
+  ) => {
+    if (!activeAppointment) return;
+    const updated: Appt = {
+      ...activeAppointment,
+      [field]: field === "plate" ? value.toLocaleUpperCase("pt-BR") : value,
+      lastEditedBy: user.displayName,
+      lastEditedAt: new Date().toISOString(),
+      _updatedAt: Date.now(),
+    };
+    DISPLAY_APPT = updated;
+    setActiveAppointment(updated);
+    setAppointments((list) =>
+      list.map((appointment) =>
+        appointment.id === updated.id ? updated : appointment,
+      ),
+    );
+  };
   const nav: [View, string, string][] = [
     ["agenda", "Agenda", "▦"],
     ["avaliacao", "Avaliação", "✓"],
@@ -2169,6 +2197,69 @@ export default function App({ initialState, user, onLogout }: any) {
                       }
                     >
                       <div className="card bare">
+                        {activeAppointment && (
+                          <div className="conference-required-card">
+                            <div>
+                              <b>Dados obrigatórios para finalizar</b>
+                              <small>
+                                Preencha ou confira estes dados sem precisar
+                                voltar ao agendamento.
+                              </small>
+                            </div>
+                            <div className="conference-required-grid">
+                              <label>
+                                Veículo
+                                <input
+                                  value={activeAppointment.vehicle}
+                                  placeholder="Informe o veículo"
+                                  onChange={(e) =>
+                                    updateRequiredVehicleField(
+                                      "vehicle",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label>
+                                Placa
+                                <input
+                                  value={activeAppointment.plate}
+                                  placeholder="Informe a placa"
+                                  onChange={(e) =>
+                                    updateRequiredVehicleField(
+                                      "plate",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label>
+                                KM
+                                <input
+                                  value={activeAppointment.km}
+                                  inputMode="numeric"
+                                  placeholder="Informe o KM"
+                                  onChange={(e) =>
+                                    updateRequiredVehicleField(
+                                      "km",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </label>
+                              <span className="conference-current-status">
+                                <b>Status atual</b>
+                                <strong>
+                                  {processStatus === "Finalizado"
+                                    ? completedAttendanceLabel(
+                                        activeAppointment,
+                                      )
+                                    : "Em conferência"}
+                                </strong>
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         <div className="final">
                           <label>
                             <input
@@ -2255,7 +2346,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="required-vehicle-warning" role="alert">
                         <b>Preenchimento obrigatório para finalizar</b>
                         <span>
-                          Complete no agendamento:{" "}
+                          Abra “Finalização” e complete:{" "}
                           {[
                             !activeAppointment.vehicle.trim() && "veículo",
                             !activeAppointment.plate.trim() && "placa",
@@ -2278,7 +2369,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       ].filter(Boolean);
                       if (missing.length) {
                         alert(
-                          `Não é possível finalizar. Preencha no agendamento: ${missing.join(", ")}.`,
+                          `Não é possível finalizar. Preencha nesta tela: ${missing.join(", ")}.`,
                         );
                         return;
                       }
@@ -3035,7 +3126,7 @@ function Agenda({
                   <b>{a.time}</b>
                   <small>
                     {a.budget?.processStatus === "Finalizado"
-                      ? "FINALIZADO"
+                      ? completedAttendanceLabel(a).toLocaleUpperCase("pt-BR")
                       : agendaStatusLabel(a)}
                   </small>
                   {expanded && a.type !== "bloqueio" && a.tech && (
@@ -3084,7 +3175,7 @@ function Agenda({
                   </p>
                   {a.budget?.processStatus === "Finalizado" ? (
                     <div className="agenda-finalization compact">
-                      <b>✓ Atendimento finalizado</b>
+                      <b>✓ {completedAttendanceLabel(a)}</b>
                     </div>
                   ) : null}
                   {a.type === "cliente" &&
@@ -4564,7 +4655,7 @@ function AttendanceSummary({
       <Vehicle />
       <div className="completion-banner">
         <span>
-          <b>✓ Atendimento concluído</b>
+          <b>✓ {completedAttendanceLabel(appointment)}</b>
           <small>
             Finalizado em{" "}
             {appointment.conference?.finalizedAt
@@ -4574,7 +4665,7 @@ function AttendanceSummary({
               : "data não registrada"}
           </small>
         </span>
-        <strong>Atendimento concluído</strong>
+        <strong>{completedAttendanceLabel(appointment)}</strong>
       </div>
       <div className="summary-card">
         <h2>Responsáveis pelo atendimento</h2>
