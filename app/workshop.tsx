@@ -313,6 +313,12 @@ const renderMessageTemplate = (template: string, appointment: Appt) =>
     .replace(/\b(?:vamos|podemos)\s+fechar\s*[?.!]?/giu, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+const conferenceStarted = (a: Appt) =>
+  Object.values(a.conference?.checks ?? {}).some(Boolean) ||
+  !!a.conference?.finalization?.serviceCompleted ||
+  !!a.conference?.finalization?.vehicleReleased ||
+  !!a.conference?.finalization?.clientOriented ||
+  !!a.conference?.finalization?.note?.trim();
 const apptClass = (a: Appt) =>
   a.type === "bloqueio"
     ? "block"
@@ -323,27 +329,34 @@ const apptClass = (a: Appt) =>
         ? "retorno"
         : a.type === "garantia"
           ? "garantia"
-          : a.type === "revisao"
+          : a.type === "revisao" && !a.review
             ? "revisao"
-            : a.inProgress && a.status !== "servico"
-              ? "inprogress"
-              : a.status;
+            : a.status === "servico" && conferenceStarted(a)
+              ? "conference"
+              : a.inProgress && a.status !== "servico"
+                ? "inprogress"
+                : a.status;
 const agendaStatusLabel = (a: Appt) => {
   if (a.type === "bloqueio") return "AUSENTE";
+  if (a.budget?.processStatus === "Finalizado") return "ATENDIMENTO FINALIZADO";
   if (a.type === "retorno") return "RETORNO";
   if (a.type === "garantia") return "GARANTIA";
-  if (a.type === "revisao")
+  if (a.type === "revisao" && !a.review)
     return a.reviewWithService ? "REVISÃO + SERVIÇO" : "REVISÃO 30 DIAS";
-  if (a.budget?.processStatus === "Finalizado") return "ATENDIMENTO FINALIZADO";
   if (a.serviceScheduled && a.status === "agendado") return "SERVIÇO AGENDADO";
   if (a.serviceAppointmentId && a.serviceScheduledFor)
     return `SERVIÇO AGENDADO ${new Date(
       `${a.serviceScheduledFor}T12:00:00`,
     ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
-  if (a.inProgress) return "EM ANDAMENTO";
+  if (a.status === "agendado" && a.inProgress) return "AGUARDANDO AVALIAÇÃO";
   if (a.status === "avaliou" && a.quoteSentAt)
     return "ORÇAMENTO ENVIADO EM ABERTO";
   if (a.status === "avaliou") return "AGUARDANDO ORÇAMENTO";
+  if (a.status === "servico" && conferenceStarted(a)) return "EM CONFERÊNCIA";
+  if (a.status === "servico" && a.inProgress)
+    return "SERVIÇO APROVADO · EM ANDAMENTO";
+  if (a.status === "servico") return "AGUARDANDO CONFERÊNCIA";
+  if (a.inProgress) return "AGUARDANDO AVALIAÇÃO";
   return a.status.toUpperCase();
 };
 const INITIAL: Appt[] = [];
@@ -2867,10 +2880,12 @@ function Agenda({
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
         <span>
-          <i className="dot yellow" /> Avaliou <i className="dot green" /> Fez
-          serviço <i className="dot red" /> Faltou <i className="dot purple" />{" "}
-          Retorno <i className="dot orange" /> Garantia{" "}
-          <i className="dot blue" /> Revisão 30 dias
+          <i className="dot yellow" /> Aguardando orçamento{" "}
+          <i className="dot green" /> Serviço aprovado{" "}
+          <i className="dot conference-dot" /> Conferência{" "}
+          <i className="dot red" /> Faltou <i className="dot purple" /> Retorno{" "}
+          <i className="dot orange" /> Garantia <i className="dot blue" />{" "}
+          Revisão 30 dias
           <i className="dot completed" /> Concluído
           <i className="dot scheduled-service-dot" /> Serviço agendado
           <i className="shop-line" /> Na oficina
@@ -3922,7 +3937,7 @@ function PrintDocuments({
           </span>
         </div>
         {budgetApproved && (
-          <div className="print-approval-banner">✓ SERVIÇOS APROVADOS</div>
+          <div className="print-approval-banner">✓ ORÇAMENTO APROVADO</div>
         )}
         <h3>Peças e materiais</h3>
         {parts.map((p: any, i: number) => (

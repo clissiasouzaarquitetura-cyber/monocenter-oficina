@@ -1124,6 +1124,19 @@ header > button {
   border-left-color: #2f74c0;
   background: #edf5ff;
 }
+.days span.conference,
+.day article.conference {
+  border-left-color: #7c3aed;
+  background: #f5f0ff;
+}
+.dot.conference-dot {
+  background: #7c3aed;
+}
+.app.dark .days span.conference,
+.app.dark .day article.conference {
+  border-left-color: #a78bfa;
+  background: #2d2442;
+}
 .days span.faltou,
 .day article.faltou {
   border-left-color: var(--r);
