@@ -202,6 +202,7 @@ type View =
   | "config";
 type Appt = {
   id: number;
+  workOrder?: string;
   date: string;
   time: string;
   client: string;
@@ -2750,6 +2751,23 @@ export default function App({ initialState, user, onLogout }: any) {
               syncBlockedUntil.current = Date.now() + 4000;
               setPurchaseChecks(updater);
             }}
+            setWorkOrder={(ownerId: number, workOrder: string) => {
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((appointment) =>
+                  appointment.id === ownerId ||
+                  appointment.sourceAppointmentId === ownerId
+                    ? {
+                        ...appointment,
+                        workOrder,
+                        lastEditedBy: user.displayName,
+                        lastEditedAt: new Date().toISOString(),
+                        _updatedAt: Date.now(),
+                      }
+                    : appointment,
+                ),
+              );
+            }}
           />
         )}
         {view === "historico" && <History />}
@@ -4985,7 +5003,13 @@ function UserRow({ account, current, act }: any) {
   );
 }
 
-function PurchaseOrders({ appointments, checks, setChecks, currentUser }: any) {
+function PurchaseOrders({
+  appointments,
+  checks,
+  setChecks,
+  setWorkOrder,
+  currentUser,
+}: any) {
   const [filter, setFilter] = useState<
     "all" | "pending" | "ordered" | "received"
   >("all");
@@ -5006,6 +5030,7 @@ function PurchaseOrders({ appointments, checks, setChecks, currentUser }: any) {
         if (!unique.has(key))
           unique.set(key, {
             key,
+            ownerId,
             appointment,
             part,
             serviceDate:
@@ -5041,6 +5066,20 @@ function PurchaseOrders({ appointments, checks, setChecks, currentUser }: any) {
       if (filter === "received") return state?.received;
       return true;
     }),
+    groups = visibleRows.reduce((result: any[], row: any) => {
+      let group = result.find((item) => item.ownerId === row.ownerId);
+      if (!group) {
+        group = {
+          ownerId: row.ownerId,
+          appointment: row.appointment,
+          serviceDate: row.serviceDate,
+          rows: [],
+        };
+        result.push(group);
+      }
+      group.rows.push(row);
+      return result;
+    }, []),
     update = (key: string, patch: Partial<PurchaseCheck>) =>
       setChecks((current: Record<string, PurchaseCheck>) => ({
         ...current,
@@ -5094,135 +5133,134 @@ function PurchaseOrders({ appointments, checks, setChecks, currentUser }: any) {
           orçamento ser aprovado ou o serviço ser agendado.
         </div>
       ) : (
-        <div className="purchase-list">
-          {visibleRows.map(({ key, appointment, part, serviceDate }) => {
-            const state: PurchaseCheck = checks[key] ?? {
-                ordered: false,
-                received: false,
-                note: "",
-              },
-              status = state.received
-                ? "RECEBIDO E CONFERIDO"
-                : state.ordered
-                  ? "COMPRADO — AGUARDANDO CHEGADA"
-                  : "A COMPRAR";
-            return (
-              <article
-                key={key}
-                className={
-                  state.received
-                    ? "received"
-                    : state.ordered
-                      ? "ordered"
-                      : "pending"
-                }
-              >
-                <div className="purchase-part-heading">
-                  <span>
-                    <b>{part.item}</b>
-                    <small>
-                      {part.brand || "Marca não informada"} · Código:{" "}
-                      {part.code || "não informado"}
-                    </small>
-                  </span>
-                  <strong>{status}</strong>
-                </div>
-                <div className="purchase-data">
-                  <span>
-                    <small>Quantidade</small>
-                    <b>{part.qty}</b>
-                  </span>
-                  <span>
-                    <small>Fornecedor</small>
-                    <b>{part.supplier || "Não informado"}</b>
-                  </span>
-                  <span>
-                    <small>Cliente / veículo</small>
-                    <b>
-                      {appointment.client} ·{" "}
-                      {appointment.vehicle || "Veículo não informado"}
-                    </b>
-                  </span>
-                  <span>
-                    <small>Data do serviço</small>
-                    <b>
-                      {serviceDate
-                        ? new Date(
-                            `${serviceDate}T12:00:00`,
-                          ).toLocaleDateString("pt-BR")
-                        : "Não informada"}
-                    </b>
-                  </span>
-                </div>
-                <div className="purchase-checks">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={state.ordered}
-                      onChange={(event) =>
-                        update(key, {
-                          ordered: event.target.checked,
-                          received: event.target.checked
-                            ? state.received
-                            : false,
-                          orderedBy: event.target.checked
-                            ? currentUser
-                            : undefined,
-                          receivedBy: event.target.checked
-                            ? state.receivedBy
-                            : undefined,
-                        })
-                      }
-                    />
-                    <span>
-                      <b>Comprado</b>
-                      <small>
-                        {state.orderedBy
-                          ? `Marcado por ${state.orderedBy}`
-                          : "Marcar após fazer o pedido"}
-                      </small>
-                    </span>
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={state.received}
-                      onChange={(event) =>
-                        update(key, {
-                          ordered: event.target.checked ? true : state.ordered,
-                          received: event.target.checked,
-                          orderedBy: event.target.checked
-                            ? state.orderedBy || currentUser
-                            : state.orderedBy,
-                          receivedBy: event.target.checked
-                            ? currentUser
-                            : undefined,
-                        })
-                      }
-                    />
-                    <span>
-                      <b>Recebido e conferido</b>
-                      <small>
-                        {state.receivedBy
-                          ? `Conferido por ${state.receivedBy}`
-                          : "Marcar após conferir a peça"}
-                      </small>
-                    </span>
-                  </label>
-                  <label className="purchase-note">
-                    Observação da compra
-                    <input
-                      value={state.note}
-                      placeholder="Prazo, pedido, diferença ou observação"
-                      onChange={(event) =>
-                        update(key, { note: event.target.value })
-                      }
-                    />
-                  </label>
-                </div>
-              </article>
-            );
-          })}
+        <div className="purchase-os-list">
+          {groups.map((group: any) => (
+            <section className="purchase-os-card" key={group.ownerId}>
+              <header className="purchase-os-head">
+                <label>
+                  <span>Número da OS</span>
+                  <input
+                    value={group.appointment.workOrder ?? ""}
+                    placeholder="Digite a OS"
+                    onChange={(event) =>
+                      setWorkOrder(group.ownerId, event.target.value)
+                    }
+                  />
+                </label>
+                <span>
+                  <small>Cliente / veículo</small>
+                  <b>
+                    {group.appointment.client} ·{" "}
+                    {group.appointment.vehicle || "Veículo não informado"} ·{" "}
+                    {group.appointment.plate || "Sem placa"}
+                  </b>
+                </span>
+                <span>
+                  <small>Data do serviço</small>
+                  <b>
+                    {group.serviceDate
+                      ? new Date(
+                          `${group.serviceDate}T12:00:00`,
+                        ).toLocaleDateString("pt-BR")
+                      : "Não informada"}
+                  </b>
+                </span>
+              </header>
+              <div className="purchase-os-columns" aria-hidden="true">
+                <b>Peça / fornecedor</b>
+                <b>Qtd.</b>
+                <b>Comprado</b>
+                <b>Conferido</b>
+              </div>
+              <div className="purchase-os-items">
+                {group.rows.map(({ key, part }: any) => {
+                  const state: PurchaseCheck = checks[key] ?? {
+                    ordered: false,
+                    received: false,
+                    note: "",
+                  };
+                  return (
+                    <div
+                      className={`purchase-os-row ${
+                        state.received
+                          ? "received"
+                          : state.ordered
+                            ? "ordered"
+                            : "pending"
+                      }`}
+                      key={key}
+                    >
+                      <span className="purchase-os-part">
+                        <b>{part.item}</b>
+                        <small>
+                          {part.brand || "Marca não informada"} ·{" "}
+                          {part.supplier || "Fornecedor não informado"} · Cód.{" "}
+                          {part.code || "não informado"}
+                        </small>
+                      </span>
+                      <strong className="purchase-os-qty">{part.qty}</strong>
+                      <label
+                        className="purchase-os-tick"
+                        title={
+                          state.orderedBy
+                            ? `Comprado por ${state.orderedBy}`
+                            : "Marcar como comprado"
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={state.ordered}
+                          onChange={(event) =>
+                            update(key, {
+                              ordered: event.target.checked,
+                              received: event.target.checked
+                                ? state.received
+                                : false,
+                              orderedBy: event.target.checked
+                                ? currentUser
+                                : undefined,
+                              receivedBy: event.target.checked
+                                ? state.receivedBy
+                                : undefined,
+                            })
+                          }
+                        />
+                        <span>Comprado</span>
+                      </label>
+                      <label
+                        className="purchase-os-tick"
+                        title={
+                          state.receivedBy
+                            ? `Conferido por ${state.receivedBy}`
+                            : "Marcar como recebido e conferido"
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={state.received}
+                          onChange={(event) =>
+                            update(key, {
+                              ordered: event.target.checked
+                                ? true
+                                : state.ordered,
+                              received: event.target.checked,
+                              orderedBy: event.target.checked
+                                ? state.orderedBy || currentUser
+                                : state.orderedBy,
+                              receivedBy: event.target.checked
+                                ? currentUser
+                                : undefined,
+                            })
+                          }
+                        />
+                        <span>Conferido</span>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </section>

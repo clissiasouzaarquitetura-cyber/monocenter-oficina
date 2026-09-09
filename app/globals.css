@@ -6136,3 +6136,206 @@ header > button {
     text-align: left;
   }
 }
+
+/* Serviços: uma linha por item, tipografia compacta e valores alinhados. */
+.servicegrid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.servicegrid .service-group .service-row {
+  grid-template-columns: 24px minmax(240px, 1fr) 235px 110px !important;
+  min-height: 48px;
+  padding: 5px 8px;
+  gap: 7px;
+}
+.servicegrid .service-group .service-row > span {
+  padding: 5px 7px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.servicegrid .service-group .service-entry-fields {
+  grid-template-columns: 66px 155px;
+  gap: 6px;
+}
+.servicegrid .service-group .service-entry-fields label,
+.servicegrid .service-group .service-entry-fields label small {
+  font-size: 9px !important;
+}
+.servicegrid .service-group .service-entry-fields input {
+  min-height: 32px;
+  padding: 5px 7px;
+  font-size: 13px;
+}
+.servicegrid .service-group .service-row > b {
+  font-size: 11px;
+}
+.servicegrid .service-group .approved-service-badge {
+  display: inline-block;
+  margin: 0 0 0 7px;
+  padding: 2px 5px;
+  font-size: 8px;
+}
+
+/* Pedido de compra agrupado por ordem de serviço. */
+.purchase-os-list {
+  display: grid;
+  gap: 14px;
+}
+.purchase-os-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.purchase-os-head {
+  display: grid;
+  grid-template-columns: 185px minmax(260px, 1fr) 150px;
+  align-items: end;
+  gap: 14px;
+  padding: 11px 13px;
+  background: #172433;
+  color: #fff;
+}
+.purchase-os-head > label,
+.purchase-os-head > span {
+  display: grid;
+  gap: 4px;
+}
+.purchase-os-head small,
+.purchase-os-head label > span {
+  color: #cbd5e1;
+  font-size: 9px;
+  font-weight: 700;
+}
+.purchase-os-head b {
+  font-size: 12px;
+}
+.purchase-os-head input {
+  width: 100%;
+  border: 2px solid #82add3;
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: #edf6ff;
+  color: #102f4c;
+  font-weight: 900;
+}
+.purchase-os-columns,
+.purchase-os-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 70px 120px 120px;
+  align-items: center;
+  gap: 8px;
+}
+.purchase-os-columns {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #eef2f6;
+  color: #536273;
+  font-size: 9px;
+}
+.purchase-os-columns b:not(:first-child) {
+  text-align: center;
+}
+.purchase-os-row {
+  min-height: 54px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  border-left: 5px solid #d59600;
+}
+.purchase-os-row:last-child {
+  border-bottom: 0;
+}
+.purchase-os-row.ordered {
+  border-left-color: #2563eb;
+  background: #f4f8ff;
+}
+.purchase-os-row.received {
+  border-left-color: #178448;
+  background: #effcf4;
+}
+.purchase-os-part,
+.purchase-os-part small {
+  display: block;
+}
+.purchase-os-part b {
+  font-size: 12px;
+}
+.purchase-os-part small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.purchase-os-qty {
+  text-align: center;
+  font-size: 13px;
+}
+.purchase-os-tick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.purchase-os-tick input {
+  width: 22px;
+  height: 22px;
+  accent-color: #178448;
+}
+.app.dark .purchase-os-card,
+.app.dark .purchase-os-row,
+.app.dark .purchase-os-tick {
+  background: #1b2634;
+  color: #fff;
+}
+.app.dark .purchase-os-columns {
+  background: #293645;
+  color: #d8e0e8;
+}
+.app.dark .purchase-os-row.ordered {
+  background: #172b48;
+}
+.app.dark .purchase-os-row.received {
+  background: #163524;
+}
+
+@media (max-width: 700px) {
+  .servicegrid .service-group .service-row {
+    grid-template-columns: 24px minmax(0, 1fr) !important;
+  }
+  .servicegrid .service-group .service-entry-fields {
+    grid-column: 2;
+    grid-template-columns: 70px minmax(120px, 1fr);
+  }
+  .servicegrid .service-group .service-row > b {
+    grid-column: 2;
+  }
+  .purchase-os-head {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+  .purchase-os-columns {
+    display: none;
+  }
+  .purchase-os-row {
+    grid-template-columns: 55px 1fr 1fr;
+    gap: 6px;
+    padding: 9px;
+  }
+  .purchase-os-part {
+    grid-column: 1 / -1;
+  }
+  .purchase-os-qty::before {
+    content: "Qtd. ";
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .purchase-os-tick {
+    min-height: 42px;
+    font-size: 11px;
+  }
+}
