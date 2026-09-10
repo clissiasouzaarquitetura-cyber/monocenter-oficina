@@ -3235,12 +3235,21 @@ function Agenda({
     [openCal, setOpenCal] = useState(true),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
   const carryLimitIso = todayIso,
+    isBusinessDay = (targetDate: string) => {
+      const weekday = new Date(`${targetDate}T12:00:00`).getDay();
+      return (
+        weekday >= 1 &&
+        weekday <= 5 &&
+        !holidays.some((holiday: any) => holiday.date === targetDate)
+      );
+    },
     isCarriedInto = (appointment: Appt, targetDate: string) =>
       appointment.type !== "bloqueio" &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado" &&
       appointment.date < targetDate &&
-      targetDate <= carryLimitIso,
+      targetDate <= carryLimitIso &&
+      isBusinessDay(targetDate),
     appointmentsForDate = (targetDate: string) =>
       (data as Appt[]).filter(
         (appointment) =>
