@@ -6386,6 +6386,21 @@ header > button {
   }
 }
 .servicegrid .service-group .service-row > span {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
+}
+.servicegrid .service-group > h3 {
+  background: #d9e0e7;
+  color: #263442;
+  font-size: 12px;
+  font-weight: 600;
+}
+.manualservices > div > input:first-child {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+.app.dark .servicegrid .service-group > h3 {
+  background: #3a4654;
+  color: #f1f5f9;
 }
