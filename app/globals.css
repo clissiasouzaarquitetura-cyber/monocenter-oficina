@@ -6357,3 +6357,35 @@ header > button {
   background: transparent !important;
   color: #f1f5f9 !important;
 }
+
+/* Mão de obra: duas listas alinhadas, no mesmo padrão da avaliação. */
+@media (min-width: 901px) {
+  .servicegrid .service-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .servicegrid .service-group > h3 {
+    grid-column: 1 / -1;
+  }
+  .servicegrid .service-group .service-row {
+    grid-template-columns: 22px minmax(145px, 1fr) 180px 88px !important;
+    min-height: 45px;
+    padding: 5px 7px;
+    gap: 6px;
+  }
+  .servicegrid .service-group .service-entry-fields {
+    grid-template-columns: 54px minmax(112px, 1fr);
+    gap: 5px;
+  }
+  .servicegrid .service-group .service-entry-fields input {
+    min-height: 30px;
+    font-size: 11px;
+  }
+  .servicegrid .service-group .service-row > b {
+    font-size: 10px;
+  }
+}
+.servicegrid .service-group .service-row > span {
+  font-size: 10px;
+  font-weight: 700;
+}
