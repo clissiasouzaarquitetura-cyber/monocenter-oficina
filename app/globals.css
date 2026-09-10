@@ -6339,3 +6339,18 @@ header > button {
     font-size: 11px;
   }
 }
+
+/* Nome dos serviços sem faixa cinza e com leitura mais leve. */
+.servicegrid .service-group .service-row > span {
+  background: transparent !important;
+  color: var(--ink) !important;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+.servicegrid .service-group .service-row.approved > span {
+  background: transparent !important;
+}
+.app.dark .servicegrid .service-group .service-row > span {
+  background: transparent !important;
+  color: #f1f5f9 !important;
+}
