@@ -4835,6 +4835,91 @@ header > button {
   color: #fff;
   font-weight: 800;
 }
+.vehicle-progress-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.vehicle-progress-list .vehicle-progress-card {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 154px;
+  border-left: 5px solid #159a68;
+  background: #fbfdfc;
+}
+.vehicle-picture {
+  min-height: 120px;
+  padding: 10px 8px;
+  border: 1px solid #dce4e8;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f6f8fa, #edf1f4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.vehicle-progress-card > .vehicle-picture {
+  flex-wrap: nowrap;
+  gap: 0;
+}
+.vehicle-picture svg {
+  color: #263341;
+  filter: drop-shadow(0 3px 2px rgb(17 29 43 / 12%));
+}
+.vehicle-picture small,
+.vehicle-picture span {
+  color: #657180;
+  font-size: 12px;
+  line-height: 1.25;
+}
+.vehicle-picture b {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.vehicle-progress-card > span {
+  align-content: center;
+  min-width: 0;
+}
+.vehicle-progress-model {
+  font-size: 18px;
+  line-height: 1.25;
+}
+.vehicle-progress-status {
+  width: fit-content;
+  margin-bottom: 2px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #e0f5ea;
+  color: #08734a;
+  font-size: 13px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.vehicle-progress-card > span > small {
+  font-size: 14px;
+  line-height: 1.35;
+}
+.app.dark .vehicle-progress-list .vehicle-progress-card {
+  background: #172231;
+}
+.app.dark .vehicle-picture {
+  border-color: #465467;
+  background: #202d3d;
+}
+.app.dark .vehicle-picture svg {
+  color: #e8edf3;
+}
+.app.dark .vehicle-picture small,
+.app.dark .vehicle-picture span {
+  color: #c4ccd6;
+}
+.app.dark .vehicle-progress-status {
+  background: #123f31;
+  color: #7de0b5;
+}
 .app.dark .management-report-tabs button,
 .app.dark .management-report-panel,
 .app.dark .management-report-head input,
@@ -4867,6 +4952,34 @@ header > button {
   .open-quotes-list article {
     align-items: stretch;
     flex-direction: column;
+  }
+  .vehicle-progress-list {
+    grid-template-columns: 1fr;
+  }
+  .vehicle-progress-list .vehicle-progress-card {
+    display: grid;
+    grid-template-columns: 100px minmax(0, 1fr);
+    align-items: center;
+  }
+  .vehicle-progress-card > div:last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 560px) {
+  .vehicle-progress-list .vehicle-progress-card {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 11px;
+    padding: 10px;
+  }
+  .vehicle-picture {
+    min-height: 104px;
+  }
+  .vehicle-picture svg {
+    width: 54px;
+    height: 54px;
+  }
+  .vehicle-progress-model {
+    font-size: 17px;
   }
 }
 @media print {

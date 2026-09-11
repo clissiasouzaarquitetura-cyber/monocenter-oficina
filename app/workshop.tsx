@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CarFront } from "lucide-react";
 const ITEMS = [
   "Amortecedor Dianteiro Direito",
   "Amortecedor Dianteiro Esquerdo",
@@ -106,6 +107,74 @@ const FRONT = [
     "Torque de bieletas",
     "Torque conforme padrão técnico",
   ];
+
+const VEHICLE_CATALOG = [
+  ["Gol", "Volkswagen", "Hatch"],
+  ["Polo", "Volkswagen", "Hatch"],
+  ["Virtus", "Volkswagen", "Sedã"],
+  ["Voyage", "Volkswagen", "Sedã"],
+  ["T-Cross", "Volkswagen", "SUV"],
+  ["Nivus", "Volkswagen", "SUV"],
+  ["Saveiro", "Volkswagen", "Picape"],
+  ["Onix", "Chevrolet", "Hatch"],
+  ["Onix Plus", "Chevrolet", "Sedã"],
+  ["Celta", "Chevrolet", "Hatch"],
+  ["Corsa", "Chevrolet", "Hatch"],
+  ["Prisma", "Chevrolet", "Sedã"],
+  ["Tracker", "Chevrolet", "SUV"],
+  ["S10", "Chevrolet", "Picape"],
+  ["Uno", "Fiat", "Hatch"],
+  ["Mobi", "Fiat", "Hatch"],
+  ["Argo", "Fiat", "Hatch"],
+  ["Cronos", "Fiat", "Sedã"],
+  ["Pulse", "Fiat", "SUV"],
+  ["Strada", "Fiat", "Picape"],
+  ["Palio", "Fiat", "Hatch"],
+  ["HB20", "Hyundai", "Hatch"],
+  ["HB20S", "Hyundai", "Sedã"],
+  ["Creta", "Hyundai", "SUV"],
+  ["Ka", "Ford", "Hatch"],
+  ["Fiesta", "Ford", "Hatch"],
+  ["EcoSport", "Ford", "SUV"],
+  ["Ranger", "Ford", "Picape"],
+  ["Corolla", "Toyota", "Sedã"],
+  ["Yaris", "Toyota", "Hatch"],
+  ["Hilux", "Toyota", "Picape"],
+  ["Compass", "Jeep", "SUV"],
+  ["Renegade", "Jeep", "SUV"],
+  ["Kwid", "Renault", "Hatch"],
+  ["Sandero", "Renault", "Hatch"],
+  ["Duster", "Renault", "SUV"],
+  ["Civic", "Honda", "Sedã"],
+  ["City", "Honda", "Sedã"],
+  ["Fit", "Honda", "Hatch"],
+] as const;
+const VEHICLE_COLORS: Record<string, string> = {
+  branco: "#ffffff",
+  branca: "#ffffff",
+  preto: "#222831",
+  preta: "#222831",
+  prata: "#aeb7c2",
+  cinza: "#717b87",
+  vermelho: "#d71920",
+  vermelha: "#d71920",
+  azul: "#2877c7",
+  verde: "#3a9363",
+  amarelo: "#eab72f",
+  amarela: "#eab72f",
+  bege: "#c7b693",
+  marrom: "#795548",
+};
+const findVehicle = (value: string) => {
+  const normalized = value.trim().toLocaleLowerCase("pt-BR");
+  return VEHICLE_CATALOG.find(
+    ([model]) =>
+      normalized === model.toLocaleLowerCase("pt-BR") ||
+      normalized.startsWith(model.toLocaleLowerCase("pt-BR") + " "),
+  );
+};
+const vehicleColorHex = (value?: string) =>
+  VEHICLE_COLORS[(value || "").trim().toLocaleLowerCase("pt-BR")] ?? "#d8dde4";
 const SERVICES = [
   ["Alinhamento de direção - Passeio", 100],
   ["Alinhamento de direção - SUV", 120],
@@ -190,6 +259,7 @@ type PurchaseCheck = {
 };
 type View =
   | "agenda"
+  | "veiculos"
   | "atendimento"
   | "avaliacao"
   | "orcamento"
@@ -208,6 +278,9 @@ type Appt = {
   client: string;
   phone: string;
   vehicle: string;
+  vehicleBrand?: string;
+  vehicleColor?: string;
+  vehicleBody?: string;
   plate: string;
   km: string;
   note: string;
@@ -364,6 +437,33 @@ const completedAttendanceLabel = (a: Appt) => {
     return "Atendimento finalizado (Serviço executado)";
   return "Atendimento finalizado (Avaliação)";
 };
+const inProgressLabel = (a: Appt) => {
+  if (!a.evaluation && a.status === "agendado") return "Aguardando avaliação";
+  if (a.type === "revisao") return "Revisão em andamento";
+  if (a.status === "avaliou") return "Aguardando orçamento";
+  if (conferenceStarted(a)) return "Em conferência";
+  return "Serviço em andamento";
+};
+
+function VehiclePicture({ appointment }: { appointment: Appt }) {
+  const catalog = findVehicle(appointment.vehicle || "");
+  const brand = appointment.vehicleBrand || catalog?.[1] || "Marca não informada";
+  const body = appointment.vehicleBody || catalog?.[2] || "Automóvel";
+  const color = appointment.vehicleColor || "Cor não informada";
+  return (
+    <div className="vehicle-picture" aria-label={`${appointment.vehicle || "Veículo"}, ${color}`}>
+      <CarFront
+        aria-hidden="true"
+        size={68}
+        strokeWidth={1.8}
+        fill={vehicleColorHex(appointment.vehicleColor)}
+      />
+      <small>{body}</small>
+      <b>{brand}</b>
+      <span>{color}</span>
+    </div>
+  );
+}
 const apptClass = (a: Appt) =>
   a.type === "bloqueio"
     ? "block"
@@ -742,6 +842,7 @@ export default function App({ initialState, user, onLogout }: any) {
   };
   const nav: [View, string, string][] = [
     ["agenda", "Agenda", "▦"],
+    ["veiculos", "Veículos na oficina", "▣"],
     ["avaliacao", "Avaliação", "✓"],
     ["orcamento", "Orçamento", "$"],
     ["proposta", "Proposta", "▤"],
@@ -2694,11 +2795,11 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
-        {view === "relatorios" && (
+        {(view === "relatorios" || view === "veiculos") && (
           <Reports
             data={appointments}
             user={user}
-            initialMode={reportStartMode}
+            initialMode={view === "veiculos" ? "andamento" : reportStartMode}
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
@@ -3048,7 +3149,11 @@ function Vehicle() {
   );
 }
 function Steps({ view }: { view: View }) {
-  const n = { avaliacao: 1, orcamento: 2, proposta: 3, torque: 4 }[view] ?? 1;
+  const n = (
+    { avaliacao: 1, orcamento: 2, proposta: 3, torque: 4 } as Partial<
+      Record<View, number>
+    >
+  )[view] ?? 1;
   return (
     <div className="steps">
       {["Avaliação", "Orçamento", "Proposta", "Conferência"].map((x, i) => (
@@ -3710,11 +3815,11 @@ function Agenda({
         </button>
         <button className="in-progress-alert" onClick={showInProgress}>
           <span>
-            <b>Atendimentos em andamento</b>
-            <small>Veículos em execução aguardando conclusão</small>
+            <b>Veículos na oficina</b>
+            <small>Aguardando avaliação, revisão ou conclusão</small>
           </span>
           <strong>{inProgressCount}</strong>
-          <i>Ver atendimentos →</i>
+          <i>Ver veículos →</i>
         </button>
       </div>
     </section>
@@ -4077,6 +4182,9 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         client: "",
         phone: "",
         vehicle: "",
+        vehicleBrand: "",
+        vehicleColor: "",
+        vehicleBody: "",
         plate: "",
         km: "",
         note: "",
@@ -4189,11 +4297,66 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             />
           </label>
           <label>
-            Veículo
+            Modelo do veículo
             <input
+              list="vehicle-model-list"
               value={f.vehicle}
-              onChange={(e) => setF({ ...f, vehicle: e.target.value })}
+              onChange={(e) => {
+                const vehicle = e.target.value;
+                const found = findVehicle(vehicle);
+                setF({
+                  ...f,
+                  vehicle,
+                  vehicleBrand: found?.[1] ?? f.vehicleBrand,
+                  vehicleBody: found?.[2] ?? f.vehicleBody,
+                });
+              }}
+              placeholder="Digite, por exemplo: Gol"
             />
+            <datalist id="vehicle-model-list">
+              {VEHICLE_CATALOG.map(([model, brand]) => (
+                <option key={`${brand}-${model}`} value={model}>
+                  {brand}
+                </option>
+              ))}
+            </datalist>
+            <small>Ao reconhecer o modelo, o sistema preenche a marca.</small>
+          </label>
+          <label>
+            Marca
+            <input
+              value={f.vehicleBrand || ""}
+              onChange={(e) => setF({ ...f, vehicleBrand: e.target.value })}
+              placeholder="Ex.: Volkswagen"
+            />
+          </label>
+          <label>
+            Cor do veículo
+            <input
+              list="vehicle-color-list"
+              value={f.vehicleColor || ""}
+              onChange={(e) => setF({ ...f, vehicleColor: e.target.value })}
+              placeholder="Ex.: Branco"
+            />
+            <datalist id="vehicle-color-list">
+              {["Branco", "Preto", "Prata", "Cinza", "Vermelho", "Azul", "Verde", "Bege", "Marrom"].map((color) => (
+                <option key={color} value={color} />
+              ))}
+            </datalist>
+          </label>
+          <label>
+            Tipo do veículo
+            <select
+              value={f.vehicleBody || ""}
+              onChange={(e) => setF({ ...f, vehicleBody: e.target.value })}
+            >
+              <option value="">Automóvel</option>
+              <option>Hatch</option>
+              <option>Sedã</option>
+              <option>SUV</option>
+              <option>Picape</option>
+              <option>Van</option>
+            </select>
           </label>
           <label>
             Placa (opcional)
@@ -5678,7 +5841,9 @@ function Reports({
   const inProgress = (data as Appt[])
     .filter(
       (a) =>
-        (a.inProgress || a.status === "servico") &&
+        (a.inProgress ||
+          a.status === "servico" ||
+          (a.type === "revisao" && a.reviewWithService && !!a.review)) &&
         a.type !== "bloqueio" &&
         a.budget?.processStatus !== "Finalizado",
     )
@@ -5733,7 +5898,7 @@ function Reports({
             className={reportMode === "andamento" ? "active" : ""}
             onClick={() => setReportMode("andamento")}
           >
-            Atendimentos em andamento
+            Veículos em andamento
           </button>
         </div>
         {isClissia && reportMode === "semana" && (
@@ -5869,11 +6034,13 @@ function Reports({
           <div className="management-report-panel open-quotes-panel">
             <div className="management-report-head">
               <span>
-                <h2>Atendimentos em andamento</h2>
-                <p>{inProgress.length} veículos aguardando conclusão</p>
+                <h2>Veículos na oficina</h2>
+                <p>
+                  {inProgress.length} {inProgress.length === 1 ? "veículo" : "veículos"} aguardando avaliação ou conclusão
+                </p>
               </span>
             </div>
-            <div className="open-quotes-list">
+            <div className="open-quotes-list vehicle-progress-list">
               {inProgress.length ? (
                 inProgress.map((a) => {
                   const daysInProgress = Math.max(
@@ -5884,12 +6051,18 @@ function Reports({
                     ),
                   );
                   return (
-                    <article key={a.id}>
+                    <article key={a.id} className="vehicle-progress-card">
+                      <VehiclePicture appointment={a} />
                       <span>
-                        <b>{a.client}</b>
+                        <strong className="vehicle-progress-status">
+                          {inProgressLabel(a)}
+                        </strong>
+                        <b className="vehicle-progress-model">
+                          {a.vehicle || "Modelo não informado"}
+                          {a.vehicleColor ? ` · ${a.vehicleColor}` : ""}
+                        </b>
                         <small>
-                          {a.vehicle || "Veículo não informado"} ·{" "}
-                          {a.plate || "Sem placa"}
+                          Cliente: {a.client} · {a.plate || "Sem placa"}
                         </small>
                         <small>
                           Iniciado em{" "}
@@ -6097,6 +6270,10 @@ const TITLES: Record<View, [string, string]> = {
   agenda: [
     "Agenda Monocenter",
     "Agendamentos, ausências e situação dos atendimentos.",
+  ],
+  veiculos: [
+    "Veículos na oficina",
+    "Modelos aguardando avaliação, revisão ou conclusão do serviço.",
   ],
   atendimento: [
     "Atendimento concluído",
