@@ -2004,6 +2004,28 @@ export default function App({ initialState, user, onLogout }: any) {
                               />
                             </label>
                             <b>{brl(x.qty * x.value)}</b>
+                            <button
+                              type="button"
+                              className="manual-service-delete"
+                              aria-label={`Excluir serviço ${x.name || "sem nome"}`}
+                              title="Excluir este serviço"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Excluir o serviço “${x.name || "sem nome"}”?`,
+                                  )
+                                ) {
+                                  setManualServices((current) =>
+                                    current.filter(
+                                      (_: any, index: number) => index !== i,
+                                    ),
+                                  );
+                                  setServiceValueDrafts({});
+                                }
+                              }}
+                            >
+                              🗑
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -3515,7 +3537,7 @@ function Agenda({
                       }
                       title={expanded ? "Recolher" : "Ver atendimento completo"}
                     >
-                      {expanded ? "⌃" : "⌄"}
+                      {expanded ? "Recolher ▲" : "Ver detalhes ▼"}
                     </button>
                   </div>
                   <p>

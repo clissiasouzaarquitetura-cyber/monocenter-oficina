@@ -1637,7 +1637,7 @@ header > button {
 }
 .manualservices > div {
   display: grid;
-  grid-template-columns: 1fr 90px 150px 100px;
+  grid-template-columns: 1fr 90px 150px 100px 44px;
   gap: 8px;
   align-items: end;
   border-top: 1px solid var(--line);
@@ -1651,6 +1651,20 @@ header > button {
 }
 .manualservices label {
   font-size: 8px;
+}
+.manual-service-delete {
+  width: 40px;
+  height: 38px;
+  border: 1px solid #d71920;
+  border-radius: 7px;
+  background: #fff0f0;
+  color: #b51218;
+  font-size: 17px;
+  cursor: pointer;
+}
+.manual-service-delete:hover {
+  background: #d71920;
+  color: #fff;
 }
 .workflowbar {
   display: flex;
@@ -1742,6 +1756,9 @@ header > button {
   }
   .manualservices > div > b {
     grid-column: 2;
+  }
+  .manual-service-delete {
+    grid-column: 1;
   }
   .workflowbar {
     gap: 8px;
@@ -6016,9 +6033,26 @@ header > button {
   line-height: 1.2;
 }
 .day article div .appointment-toggle {
-  width: 27px;
-  height: 27px;
-  font-size: 14px !important;
+  width: auto;
+  min-width: 92px;
+  height: 32px;
+  padding: 0 9px !important;
+  border: 2px solid #4c7398 !important;
+  border-radius: 7px !important;
+  background: #edf6ff !important;
+  color: #173a59 !important;
+  font-size: 10px !important;
+  line-height: 1;
+}
+.day article div .appointment-toggle:hover,
+.day article div .appointment-toggle:focus-visible {
+  border-color: #173a59 !important;
+  background: #d9edff !important;
+}
+.app.dark .day article div .appointment-toggle {
+  border-color: #8bb7de !important;
+  background: #193751 !important;
+  color: #f0f8ff !important;
 }
 .carry-over-notice,
 .day article .quote-sent,
@@ -6403,4 +6437,19 @@ header > button {
 .app.dark .servicegrid .service-group > h3 {
   background: #3a4654;
   color: #f1f5f9;
+}
+
+/* Nomes dos serviços maiores para facilitar a leitura. */
+.servicegrid .service-group .service-row > span {
+  font-size: 15px !important;
+  line-height: 1.25;
+}
+.manualservices > div > input:first-child {
+  font-size: 15px !important;
+  line-height: 1.25;
+}
+@media (min-width: 901px) {
+  .servicegrid .service-group .service-row {
+    min-height: 52px;
+  }
 }
