@@ -2656,6 +2656,32 @@ header > button {
   font-size: 8px;
   font-weight: 900;
 }
+.proposal-a4 .a4-head > div {
+  border: 1px solid #aeb7c0;
+  background: #fff !important;
+  color: #111b28 !important;
+}
+.proposal-a4 .a4-head h1,
+.proposal-a4 .a4-head h2 {
+  color: #111b28 !important;
+}
+.proposal-a4 .a4-head h2 {
+  border-top-color: #cbd1d7;
+}
+.proposal-a4 .a4-head p {
+  color: #56616d !important;
+}
+.proposal-a4 .budget-head > strong.approval-head-badge {
+  min-width: 112px;
+  border: 2px solid #15803d;
+  background: #dcfce7 !important;
+  color: #166534 !important;
+  font:
+    800 12px Arial,
+    sans-serif;
+  letter-spacing: 0;
+  text-align: center;
+}
 .budget-a4 .print-notes {
   background: #f3f5f7 !important;
   border-left: 4px solid #d71920;

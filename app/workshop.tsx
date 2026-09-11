@@ -4453,6 +4453,9 @@ function PrintDocuments({
             <b>{p.qty}x</b>
             <span>
               {p.item} - {p.brand}
+              {budgetApproved && (
+                <small className="print-approved">✓ APROVADO</small>
+              )}
             </span>
             <em>{brl(p.qty * saleOf(p, roundStep))}</em>
           </div>
@@ -4510,7 +4513,10 @@ function PrintDocuments({
         </div>
       </section>
       <section className="a4 proposal-a4">
-        <BudgetHead title="PROPOSTA DE ORÇAMENTO" />
+        <BudgetHead
+          title="PROPOSTA DE ORÇAMENTO"
+          approvalBadge={budgetApproved}
+        />
         <div className="a4-client">
           <span>
             <b>Cliente</b>
@@ -4534,6 +4540,9 @@ function PrintDocuments({
             <b>{p.qty}x</b>
             <span>
               {p.item} - {p.brand}
+              {budgetApproved && (
+                <small className="print-approved">✓ APROVADO</small>
+              )}
             </span>
           </div>
         ))}
@@ -4646,7 +4655,13 @@ function PrintHead({ title }: { title: string }) {
     </header>
   );
 }
-function BudgetHead({ title }: { title: string }) {
+function BudgetHead({
+  title,
+  approvalBadge = false,
+}: {
+  title: string;
+  approvalBadge?: boolean;
+}) {
   return (
     <header className="a4-head budget-head">
       <img src="/logo-monocenter.jpg" alt="Monocenter" />
@@ -4656,7 +4671,9 @@ function BudgetHead({ title }: { title: string }) {
         <p>WhatsApp (15) 99657-4741</p>
         <h2>{title}</h2>
       </div>
-      <strong>{DISPLAY_APPT.plate || "SEM PLACA"}</strong>
+      <strong className={approvalBadge ? "approval-head-badge" : ""}>
+        {approvalBadge ? "APROVADO 👍" : DISPLAY_APPT.plate || "SEM PLACA"}
+      </strong>
     </header>
   );
 }
