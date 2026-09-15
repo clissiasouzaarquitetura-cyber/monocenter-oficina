@@ -6592,3 +6592,15 @@ header > button {
     min-height: 52px;
   }
 }
+
+.password-input-wrap { position: relative; display: flex; align-items: center; }
+.password-input-wrap input { width: 100%; padding-right: 92px !important; }
+.password-toggle { position: absolute; right: 6px; border: 0; background: transparent; color: #334155; font-weight: 800; padding: 7px 9px; cursor: pointer; }
+.tomorrow-agenda-list { display: grid; gap: 8px; margin-top: 14px; }
+.tomorrow-agenda-list article { display: grid; grid-template-columns: 70px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.tomorrow-agenda-list time { font-weight: 900; font-size: 15px; }
+.tomorrow-agenda-list span b, .tomorrow-agenda-list span small { display: block; }
+.tomorrow-agenda-list span small { color: var(--muted); margin-top: 3px; }
+.tomorrow-agenda-list strong { color: var(--r); font-size: 10px; text-align: right; }
+.management-report-head .wa { background: #1dab61; color: #fff; border-color: #1dab61; }
+@media (max-width:700px) { .tomorrow-agenda-list article { grid-template-columns:54px minmax(0,1fr); } .tomorrow-agenda-list strong { grid-column:2; text-align:left; } }

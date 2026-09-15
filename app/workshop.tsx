@@ -5740,7 +5740,7 @@ function Reports({
     [filter, setFilter] = useState("todos"),
     [printRow, setPrintRow] = useState<Appt | null>(null),
     [reportMode, setReportMode] = useState<
-      "registros" | "semana" | "abertos" | "andamento"
+      "registros" | "semana" | "amanha" | "abertos" | "andamento"
     >(
       initialMode === "abertos" || initialMode === "andamento"
         ? initialMode
@@ -5829,6 +5829,31 @@ function Reports({
     ["Garantias", weeklyRows.filter((a) => a.type === "garantia").length],
     ["Revisões 30 dias", weeklyRows.filter((a) => a.type === "revisao").length],
   ];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = iso(tomorrow);
+  const tomorrowRows = (data as Appt[])
+    .filter((a) => a.type !== "bloqueio" && a.date === tomorrowIso)
+    .sort((a, b) => a.time.localeCompare(b.time));
+  const tomorrowMessage = [
+    `*AGENDA MONOCENTER - ${tomorrow.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).toUpperCase()}*`,
+    "",
+    ...(tomorrowRows.length
+      ? tomorrowRows.map((a) =>
+          [
+            `*${a.time} - ${a.client}*`,
+            `${a.vehicle || "Veículo não informado"}${a.plate ? ` - ${a.plate}` : ""}`,
+            `Situação: ${category(a)}${a.inProgress ? " - veículo na oficina" : ""}`,
+            a.note ? `Observação: ${a.note}` : "",
+          ].filter(Boolean).join("\n"),
+        )
+      : ["Nenhum agendamento para amanhã."]),
+  ].join("\n\n");
   const openQuotes = (data as Appt[])
     .filter(
       (a) =>
@@ -5888,6 +5913,12 @@ function Reports({
               Resumo semanal
             </button>
           )}
+          <button
+            className={reportMode === "amanha" ? "active" : ""}
+            onClick={() => setReportMode("amanha")}
+          >
+            Agenda de amanhã
+          </button>
           <button
             className={reportMode === "abertos" ? "active" : ""}
             onClick={() => setReportMode("abertos")}
@@ -5963,6 +5994,43 @@ function Reports({
                   ))
               ) : (
                 <p>Nenhum atendimento registrado nesta semana.</p>
+              )}
+            </div>
+          </div>
+        )}
+        {reportMode === "amanha" && (
+          <div className="management-report-panel tomorrow-agenda-panel">
+            <div className="management-report-head">
+              <span>
+                <h2>Agenda do dia seguinte</h2>
+                <p>
+                  {tomorrow.toLocaleDateString("pt-BR", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  })} · {tomorrowRows.length} {tomorrowRows.length === 1 ? "registro" : "registros"}
+                </p>
+              </span>
+              <button className="wa" onClick={() => message(tomorrowMessage)}>
+                Copiar para WhatsApp
+              </button>
+            </div>
+            <div className="tomorrow-agenda-list">
+              {tomorrowRows.length ? (
+                tomorrowRows.map((a) => (
+                  <article key={a.id}>
+                    <time>{a.time}</time>
+                    <span>
+                      <b>{a.client}</b>
+                      <small>{a.vehicle || "Veículo não informado"} · {a.plate || "Sem placa"}</small>
+                      {a.note && <small>Observação: {a.note}</small>}
+                    </span>
+                    <strong>{category(a)}</strong>
+                  </article>
+                ))
+              ) : (
+                <p>Nenhum agendamento para amanhã.</p>
               )}
             </div>
           </div>
