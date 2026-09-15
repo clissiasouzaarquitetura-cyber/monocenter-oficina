@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { CarFront } from "lucide-react";
 const ITEMS = [
   "Amortecedor Dianteiro Direito",
@@ -3405,7 +3405,19 @@ function Agenda({
         return d;
       });
     }, [cursor, date, mode]);
-  const list = appointmentsForDate(date),
+  const isOngoingVehicle = (appointment: Appt) =>
+      appointment.type !== "bloqueio" &&
+      !!appointment.inProgress &&
+      appointment.budget?.processStatus !== "Finalizado",
+    list = [...appointmentsForDate(date)].sort((first, second) => {
+      const groupDifference =
+        Number(isOngoingVehicle(first)) - Number(isOngoingVehicle(second));
+      if (groupDifference !== 0) return groupDifference;
+      return (
+        first.time.localeCompare(second.time, "pt-BR", { numeric: true }) ||
+        first.client.localeCompare(second.client, "pt-BR")
+      );
+    }),
     openQuotesCount = (data as Appt[]).filter(
       (a) =>
         a.type === "cliente" &&
@@ -3596,13 +3608,20 @@ function Agenda({
               Nenhum agendamento. Clique em “Novo agendamento” para incluir.
             </div>
           )}
-          {list.map((a: Appt) => {
+          {list.map((a: Appt, index: number) => {
             const expanded = expandedAppointments.includes(a.id);
             return (
-              <article
-                className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
-                key={a.id}
-              >
+              <Fragment key={a.id}>
+                {isOngoingVehicle(a) &&
+                  (index === 0 || !isOngoingVehicle(list[index - 1])) && (
+                    <div className="day-group-heading ongoing">
+                      <span>Veículos em andamento</span>
+                      <small>Na oficina</small>
+                    </div>
+                  )}
+                <article
+                  className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
+                >
                 <time>
                   <b>{a.time}</b>
                   <small>
@@ -3799,7 +3818,8 @@ function Agenda({
                     )}
                   </div>
                 )}
-              </article>
+                </article>
+              </Fragment>
             );
           })}
         </div>
