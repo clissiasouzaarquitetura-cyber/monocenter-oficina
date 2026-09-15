@@ -3360,6 +3360,7 @@ function Agenda({
     ),
     [mode, setMode] = useState<"dia" | "semana" | "mes">("mes"),
     [openCal, setOpenCal] = useState(true),
+    [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
   const carryLimitIso = todayIso,
     isBusinessDay = (targetDate: string) => {
@@ -3418,6 +3419,7 @@ function Agenda({
         first.client.localeCompare(second.client, "pt-BR")
       );
     }),
+    ongoingVehicleCount = list.filter(isOngoingVehicle).length,
     openQuotesCount = (data as Appt[]).filter(
       (a) =>
         a.type === "cliente" &&
@@ -3614,14 +3616,32 @@ function Agenda({
               <Fragment key={a.id}>
                 {isOngoingVehicle(a) &&
                   (index === 0 || !isOngoingVehicle(list[index - 1])) && (
-                    <div className="day-group-heading ongoing">
-                      <span>Veículos em andamento</span>
-                      <small>Na oficina</small>
-                    </div>
+                    <button
+                      type="button"
+                      className="day-group-heading ongoing"
+                      onClick={() =>
+                        setShowOngoingVehicles((current) => !current)
+                      }
+                      aria-expanded={showOngoingVehicles}
+                    >
+                      <span>
+                        Veículos em andamento
+                        <small>
+                          {ongoingVehicleCount}{" "}
+                          {ongoingVehicleCount === 1 ? "veículo" : "veículos"}
+                        </small>
+                      </span>
+                      <strong>
+                        {showOngoingVehicles
+                          ? "Recolher ▲"
+                          : "Mostrar veículos ▼"}
+                      </strong>
+                    </button>
                   )}
-                <article
-                  className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
-                >
+                {(!isOngoingVehicle(a) || showOngoingVehicles) && (
+                  <article
+                    className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
+                  >
                 <time>
                   <b>{a.time}</b>
                   <small>
@@ -3818,7 +3838,8 @@ function Agenda({
                     )}
                   </div>
                 )}
-                </article>
+                  </article>
+                )}
               </Fragment>
             );
           })}
