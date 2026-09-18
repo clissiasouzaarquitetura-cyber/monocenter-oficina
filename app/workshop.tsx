@@ -273,6 +273,11 @@ type PurchaseCheck = {
   receivedBy?: string;
   updatedAt?: string;
 };
+type PurchaseOrderState = {
+  closed: boolean;
+  closedAt?: string;
+  closedBy?: string;
+};
 type View =
   | "agenda"
   | "veiculos"
@@ -669,6 +674,9 @@ export default function App({ initialState, user, onLogout }: any) {
     [purchaseChecks, setPurchaseChecks] = useState<
       Record<string, PurchaseCheck>
     >(shared.purchaseChecks ?? {}),
+    [purchaseOrderStates, setPurchaseOrderStates] = useState<
+      Record<string, PurchaseOrderState>
+    >(shared.purchaseOrderStates ?? {}),
     [budgetReviewOpen, setBudgetReviewOpen] = useState(false),
     [budgetReviewChecks, setBudgetReviewChecks] = useState<
       Record<number, boolean>
@@ -711,6 +719,7 @@ export default function App({ initialState, user, onLogout }: any) {
         patioNotes,
         processStatus,
         purchaseChecks,
+        purchaseOrderStates,
       };
       fetch("/api/state", {
         method: "POST",
@@ -754,6 +763,7 @@ export default function App({ initialState, user, onLogout }: any) {
     patioNotes,
     processStatus,
     purchaseChecks,
+    purchaseOrderStates,
   ]);
   useEffect(() => {
     let alive = true;
@@ -786,6 +796,11 @@ export default function App({ initialState, user, onLogout }: any) {
           apply(setHolidays, holidays, s.holidays);
           apply(setTemplates, templates, s.templates);
           apply(setPurchaseChecks, purchaseChecks, s.purchaseChecks);
+          apply(
+            setPurchaseOrderStates,
+            purchaseOrderStates,
+            s.purchaseOrderStates,
+          );
           if (s.footerSize !== undefined && s.footerSize !== footerSize) {
             changed = true;
             setFooterSize(s.footerSize);
@@ -811,6 +826,7 @@ export default function App({ initialState, user, onLogout }: any) {
     holidays,
     templates,
     purchaseChecks,
+    purchaseOrderStates,
     footerSize,
     roundStep,
     onLogout,
@@ -3437,10 +3453,15 @@ export default function App({ initialState, user, onLogout }: any) {
           <PurchaseOrders
             appointments={appointments}
             checks={purchaseChecks}
+            orderStates={purchaseOrderStates}
             currentUser={user.displayName}
             setChecks={(updater: any) => {
               syncBlockedUntil.current = Date.now() + 4000;
               setPurchaseChecks(updater);
+            }}
+            setOrderStates={(updater: any) => {
+              syncBlockedUntil.current = Date.now() + 4000;
+              setPurchaseOrderStates(updater);
             }}
             setWorkOrder={(ownerId: number, workOrder: string) => {
               syncBlockedUntil.current = Date.now() + 4000;
@@ -5827,12 +5848,13 @@ function PurchaseOrders({
   appointments,
   checks,
   setChecks,
+  orderStates,
+  setOrderStates,
   setWorkOrder,
   currentUser,
 }: any) {
-  const [filter, setFilter] = useState<
-    "all" | "pending" | "ordered" | "received"
-  >("all");
+  const [filter, setFilter] = useState<"all" | "open" | "closed">("all"),
+    [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const rows = useMemo(() => {
     const unique = new Map<string, any>();
     for (const appointment of appointments as Appt[]) {
@@ -5872,21 +5894,14 @@ function PurchaseOrders({
       );
     });
   }, [appointments, checks]);
-  const counts = {
+  const itemCounts = {
       pending: rows.filter((row) => !checks[row.key]?.ordered).length,
       ordered: rows.filter(
         (row) => checks[row.key]?.ordered && !checks[row.key]?.received,
       ).length,
       received: rows.filter((row) => checks[row.key]?.received).length,
     },
-    visibleRows = rows.filter((row) => {
-      const state = checks[row.key];
-      if (filter === "pending") return !state?.ordered;
-      if (filter === "ordered") return state?.ordered && !state?.received;
-      if (filter === "received") return state?.received;
-      return true;
-    }),
-    groups = visibleRows.reduce((result: any[], row: any) => {
+    allGroups = rows.reduce((result: any[], row: any) => {
       let group = result.find((item) => item.ownerId === row.ownerId);
       if (!group) {
         group = {
@@ -5900,18 +5915,84 @@ function PurchaseOrders({
       group.rows.push(row);
       return result;
     }, []),
-    update = (key: string, patch: Partial<PurchaseCheck>) =>
-      setChecks((current: Record<string, PurchaseCheck>) => ({
+    groups = allGroups
+      .map((group: any) => {
+        const savedState: PurchaseOrderState = orderStates[group.ownerId] ?? {
+            closed: false,
+          },
+          allReceived =
+            group.rows.length > 0 &&
+            group.rows.every((row: any) => checks[row.key]?.received),
+          totalQuantity = group.rows.reduce(
+            (total: number, row: any) => total + (Number(row.part.qty) || 0),
+            0,
+          );
+        return { ...group, savedState, allReceived, totalQuantity };
+      })
+      .filter((group: any) => {
+        if (filter === "open") return !group.savedState.closed;
+        if (filter === "closed") return group.savedState.closed;
+        return true;
+      })
+      .sort(
+        (a: any, b: any) =>
+          Number(a.savedState.closed) - Number(b.savedState.closed) ||
+          a.serviceDate.localeCompare(b.serviceDate),
+      ),
+    orderCounts = {
+      all: allGroups.length,
+      open: allGroups.filter(
+        (group: any) => !orderStates[group.ownerId]?.closed,
+      ).length,
+      closed: allGroups.filter(
+        (group: any) => orderStates[group.ownerId]?.closed,
+      ).length,
+    },
+    update = (
+      ownerId: number,
+      key: string,
+      patch: Partial<PurchaseCheck>,
+    ) => {
+      setChecks((current: Record<string, PurchaseCheck>) => {
+        const previous = current[key];
+        return {
+          ...current,
+          [key]: {
+            ...previous,
+            ...patch,
+            ordered: patch.ordered ?? previous?.ordered ?? false,
+            received: patch.received ?? previous?.received ?? false,
+            note: patch.note ?? previous?.note ?? "",
+            updatedAt: new Date().toISOString(),
+          },
+        };
+      });
+      if (orderStates[ownerId]?.closed)
+        setOrderStates(
+          (current: Record<string, PurchaseOrderState>) => ({
+            ...current,
+            [ownerId]: { closed: false },
+          }),
+        );
+    },
+    closeOrder = (ownerId: number) => {
+      setOrderStates((current: Record<string, PurchaseOrderState>) => ({
         ...current,
-        [key]: {
-          ordered: false,
-          received: false,
-          note: "",
-          ...current[key],
-          ...patch,
-          updatedAt: new Date().toISOString(),
+        [ownerId]: {
+          closed: true,
+          closedAt: new Date().toISOString(),
+          closedBy: currentUser,
         },
       }));
+      setExpanded((current) => ({ ...current, [ownerId]: false }));
+    },
+    reopenOrder = (ownerId: number) => {
+      setOrderStates((current: Record<string, PurchaseOrderState>) => ({
+        ...current,
+        [ownerId]: { closed: false },
+      }));
+      setExpanded((current) => ({ ...current, [ownerId]: true }));
+    };
   return (
     <section className="page purchase-page">
       <div className="purchase-summary">
@@ -5919,43 +6000,89 @@ function PurchaseOrders({
           className={filter === "all" ? "active" : ""}
           onClick={() => setFilter("all")}
         >
-          Todos <b>{rows.length}</b>
+          Todos os pedidos <b>{orderCounts.all}</b>
         </button>
         <button
-          className={filter === "pending" ? "active pending" : ""}
-          onClick={() => setFilter("pending")}
+          className={filter === "open" ? "active pending" : ""}
+          onClick={() => setFilter("open")}
         >
-          A comprar <b>{counts.pending}</b>
+          Pedidos abertos <b>{orderCounts.open}</b>
         </button>
         <button
-          className={filter === "ordered" ? "active ordered" : ""}
-          onClick={() => setFilter("ordered")}
+          className={filter === "closed" ? "active received" : ""}
+          onClick={() => setFilter("closed")}
         >
-          Comprados <b>{counts.ordered}</b>
-        </button>
-        <button
-          className={filter === "received" ? "active received" : ""}
-          onClick={() => setFilter("received")}
-        >
-          Conferidos <b>{counts.received}</b>
+          Pedidos fechados <b>{orderCounts.closed}</b>
         </button>
       </div>
       <div className="purchase-guidance">
         <b>Conferência do pedido</b>
         <span>
           Primeiro marque “Comprado”. Quando a peça chegar, marque “Recebido e
-          conferido”. As alterações são salvas automaticamente.
+          conferido”. Depois clique em “Salvar e fechar pedido”.
         </span>
+        <small className="purchase-item-totals">
+          Peças: <b>{itemCounts.pending}</b> a comprar · <b>{itemCounts.ordered}</b>{" "}
+          compradas · <b>{itemCounts.received}</b> conferidas
+        </small>
       </div>
-      {visibleRows.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="emptyday">
-          Nenhuma peça encontrada nesta situação. Os itens aparecerão após o
+          Nenhum pedido encontrado nesta situação. Os itens aparecerão após o
           orçamento ser aprovado ou o serviço ser agendado.
         </div>
       ) : (
         <div className="purchase-os-list">
-          {groups.map((group: any) => (
-            <section className="purchase-os-card" key={group.ownerId}>
+          {groups.map((group: any) => {
+            const isClosed = group.savedState.closed,
+              isExpanded = expanded[group.ownerId] ?? !isClosed,
+              pendingToClose = group.rows.filter(
+                (row: any) => !checks[row.key]?.received,
+              ).length;
+            return (
+            <section
+              className={`purchase-os-card ${isClosed ? "closed" : "open"}`}
+              key={group.ownerId}
+            >
+              <button
+                type="button"
+                className="purchase-os-summary"
+                aria-expanded={isExpanded}
+                onClick={() =>
+                  setExpanded((current) => ({
+                    ...current,
+                    [group.ownerId]: !isExpanded,
+                  }))
+                }
+              >
+                <span className="purchase-os-chevron">
+                  {isExpanded ? "▾" : "▸"}
+                </span>
+                <span>
+                  <small>OS</small>
+                  <b>{group.appointment.workOrder || "Sem número"}</b>
+                </span>
+                <span className="purchase-os-customer">
+                  <small>Cliente / veículo</small>
+                  <b>
+                    {group.appointment.client} ·{" "}
+                    {group.appointment.vehicle || "Veículo não informado"} ·{" "}
+                    {group.appointment.plate || "Sem placa"}
+                  </b>
+                </span>
+                <span>
+                  <small>Resumo</small>
+                  <b>
+                    {group.rows.length} {group.rows.length === 1 ? "item" : "itens"}
+                    {" · "}{group.totalQuantity} peças
+                  </b>
+                </span>
+                <strong className={`purchase-order-badge ${isClosed ? "closed" : "open"}`}>
+                  {isClosed ? "FECHADO" : "ABERTO"}
+                </strong>
+              </button>
+              {isExpanded && (
+                <>
               <header className="purchase-os-head">
                 <label>
                   <span>Número da OS</span>
@@ -6031,7 +6158,7 @@ function PurchaseOrders({
                           type="checkbox"
                           checked={state.ordered}
                           onChange={(event) =>
-                            update(key, {
+                            update(group.ownerId, key, {
                               ordered: event.target.checked,
                               received: event.target.checked
                                 ? state.received
@@ -6059,7 +6186,7 @@ function PurchaseOrders({
                           type="checkbox"
                           checked={state.received}
                           onChange={(event) =>
-                            update(key, {
+                            update(group.ownerId, key, {
                               ordered: event.target.checked
                                 ? true
                                 : state.ordered,
@@ -6079,8 +6206,42 @@ function PurchaseOrders({
                   );
                 })}
               </div>
+              <footer className="purchase-order-actions">
+                {isClosed ? (
+                  <>
+                    <span className="purchase-order-saved">
+                      ✓ Pedido fechado
+                      {group.savedState.closedBy
+                        ? ` por ${group.savedState.closedBy}`
+                        : ""}
+                    </span>
+                    <button type="button" onClick={() => reopenOrder(group.ownerId)}>
+                      Reabrir pedido
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className={group.allReceived ? "ready" : "waiting"}>
+                      {group.allReceived
+                        ? "✓ Todas as peças foram conferidas."
+                        : `Falta conferir ${pendingToClose} ${pendingToClose === 1 ? "item" : "itens"}.`}
+                    </span>
+                    <button
+                      type="button"
+                      className="close-order"
+                      disabled={!group.allReceived}
+                      onClick={() => closeOrder(group.ownerId)}
+                    >
+                      Salvar e fechar pedido
+                    </button>
+                  </>
+                )}
+              </footer>
+                </>
+              )}
             </section>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>

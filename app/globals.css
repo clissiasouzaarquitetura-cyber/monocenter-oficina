@@ -5982,7 +5982,7 @@ header > button {
 }
 .purchase-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
   gap: 9px;
   margin-bottom: 12px;
 }
@@ -6030,6 +6030,11 @@ header > button {
 .purchase-guidance span {
   color: var(--muted);
   font-size: 11px;
+}
+.purchase-item-totals {
+  margin-top: 4px;
+  color: #334155;
+  font-size: 10px;
 }
 .purchase-list {
   display: grid;
@@ -6405,6 +6410,74 @@ header > button {
   border-radius: 10px;
   background: #fff;
 }
+.purchase-os-card.closed {
+  border-color: #9bcdb0;
+  background: #f4fbf6;
+}
+.purchase-os-summary {
+  display: grid;
+  grid-template-columns: 30px 130px minmax(260px, 1fr) 170px 95px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  padding: 11px 13px;
+  background: #f8fafc;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.purchase-os-card.open .purchase-os-summary {
+  border-left: 5px solid #d59600;
+}
+.purchase-os-card.closed .purchase-os-summary {
+  border-left: 5px solid #178448;
+  background: #effaf3;
+}
+.purchase-os-summary > span:not(.purchase-os-chevron) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.purchase-os-summary small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.purchase-os-summary b {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.purchase-os-chevron {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid #9aa8b5;
+  border-radius: 50%;
+  background: #fff;
+  color: #17324d;
+  font-size: 18px;
+  font-weight: 900;
+}
+.purchase-order-badge {
+  justify-self: end;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 10px;
+  text-align: center;
+}
+.purchase-order-badge.open {
+  background: #fff1c7;
+  color: #8a5800;
+}
+.purchase-order-badge.closed {
+  background: #d8f5e3;
+  color: #126538;
+}
 .purchase-os-head {
   display: grid;
   grid-template-columns: 185px minmax(260px, 1fr) 150px;
@@ -6505,6 +6578,47 @@ header > button {
   height: 22px;
   accent-color: #178448;
 }
+.purchase-order-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding: 11px 13px;
+  background: #f8fafc;
+}
+.purchase-order-actions > span {
+  margin-right: auto;
+  font-size: 11px;
+  font-weight: 800;
+}
+.purchase-order-actions .waiting {
+  color: #9a5f00;
+}
+.purchase-order-actions .ready,
+.purchase-order-saved {
+  color: #16713e;
+}
+.purchase-order-actions button {
+  border: 1px solid #60758a;
+  border-radius: 7px;
+  padding: 9px 13px;
+  background: #fff;
+  color: #17324d;
+  font-weight: 800;
+  cursor: pointer;
+}
+.purchase-order-actions .close-order {
+  border-color: #178448;
+  background: #178448;
+  color: #fff;
+}
+.purchase-order-actions button:disabled {
+  border-color: #cbd5e1;
+  background: #e8edf2;
+  color: #8b98a6;
+  cursor: not-allowed;
+}
 .app.dark .purchase-os-card,
 .app.dark .purchase-os-row,
 .app.dark .purchase-os-tick {
@@ -6514,6 +6628,14 @@ header > button {
 .app.dark .purchase-os-columns {
   background: #293645;
   color: #d8e0e8;
+}
+.app.dark .purchase-os-summary,
+.app.dark .purchase-order-actions {
+  background: #1b2634;
+  color: #fff;
+}
+.app.dark .purchase-os-card.closed .purchase-os-summary {
+  background: #163524;
 }
 .app.dark .purchase-os-row.ordered {
   background: #172b48;
@@ -6537,6 +6659,24 @@ header > button {
     grid-template-columns: 1fr;
     gap: 9px;
   }
+  .purchase-os-summary {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .purchase-os-summary > span:not(.purchase-os-chevron) {
+    grid-column: 2;
+  }
+  .purchase-os-summary .purchase-os-customer {
+    grid-row: 1;
+  }
+  .purchase-os-summary > span:nth-of-type(2),
+  .purchase-os-summary > span:nth-of-type(4) {
+    display: none;
+  }
+  .purchase-order-badge {
+    grid-column: 3;
+    grid-row: 1;
+  }
   .purchase-os-columns {
     display: none;
   }
@@ -6556,6 +6696,17 @@ header > button {
   .purchase-os-tick {
     min-height: 42px;
     font-size: 11px;
+  }
+  .purchase-order-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .purchase-order-actions > span {
+    margin-right: 0;
+  }
+  .purchase-order-actions button {
+    width: 100%;
+    min-height: 44px;
   }
 }
 
