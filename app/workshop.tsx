@@ -840,6 +840,35 @@ export default function App({ initialState, user, onLogout }: any) {
       ),
     );
   };
+  const sanitizeBudgetParts = (savedParts: any[] = []) => {
+    const credentialValues = [user?.username, user?.displayName]
+        .filter(Boolean)
+        .map((value) => String(value).trim().toLocaleUpperCase("pt-BR")),
+      cleanText = (value: unknown) => {
+        const text = String(value ?? "").trim();
+        return credentialValues.includes(text.toLocaleUpperCase("pt-BR"))
+          ? ""
+          : text;
+      },
+      cleanNumber = (value: unknown) => {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
+      };
+    return savedParts.map((part) => ({
+      ...part,
+      brand: cleanText(part.brand),
+      supplier: cleanText(part.supplier),
+      code: cleanText(part.code),
+      cost: cleanNumber(part.cost),
+      margin: cleanNumber(part.margin),
+      saleOverride:
+        part.saleOverride === null || part.saleOverride === undefined
+          ? null
+          : Number.isFinite(Number(part.saleOverride))
+            ? Number(part.saleOverride)
+            : null,
+    }));
+  };
   const nav: [View, string, string][] = [
     ["agenda", "Agenda", "▦"],
     ["veiculos", "Veículos na oficina", "▣"],
@@ -1060,7 +1089,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 final: false,
               });
               if (a.budget) {
-                setParts(a.budget.parts ?? []);
+                setParts(sanitizeBudgetParts(a.budget.parts));
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
@@ -1727,6 +1756,9 @@ export default function App({ initialState, user, onLogout }: any) {
                             <label>
                               <input
                                 value={p.item}
+                                name={`budget-item-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].item = titleCase(e.target.value);
@@ -1736,6 +1768,10 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.brand}
                                 placeholder="Marca"
+                                name={`budget-brand-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
+                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].brand = titleCase(e.target.value);
@@ -1750,6 +1786,9 @@ export default function App({ initialState, user, onLogout }: any) {
                               inputMode="numeric"
                               placeholder="0"
                               aria-label={`Quantidade de ${p.item || "peça"}`}
+                              name={`budget-quantity-${activeAppointment?.id ?? "novo"}-${i}`}
+                              autoComplete="off"
+                              data-form-type="other"
                               value={p.qty || ""}
                               onChange={(e) => {
                                 const a = [...parts];
@@ -1761,6 +1800,10 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.supplier}
                                 placeholder="Fornecedor"
+                                name={`budget-supplier-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
+                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].supplier = titleCase(e.target.value);
@@ -1770,6 +1813,10 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.code}
                                 placeholder="Código"
+                                name={`budget-code-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
+                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].code =
@@ -1779,12 +1826,18 @@ export default function App({ initialState, user, onLogout }: any) {
                               />
                             </label>
                             <input
-                              type={costs ? "number" : "password"}
+                              type="number"
+                              className={!costs ? "masked-budget-input" : ""}
+                              readOnly={!costs}
                               min="0"
                               step="0.01"
                               inputMode="decimal"
                               placeholder={costs ? "0,00" : ""}
                               aria-label={`Custo de ${p.item || "peça"} em reais`}
+                              name={`budget-cost-${activeAppointment?.id ?? "novo"}-${i}`}
+                              autoComplete="off"
+                              data-form-type="other"
+                              data-lpignore="true"
                               value={p.cost || ""}
                               onChange={(e) => {
                                 const a = [...parts];
@@ -1794,12 +1847,18 @@ export default function App({ initialState, user, onLogout }: any) {
                             />
                             <label>
                               <input
-                                type={costs ? "number" : "password"}
+                                type="number"
+                                className={!costs ? "masked-budget-input" : ""}
+                                readOnly={!costs}
                                 min="0"
                                 step="1"
                                 inputMode="numeric"
                                 placeholder={costs ? "0" : ""}
                                 aria-label={`Margem de ${p.item || "peça"} em porcentagem`}
+                                name={`budget-margin-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
+                                data-lpignore="true"
                                 value={p.margin || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
@@ -1821,6 +1880,9 @@ export default function App({ initialState, user, onLogout }: any) {
                                 inputMode="decimal"
                                 placeholder="0,00"
                                 aria-label={`Venda unitária de ${p.item || "peça"} em reais`}
+                                name={`budget-sale-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
                                 value={cashSaleOf(p, roundStep) || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
@@ -2821,7 +2883,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 },
               );
               if (a.budget) {
-                setParts(a.budget.parts ?? []);
+                setParts(sanitizeBudgetParts(a.budget.parts));
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
@@ -3009,7 +3071,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 },
               );
               if (opened.budget) {
-                setParts(opened.budget.parts ?? []);
+                setParts(sanitizeBudgetParts(opened.budget.parts));
                 setSelectedServices(opened.budget.selectedServices ?? []);
                 setServiceQty(opened.budget.serviceQty ?? {});
                 setServicePrices(opened.budget.servicePrices ?? {});

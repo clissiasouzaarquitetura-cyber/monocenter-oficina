@@ -163,6 +163,11 @@ header > button {
   color: #fff;
   border-color: var(--r) !important;
 }
+.masked-budget-input {
+  color: transparent !important;
+  caret-color: transparent !important;
+  text-shadow: none !important;
+}
 .aggrid {
   display: grid;
   grid-template-columns: 1.35fr 0.75fr;
