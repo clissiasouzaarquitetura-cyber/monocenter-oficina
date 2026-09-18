@@ -240,6 +240,14 @@ type EvaluationState = {
   custom: string[];
   notes?: Record<number, string>;
 };
+type GeometryEntry = {
+  frontLeft: string;
+  frontRight: string;
+  rearLeft: string;
+  rearRight: string;
+  condition: string;
+};
+type GeometryState = Record<string, GeometryEntry>;
 type BudgetState = {
   parts: any[];
   selectedServices: number[];
@@ -293,6 +301,7 @@ type Appt = {
   budget?: BudgetState;
   conference?: {
     checks: Record<string, boolean>;
+    geometry?: GeometryState;
     finalizedAt?: string;
     finalizedBy?: string;
     finalization?: {
@@ -426,6 +435,9 @@ const renderMessageTemplate = (template: string, appointment: Appt) =>
     .trim();
 const conferenceStarted = (a: Appt) =>
   Object.values(a.conference?.checks ?? {}).some(Boolean) ||
+  Object.values(a.conference?.geometry ?? {}).some((entry) =>
+    Object.values(entry).some((value) => value.trim()),
+  ) ||
   !!a.conference?.finalization?.serviceCompleted ||
   !!a.conference?.finalization?.vehicleReleased ||
   !!a.conference?.finalization?.clientOriented ||
@@ -555,6 +567,7 @@ export default function App({ initialState, user, onLogout }: any) {
     [checks, setChecks] = useState<Record<string, boolean>>(
       shared.checks ?? {},
     ),
+    [geometry, setGeometry] = useState<GeometryState>({}),
     [finalization, setFinalization] = useState({
       serviceCompleted: false,
       vehicleReleased: false,
@@ -602,7 +615,6 @@ export default function App({ initialState, user, onLogout }: any) {
   }, [custom, evaluationSearch]);
   const [evaluator, setEvaluator] = useState(shared.evaluator ?? "Saulo"),
     [started, setStarted] = useState(shared.started ?? ""),
-    [geometryOpen, setGeometryOpen] = useState(false),
     [checkOpen, setCheckOpen] = useState(false),
     [partsOpen, setPartsOpen] = useState(false),
     [servicesOpen, setServicesOpen] = useState(false),
@@ -840,6 +852,103 @@ export default function App({ initialState, user, onLogout }: any) {
       ),
     );
   };
+  const updateGeometryField = (
+    item: string,
+    field: keyof GeometryEntry,
+    value: string,
+  ) =>
+    setGeometry((current) => {
+      const previous = current[item];
+      return {
+        ...current,
+        [item]: previous
+          ? { ...previous, [field]: value }
+          : {
+              frontLeft: "",
+              frontRight: "",
+              rearLeft: "",
+              rearRight: "",
+              condition: "",
+              [field]: value,
+            },
+      };
+    });
+  const reverseEvaluation = () => {
+    if (!activeAppointment) return;
+    const source = activeAppointment.sourceAppointmentId
+        ? appointments.find(
+            (appointment) =>
+              appointment.id === activeAppointment.sourceAppointmentId,
+          ) ?? activeAppointment
+        : activeAppointment,
+      linkedServiceId = source.serviceAppointmentId;
+    if (
+      !confirm(
+        `ATENÇÃO: deseja estornar a avaliação de ${source.client}?\n\nA avaliação, o orçamento e uma eventual agenda de serviço vinculada serão apagados. O cliente permanecerá na agenda para uma nova avaliação.`,
+      )
+    )
+      return;
+    syncBlockedUntil.current = Date.now() + 4000;
+    const now = new Date().toISOString(),
+      reset: Appt = {
+        ...source,
+        status: "agendado",
+        evaluation: undefined,
+        budget: undefined,
+        conference: undefined,
+        quoteSentAt: undefined,
+        quoteSentBy: undefined,
+        serviceScheduled: false,
+        serviceScheduledFor: undefined,
+        serviceScheduledTime: undefined,
+        sourceAppointmentId: undefined,
+        serviceAppointmentId: undefined,
+        startedAt: undefined,
+        inProgress: true,
+        evaluationRecordedBy: undefined,
+        evaluationRecordedAt: undefined,
+        budgetEditedBy: undefined,
+        budgetEditedAt: undefined,
+        lastEditedBy: user.displayName,
+        lastEditedAt: now,
+        _updatedAt: Date.now(),
+      };
+    DISPLAY_APPT = reset;
+    setActiveAppointment(reset);
+    if (linkedServiceId)
+      setDeletedAppointmentIds((ids) => [
+        ...new Set([...ids, linkedServiceId]),
+      ]);
+    setAppointments((list) =>
+      list
+        .filter(
+          (appointment) =>
+            !linkedServiceId || appointment.id !== linkedServiceId,
+        )
+        .map((appointment) =>
+          appointment.id === reset.id ? reset : appointment,
+        ),
+    );
+    setStatus({});
+    setQuoteItems({});
+    setCustom([]);
+    setEvaluationNotes({});
+    setParts([]);
+    setSelectedServices([]);
+    setServiceQty({});
+    setServicePrices({});
+    setManualServices([]);
+    setPatioNotes("");
+    setChecks({});
+    setGeometry({});
+    setStarted("");
+    setProcessStatus("Em andamento");
+    setSavedAt("");
+    setCheckOpen(true);
+    setView("avaliacao");
+    scrollTo(0, 0);
+    alert("Avaliação estornada. O preenchimento foi reiniciado.");
+  };
   const sanitizeBudgetParts = (savedParts: any[] = []) => {
     const credentialValues = [user?.username, user?.displayName]
         .filter(Boolean)
@@ -890,7 +999,6 @@ export default function App({ initialState, user, onLogout }: any) {
         return;
       }
       if (v === "avaliacao") {
-        setGeometryOpen(false);
         setCheckOpen(false);
       }
       if (v === "orcamento") {
@@ -1066,6 +1174,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(a.evaluation?.custom ?? []);
               setEvaluationNotes(a.evaluation?.notes ?? {});
               setChecks(a.conference?.checks ?? {});
+              setGeometry(a.conference?.geometry ?? {});
               setFinalization(
                 a.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -1077,7 +1186,6 @@ export default function App({ initialState, user, onLogout }: any) {
                   checker: "",
                 },
               );
-              setGeometryOpen(false);
               setCheckOpen(false);
               setPartsOpen(false);
               setServicesOpen(false);
@@ -1191,6 +1299,7 @@ export default function App({ initialState, user, onLogout }: any) {
                     ? activeAppointment.conference
                     : {
                         checks: activeAppointment.conference?.checks ?? {},
+                        geometry: activeAppointment.conference?.geometry ?? {},
                         finalizedAt: finishedAt,
                         finalizedBy: user.displayName,
                         finalization: {
@@ -1311,6 +1420,7 @@ export default function App({ initialState, user, onLogout }: any) {
                         view === "torque"
                           ? {
                               checks,
+                              geometry,
                               finalization,
                               finalizedBy:
                                 processStatus === "Finalizado"
@@ -1341,6 +1451,21 @@ export default function App({ initialState, user, onLogout }: any) {
               />
               {view === "avaliacao" && (
                 <>
+                  {(activeAppointment?.evaluation ||
+                    activeAppointment?.budget) && (
+                    <div className="reverse-evaluation-bar">
+                      <span>
+                        <b>Precisa refazer esta avaliação?</b>
+                        <small>
+                          Estorne para apagar a avaliação e o orçamento antigos
+                          e começar um novo preenchimento.
+                        </small>
+                      </span>
+                      <button onClick={reverseEvaluation}>
+                        ↺ Estornar avaliação
+                      </button>
+                    </div>
+                  )}
                   <div className="startbox">
                     <label>
                       Quem está avaliando
@@ -1377,35 +1502,6 @@ export default function App({ initialState, user, onLogout }: any) {
                       Usar horário atual
                     </button>
                   </div>
-                  <Collapse
-                    title="⌖ Geometria / Alinhamento"
-                    subtitle="Medições de camber, caster e convergência"
-                    open={geometryOpen}
-                    set={() => setGeometryOpen(!geometryOpen)}
-                  >
-                    <div className="geometry bare">
-                      {[
-                        "Camber",
-                        "Caster",
-                        "Alinhamento (convergência)",
-                        "Posição do volante",
-                      ].map((x) => (
-                        <div key={x}>
-                          <b>{x}</b>
-                          <input placeholder="Diant. Esq." />
-                          <input placeholder="Diant. Dir." />
-                          <input placeholder="Tras. Esq." />
-                          <input placeholder="Tras. Dir." />
-                          <select>
-                            <option>Situação</option>
-                            <option>OK</option>
-                            <option>Atenção</option>
-                            <option>Não OK</option>
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-                  </Collapse>
                   <Collapse
                     title="⚙ Suspensão e peças do veículo"
                     subtitle="Checklist de avaliação e itens para orçamento"
@@ -1485,12 +1581,18 @@ export default function App({ initialState, user, onLogout }: any) {
                             <input
                               type="checkbox"
                               checked={!!quoteItems[i + 1]}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const checked = e.target.checked;
                                 setQuoteItems({
                                   ...quoteItems,
-                                  [i + 1]: e.target.checked,
-                                })
-                              }
+                                  [i + 1]: checked,
+                                });
+                                if (checked)
+                                  setStatus({
+                                    ...status,
+                                    [i + 1]: "r",
+                                  });
+                              }}
                             />{" "}
                             Orçar
                           </label>
@@ -2572,6 +2674,98 @@ export default function App({ initialState, user, onLogout }: any) {
                     {savedAt && <small>Salvo às {savedAt}</small>}
                   </div>
                   <div className="printable">
+                    <Collapse
+                      title="⌖ Geometria / Alinhamento"
+                      subtitle="Medições de camber, caster e convergência"
+                      open={!!torqueOpen.geometry}
+                      set={() =>
+                        setTorqueOpen({
+                          ...torqueOpen,
+                          geometry: !torqueOpen.geometry,
+                        })
+                      }
+                    >
+                      <div className="geometry bare">
+                        {[
+                          "Camber",
+                          "Caster",
+                          "Alinhamento (convergência)",
+                          "Posição do volante",
+                        ].map((item) => {
+                          const values = geometry[item] ?? {
+                            frontLeft: "",
+                            frontRight: "",
+                            rearLeft: "",
+                            rearRight: "",
+                            condition: "",
+                          };
+                          return (
+                            <div key={item}>
+                              <b>{item}</b>
+                              <input
+                                placeholder="Diant. Esq."
+                                value={values.frontLeft}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "frontLeft",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <input
+                                placeholder="Diant. Dir."
+                                value={values.frontRight}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "frontRight",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <input
+                                placeholder="Tras. Esq."
+                                value={values.rearLeft}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "rearLeft",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <input
+                                placeholder="Tras. Dir."
+                                value={values.rearRight}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "rearRight",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <select
+                                value={values.condition}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "condition",
+                                    event.target.value,
+                                  )
+                                }
+                              >
+                                <option value="">Situação</option>
+                                <option>OK</option>
+                                <option>Atenção</option>
+                                <option>Não OK</option>
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Collapse>
                     {[
                       ["front", "Suspensão dianteira", FRONT, true],
                       ["rear", "Suspensão traseira", REAR, true],
@@ -2803,6 +2997,7 @@ export default function App({ initialState, user, onLogout }: any) {
                         },
                         conference: {
                           checks,
+                          geometry,
                           finalization,
                           finalizedBy: user.displayName,
                           finalizedAt: new Date().toISOString(),
@@ -2833,6 +3028,7 @@ export default function App({ initialState, user, onLogout }: any) {
             onBack={() => go("agenda")}
             onEditConference={() => {
               setChecks(activeAppointment.conference?.checks ?? {});
+              setGeometry(activeAppointment.conference?.geometry ?? {});
               setFinalization(
                 activeAppointment.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -2871,6 +3067,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(a.evaluation?.custom ?? []);
               setEvaluationNotes(a.evaluation?.notes ?? {});
               setChecks(a.conference?.checks ?? {});
+              setGeometry(a.conference?.geometry ?? {});
               setFinalization(
                 a.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -3059,6 +3256,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(opened.evaluation?.custom ?? []);
               setEvaluationNotes(opened.evaluation?.notes ?? {});
               setChecks(opened.conference?.checks ?? {});
+              setGeometry(opened.conference?.geometry ?? {});
               setFinalization(
                 opened.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -3087,7 +3285,6 @@ export default function App({ initialState, user, onLogout }: any) {
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
-              setGeometryOpen(false);
               setCheckOpen(false);
               setPartsOpen(false);
               setServicesOpen(false);
@@ -6452,7 +6649,7 @@ const TITLES: Record<View, [string, string]> = {
   ],
   avaliacao: [
     "Avaliação veicular",
-    "Checklist técnico de suspensão, freios e geometria.",
+    "Checklist técnico de suspensão, freios e peças do veículo.",
   ],
   orcamento: [
     "Montar orçamento",
@@ -6461,7 +6658,7 @@ const TITLES: Record<View, [string, string]> = {
   proposta: ["Orçamento do cliente", "Data, placa, pagamento e mensagem."],
   torque: [
     "Conferência de torque",
-    "Abra apenas as áreas necessárias para o serviço.",
+    "Geometria, alinhamento, segurança e finalização do serviço.",
   ],
   revisao: [
     "Revisão de 30 dias",
