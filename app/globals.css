@@ -6783,3 +6783,179 @@ body,
     max-width: 100%;
   }
 }
+
+/* Conferência interna antes de liberar o orçamento ao cliente. */
+.budget-review-modal {
+  width: min(820px, 96%);
+}
+.budget-review-modal > div:first-child p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+.budget-review-client {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 10px;
+  padding: 12px 14px;
+  border-left: 5px solid var(--r);
+  border-radius: 8px;
+  background: #f2f5f8;
+}
+.budget-review-client span,
+.budget-review-client b,
+.budget-review-client small {
+  display: block;
+}
+.budget-review-client small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+.budget-review-client strong {
+  flex: none;
+  border-radius: 18px;
+  background: #172334;
+  color: #fff;
+  padding: 7px 12px;
+}
+.budget-review-heading {
+  display: grid !important;
+  gap: 3px;
+  margin: 12px 0 7px;
+}
+.budget-review-heading small {
+  color: var(--muted);
+}
+.budget-review-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 7px !important;
+}
+.budget-review-list label {
+  display: grid;
+  grid-template-columns: 26px 60px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 54px;
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #e0a4a6;
+  border-radius: 8px;
+  background: #fff7f7;
+  cursor: pointer;
+}
+.budget-review-list label.checked {
+  border-color: #55ae7b;
+  background: #edf9f2;
+}
+.budget-review-list input {
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  margin: 0;
+  accent-color: #238b55;
+}
+.budget-review-list label > strong {
+  color: var(--r);
+  font-size: 15px;
+}
+.budget-review-list label.checked > strong {
+  color: #167447;
+}
+.budget-review-list span,
+.budget-review-list span b,
+.budget-review-list span small {
+  display: block;
+  min-width: 0;
+}
+.budget-review-list span b {
+  font-size: 14px;
+}
+.budget-review-list span small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+.budget-review-empty {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+}
+.budget-review-services {
+  display: grid !important;
+  gap: 5px;
+  margin-top: 13px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafb;
+}
+.budget-review-services span {
+  padding: 5px 0;
+  border-top: 1px solid #e9edf0;
+}
+.budget-review-progress {
+  display: grid !important;
+  gap: 3px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff3cf;
+  color: #664b00;
+}
+.budget-review-modal footer {
+  flex-wrap: wrap;
+}
+.budget-review-modal footer button {
+  min-height: 42px;
+}
+.budget-review-modal footer .primary:disabled {
+  border-color: #aab1ba !important;
+  background: #aab1ba !important;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.budget-review-copy {
+  border-color: #1b9b59 !important;
+  background: #1b9b59 !important;
+  color: #fff !important;
+}
+.app.dark .budget-review-client,
+.app.dark .budget-review-services {
+  background: #1b2633;
+}
+.app.dark .budget-review-list label {
+  border-color: #81474b;
+  background: #2c1b1e;
+}
+.app.dark .budget-review-list label.checked {
+  border-color: #3e9568;
+  background: #173326;
+}
+.app.dark .budget-review-progress {
+  background: #453816;
+  color: #ffe59a;
+}
+@media (max-width: 700px) {
+  .budget-review-modal {
+    width: 100%;
+    max-height: calc(100dvh - 18px);
+    padding: 14px;
+  }
+  .budget-review-client {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .budget-review-list label {
+    grid-template-columns: 26px 48px minmax(0, 1fr);
+  }
+  .budget-review-modal footer {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .budget-review-modal footer button {
+    width: 100%;
+  }
+}

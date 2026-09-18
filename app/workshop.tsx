@@ -248,6 +248,13 @@ type GeometryEntry = {
   condition: string;
 };
 type GeometryState = Record<string, GeometryEntry>;
+type InternalBudgetReview = {
+  signature: string;
+  totalQuantity: number;
+  checkedItems: string[];
+  confirmedAt: string;
+  confirmedBy: string;
+};
 type BudgetState = {
   parts: any[];
   selectedServices: number[];
@@ -256,6 +263,7 @@ type BudgetState = {
   manualServices: any[];
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
+  internalReview?: InternalBudgetReview;
 };
 type PurchaseCheck = {
   ordered: boolean;
@@ -346,6 +354,8 @@ const iso = (d: Date) =>
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }),
+  quantityValue = (n: number) =>
+    Number.isInteger(Number(n)) ? String(Number(n)) : decimalValue(Number(n)),
   parseDecimalValue = (value: string) => {
     const normalized = value.includes(",")
       ? value.replace(/\./g, "").replace(",", ".")
@@ -658,7 +668,12 @@ export default function App({ initialState, user, onLogout }: any) {
     ),
     [purchaseChecks, setPurchaseChecks] = useState<
       Record<string, PurchaseCheck>
-    >(shared.purchaseChecks ?? {});
+    >(shared.purchaseChecks ?? {}),
+    [budgetReviewOpen, setBudgetReviewOpen] = useState(false),
+    [budgetReviewChecks, setBudgetReviewChecks] = useState<
+      Record<number, boolean>
+    >({}),
+    [budgetReviewCopied, setBudgetReviewCopied] = useState(false);
   const firstSave = useRef(true),
     skipSave = useRef(false),
     syncBlockedUntil = useRef(0),
@@ -832,6 +847,66 @@ export default function App({ initialState, user, onLogout }: any) {
     total = pieces + serviceTotal,
     totalCash = piecesCash + serviceTotal,
     totalInstallment = piecesInstallment + serviceTotal;
+  const reviewParts = parts
+      .map((part: any, index: number) => ({ part, index }))
+      .filter(
+        ({ part }: any) =>
+          String(part.item ?? "").trim() && Number(part.qty) > 0,
+      ),
+    totalPartQuantity = reviewParts.reduce(
+      (sum: number, { part }: any) => sum + (Number(part.qty) || 0),
+      0,
+    ),
+    allReviewPartsChecked = reviewParts.every(
+      ({ index }: any) => !!budgetReviewChecks[index],
+    ),
+    reviewServices = [
+      ...selectedServices.map(
+        (index: number) =>
+          `☐ ${quantityValue(serviceQty[index] ?? 0)}x ${SERVICES[index]?.[0] ?? "Serviço"}`,
+      ),
+      ...manualServices
+        .filter((service: any) => service.name?.trim())
+        .map(
+          (service: any) =>
+            `☐ ${quantityValue(Number(service.qty) || 0)}x ${service.name}`,
+        ),
+    ],
+    budgetReviewSignature = JSON.stringify({
+      parts: reviewParts.map(({ part }: any) => [
+        part.item,
+        part.brand,
+        part.supplier,
+        part.code,
+        Number(part.qty) || 0,
+      ]),
+      services: reviewServices,
+    }),
+    internalReviewMessage = [
+      "*CONFERÊNCIA INTERNA DO ORÇAMENTO*",
+      `Cliente: ${activeAppointment?.client || "Não informado"}`,
+      `Veículo: ${activeAppointment?.vehicle || "Não informado"} · Placa: ${activeAppointment?.plate || "Não informada"}`,
+      "",
+      "*PEÇAS*",
+      ...(reviewParts.length
+        ? reviewParts.map(({ part }: any) => {
+            const details = [
+              part.brand && `Marca: ${part.brand}`,
+              part.supplier && `Fornecedor: ${part.supplier}`,
+              part.code && `Código: ${part.code}`,
+            ].filter(Boolean);
+            return `☐ ${quantityValue(Number(part.qty) || 0)}x ${part.item}${details.length ? ` — ${details.join(" · ")}` : ""}`;
+          })
+        : ["Nenhuma peça incluída."]),
+      `*Quantidade total: ${quantityValue(totalPartQuantity)} peça(s)*`,
+      "",
+      "*SERVIÇOS*",
+      ...(reviewServices.length
+        ? reviewServices
+        : ["Nenhum serviço incluído."]),
+      "",
+      "Conferir os itens antes de liberar o orçamento ao cliente.",
+    ].join("\n");
   const updateRequiredVehicleField = (
     field: "vehicle" | "plate" | "km",
     value: string,
@@ -996,6 +1071,24 @@ export default function App({ initialState, user, onLogout }: any) {
         !activeAppointment
       ) {
         setView("agenda");
+        return;
+      }
+      if (
+        v === "proposta" &&
+        view === "orcamento" &&
+        !budgetReviewOpen &&
+        activeAppointment?.budget?.internalReview?.signature !==
+          budgetReviewSignature
+      ) {
+        if (!reviewParts.length && !reviewServices.length) {
+          alert(
+            "Inclua ao menos uma peça ou serviço antes de gerar o orçamento.",
+          );
+          return;
+        }
+        setBudgetReviewChecks({});
+        setBudgetReviewCopied(false);
+        setBudgetReviewOpen(true);
         return;
       }
       if (v === "avaliacao") {
@@ -1277,6 +1370,8 @@ export default function App({ initialState, user, onLogout }: any) {
                       activeAppointment.budget?.manualServices ?? [],
                     patioNotes: activeAppointment.budget?.patioNotes ?? "",
                     processStatus: "Finalizado",
+                    internalReview:
+                      activeAppointment.budget?.internalReview,
                   };
                 const updated: Appt = {
                   ...activeAppointment,
@@ -1388,6 +1483,8 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             patioNotes,
                             processStatus,
+                            internalReview:
+                              activeAppointment.budget?.internalReview,
                           };
                     const updated: Appt = {
                       ...activeAppointment,
@@ -2345,10 +2442,214 @@ export default function App({ initialState, user, onLogout }: any) {
                       }
                       go("avaliacao");
                     }}
-                    next={() => go("proposta")}
+                    next={() => {
+                      if (!reviewParts.length && !reviewServices.length) {
+                        alert(
+                          "Inclua ao menos uma peça ou serviço antes de gerar o orçamento.",
+                        );
+                        return;
+                      }
+                      setBudgetReviewChecks({});
+                      setBudgetReviewCopied(false);
+                      setBudgetReviewOpen(true);
+                    }}
                     b="Voltar à avaliação"
-                    n="Gerar orçamento"
+                    n="Conferir e gerar orçamento"
                   />
+                  {budgetReviewOpen && (
+                    <div className="backdrop" role="dialog" aria-modal="true">
+                      <div className="modal budget-review-modal">
+                        <div>
+                          <span>
+                            <h2>Conferência interna</h2>
+                            <p>
+                              Confira as quantidades antes de gerar o orçamento
+                              do cliente.
+                            </p>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setBudgetReviewOpen(false)}
+                            aria-label="Fechar conferência"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="budget-review-client">
+                          <span>
+                            <b>{activeAppointment?.client}</b>
+                            <small>
+                              {activeAppointment?.vehicle || "Veículo não informado"}
+                              {activeAppointment?.plate
+                                ? ` · ${activeAppointment.plate}`
+                                : ""}
+                            </small>
+                          </span>
+                          <strong>
+                            {quantityValue(totalPartQuantity)} peça(s)
+                          </strong>
+                        </div>
+                        <div className="budget-review-heading">
+                          <b>Peças para conferir</b>
+                          <small>
+                            Marque cada linha depois de conferir a quantidade.
+                          </small>
+                        </div>
+                        <section className="budget-review-list">
+                          {reviewParts.length ? (
+                            reviewParts.map(({ part, index }: any) => (
+                              <label
+                                className={
+                                  budgetReviewChecks[index] ? "checked" : ""
+                                }
+                                key={`${index}-${part.item}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!budgetReviewChecks[index]}
+                                  onChange={(event) =>
+                                    setBudgetReviewChecks({
+                                      ...budgetReviewChecks,
+                                      [index]: event.target.checked,
+                                    })
+                                  }
+                                />
+                                <strong>
+                                  {quantityValue(Number(part.qty) || 0)}x
+                                </strong>
+                                <span>
+                                  <b>{part.item}</b>
+                                  <small>
+                                    {[
+                                      part.brand,
+                                      part.supplier,
+                                      part.code,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ") || "Sem detalhes adicionais"}
+                                  </small>
+                                </span>
+                              </label>
+                            ))
+                          ) : (
+                            <p className="budget-review-empty">
+                              Nenhuma peça incluída. Confira os serviços abaixo.
+                            </p>
+                          )}
+                        </section>
+                        {reviewServices.length > 0 && (
+                          <div className="budget-review-services">
+                            <b>Serviços incluídos</b>
+                            {reviewServices.map((service: string, index: number) => (
+                              <span key={`${index}-${service}`}>
+                                {service.replace(/^☐\s*/, "")}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="budget-review-progress">
+                          <b>
+                            {reviewParts.filter(({ index }: any) =>
+                              budgetReviewChecks[index],
+                            ).length}
+                            /{reviewParts.length} peças conferidas
+                          </b>
+                          <small>
+                            O orçamento será liberado quando todas estiverem
+                            marcadas.
+                          </small>
+                        </div>
+                        <footer>
+                          <button
+                            type="button"
+                            onClick={() => setBudgetReviewOpen(false)}
+                          >
+                            Voltar e corrigir
+                          </button>
+                          <button
+                            type="button"
+                            className="wa budget-review-copy"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(
+                                  internalReviewMessage,
+                                );
+                                setBudgetReviewCopied(true);
+                              } catch {
+                                alert(
+                                  "Não foi possível copiar automaticamente. Tente novamente pelo navegador.",
+                                );
+                              }
+                            }}
+                          >
+                            {budgetReviewCopied
+                              ? "Lista copiada ✓"
+                              : "Copiar para WhatsApp"}
+                          </button>
+                          <button
+                            type="button"
+                            className="primary"
+                            disabled={!allReviewPartsChecked}
+                            onClick={() => {
+                              if (!activeAppointment || !allReviewPartsChecked)
+                                return;
+                              const now = new Date().toISOString(),
+                                internalReview: InternalBudgetReview = {
+                                  signature: budgetReviewSignature,
+                                  totalQuantity: totalPartQuantity,
+                                  checkedItems: reviewParts.map(
+                                    ({ part }: any) =>
+                                      `${quantityValue(Number(part.qty) || 0)}x ${part.item}`,
+                                  ),
+                                  confirmedAt: now,
+                                  confirmedBy: user.displayName,
+                                },
+                                budget: BudgetState = {
+                                  parts,
+                                  selectedServices,
+                                  serviceQty,
+                                  servicePrices,
+                                  manualServices,
+                                  patioNotes,
+                                  processStatus,
+                                  internalReview,
+                                },
+                                updated: Appt = {
+                                  ...activeAppointment,
+                                  budget,
+                                  budgetEditedBy: user.displayName,
+                                  budgetEditedAt: now,
+                                  lastEditedBy: user.displayName,
+                                  lastEditedAt: now,
+                                  _updatedAt: Date.now(),
+                                };
+                              syncBlockedUntil.current = Date.now() + 4000;
+                              DISPLAY_APPT = updated;
+                              setActiveAppointment(updated);
+                              setAppointments((list) =>
+                                list.map((appointment) =>
+                                  appointment.id === updated.id
+                                    ? updated
+                                    : appointment,
+                                ),
+                              );
+                              setSavedAt(
+                                new Date().toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }),
+                              );
+                              setBudgetReviewOpen(false);
+                              setView("proposta");
+                              scrollTo(0, 0);
+                            }}
+                          >
+                            Salvar e gerar orçamento
+                          </button>
+                        </footer>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
               {view === "proposta" && (
@@ -2492,6 +2793,8 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
+                            internalReview:
+                              activeAppointment.budget?.internalReview,
                           },
                           source: Appt = {
                             ...activeAppointment,
@@ -2576,6 +2879,8 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
+                            internalReview:
+                              activeAppointment.budget?.internalReview,
                           };
                           const updated: Appt = {
                             ...activeAppointment,
@@ -2620,6 +2925,8 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
+                            internalReview:
+                              activeAppointment.budget?.internalReview,
                           };
                           const updated: Appt = {
                             ...activeAppointment,
@@ -2994,6 +3301,8 @@ export default function App({ initialState, user, onLogout }: any) {
                           manualServices,
                           patioNotes,
                           processStatus: "Finalizado",
+                          internalReview:
+                            activeAppointment.budget?.internalReview,
                         },
                         conference: {
                           checks,
