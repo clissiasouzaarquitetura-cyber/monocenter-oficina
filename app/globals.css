@@ -6844,6 +6844,219 @@ header > button {
   color: #ff777d;
 }
 
+/* Anotações e lembretes de acompanhamento do orçamento. */
+.quote-followup-note {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  border: 1px solid #b9cad9;
+  border-left: 5px solid #2875ae;
+  border-radius: 10px;
+  padding: 14px;
+  background: #f7fbff;
+}
+.quote-followup-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.quote-followup-heading span,
+.quote-followup-heading b,
+.quote-followup-heading small {
+  display: block;
+}
+.quote-followup-heading small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+.quote-followup-heading strong {
+  flex: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #e2eef8;
+  color: #185884;
+  font-size: 10px;
+}
+.quote-followup-fields {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.55fr);
+  gap: 10px;
+}
+.quote-followup-fields label,
+.open-quote-controls label {
+  display: grid;
+  gap: 5px;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 800;
+}
+.quote-followup-fields select,
+.quote-followup-fields input,
+.quote-followup-fields textarea,
+.open-quote-controls select,
+.open-quote-controls input,
+.open-quote-controls textarea {
+  width: 100%;
+  border: 2px solid #8ab5d8;
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: #eef7ff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+.quote-followup-text {
+  grid-column: 1 / -1;
+}
+.quote-followup-fields textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+.quote-followup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.quote-followup-actions button {
+  border: 1px solid #315d7d;
+  border-radius: 7px;
+  padding: 9px 12px;
+  background: #fff;
+  color: #17324d;
+  font-weight: 800;
+  cursor: pointer;
+}
+.quote-followup-actions .wa {
+  border-color: #159a57;
+  background: #159a57;
+  color: #fff;
+}
+
+/* Aba exclusiva de orçamentos em aberto. */
+.open-quote-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 13px 0;
+}
+.open-quote-filters button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 800;
+}
+.open-quote-filters button b {
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: #e7edf3;
+}
+.open-quote-filters button.active {
+  border-color: #159a57;
+  box-shadow: inset 0 0 0 1px #159a57;
+}
+.open-quote-filters button.active.closed {
+  border-color: #697787;
+  box-shadow: inset 0 0 0 1px #697787;
+}
+.open-quotes-list .open-quote-card {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(440px, 1.2fr);
+  align-items: start;
+  gap: 16px;
+  border-left: 6px solid #d72b32;
+  background: #fff8f8;
+}
+.open-quotes-list .open-quote-card.sent {
+  border-left-color: #159a57;
+  background: #f1fbf5;
+}
+.open-quotes-list .open-quote-card.closed {
+  border-left-color: #788594;
+  background: #f2f4f6;
+}
+.open-quote-status {
+  display: block;
+  width: fit-content;
+  margin-top: 6px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #ffe2e3;
+  color: #aa1017;
+  font-size: 10px;
+  font-style: normal;
+  text-transform: uppercase;
+}
+.open-quote-card.sent .open-quote-status {
+  background: #d9f5e5;
+  color: #116b3b;
+}
+.open-quote-card.closed .open-quote-status {
+  background: #dfe4e8;
+  color: #495664;
+}
+.quote-reminder {
+  width: fit-content;
+  border-radius: 6px;
+  padding: 5px 7px;
+  background: #fff1bd;
+  color: #7b5100 !important;
+  font-weight: 800;
+}
+.quote-reminder.due {
+  background: #ffe0e1;
+  color: #a40f16 !important;
+}
+.quote-followup-preview {
+  border-left: 3px solid #9aa8b5;
+  padding: 5px 8px;
+  background: rgb(255 255 255 / 70%);
+}
+.open-quotes-list article > .open-quote-controls {
+  display: grid;
+  grid-template-columns: 1fr 170px;
+  gap: 9px;
+}
+.open-quote-note {
+  grid-column: 1 / -1;
+}
+.open-quote-controls textarea {
+  min-height: 58px;
+  resize: vertical;
+}
+.open-quote-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.app.dark .quote-followup-note,
+.app.dark .open-quotes-list .open-quote-card,
+.app.dark .open-quote-filters button {
+  border-color: #465467;
+  background: #172231;
+  color: #f3f6fa;
+}
+.app.dark .quote-followup-fields label,
+.app.dark .open-quote-controls label {
+  color: #dce4ed;
+}
+.app.dark .quote-followup-fields select,
+.app.dark .quote-followup-fields input,
+.app.dark .quote-followup-fields textarea,
+.app.dark .open-quote-controls select,
+.app.dark .open-quote-controls input,
+.app.dark .open-quote-controls textarea {
+  border-color: #527da3;
+  background: #1d2d3d;
+  color: #fff;
+}
+
 /* Celular e tablet: navegação somente vertical, sem a página escapar para os lados. */
 html,
 body,
@@ -6878,6 +7091,29 @@ body,
   .reverse-evaluation-bar button {
     width: 100%;
     min-height: 46px;
+  }
+  .quote-followup-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .quote-followup-fields,
+  .open-quotes-list .open-quote-card,
+  .open-quotes-list article > .open-quote-controls {
+    grid-template-columns: 1fr;
+  }
+  .open-quote-note,
+  .open-quote-actions {
+    grid-column: 1;
+  }
+  .quote-followup-actions,
+  .open-quote-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .quote-followup-actions button,
+  .open-quote-actions button {
+    width: 100%;
+    min-height: 44px;
   }
   .geometry > div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
