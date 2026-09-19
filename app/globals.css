@@ -64,10 +64,6 @@ aside nav {
   padding: 16px 10px;
   display: grid;
   gap: 6px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 aside nav button {
   border: 0;
@@ -94,7 +90,6 @@ aside nav i {
   border-top: 1px solid #283545;
   display: flex;
   gap: 10px;
-  flex-shrink: 0;
 }
 .user span {
   margin-left: 5px;
