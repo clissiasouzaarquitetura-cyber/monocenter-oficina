@@ -207,6 +207,14 @@ const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
 const servicePrice = (index: number, prices?: Record<number, number>) =>
   prices?.[index] ?? SERVICES[index]?.[1] ?? 0;
+const encodeBudgetTransfer = (value: unknown) => {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return `MCOS1.${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")}`;
+};
 const normalizeSearch = (value: string) =>
   value
     .normalize("NFD")
@@ -278,14 +286,6 @@ type PurchaseOrderState = {
   closedAt?: string;
   closedBy?: string;
 };
-type QuoteFollowUp = {
-  status: "waiting" | "sold_vehicle" | "declined";
-  note: string;
-  reminderDate: string;
-  reminderCreatedAt?: string;
-  updatedAt?: string;
-  updatedBy?: string;
-};
 type View =
   | "agenda"
   | "veiculos"
@@ -337,7 +337,6 @@ type Appt = {
   };
   quoteSentAt?: string;
   quoteSentBy?: string;
-  quoteFollowUp?: QuoteFollowUp;
   serviceScheduled?: boolean;
   serviceScheduledFor?: string;
   serviceScheduledTime?: string;
@@ -531,10 +530,6 @@ const agendaStatusLabel = (a: Appt) => {
       `${a.serviceScheduledFor}T12:00:00`,
     ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
   if (a.status === "agendado" && a.inProgress) return "AGUARDANDO AVALIAÇÃO";
-  if (a.status === "avaliou" && a.quoteFollowUp?.status === "sold_vehicle")
-    return "ORÇAMENTO ENCERRADO · VEÍCULO VENDIDO";
-  if (a.status === "avaliou" && a.quoteFollowUp?.status === "declined")
-    return "ORÇAMENTO ENCERRADO · NÃO REALIZARÁ";
   if (a.status === "avaliou" && a.quoteSentAt)
     return "ORÇAMENTO ENVIADO EM ABERTO";
   if (a.status === "avaliou") return "AGUARDANDO ORÇAMENTO";
@@ -956,38 +951,6 @@ export default function App({ initialState, user, onLogout }: any) {
       ),
     );
   };
-  const updateQuoteFollowUp = (
-    appointmentId: number,
-    patch: Partial<QuoteFollowUp>,
-  ) => {
-    const source = appointments.find((item) => item.id === appointmentId);
-    if (!source) return;
-    const now = new Date().toISOString(),
-      followUp: QuoteFollowUp = {
-        status: "waiting",
-        note: "",
-        reminderDate: "",
-        ...source.quoteFollowUp,
-        ...patch,
-        updatedAt: now,
-        updatedBy: user.displayName,
-      },
-      updated: Appt = {
-        ...source,
-        quoteFollowUp: followUp,
-        lastEditedBy: user.displayName,
-        lastEditedAt: now,
-        _updatedAt: Date.now(),
-      };
-    syncBlockedUntil.current = Date.now() + 4000;
-    setAppointments((list) =>
-      list.map((item) => (item.id === appointmentId ? updated : item)),
-    );
-    if (activeAppointment?.id === appointmentId) {
-      DISPLAY_APPT = updated;
-      setActiveAppointment(updated);
-    }
-  };
   const updateGeometryField = (
     item: string,
     field: keyof GeometryEntry,
@@ -1034,7 +997,6 @@ export default function App({ initialState, user, onLogout }: any) {
         conference: undefined,
         quoteSentAt: undefined,
         quoteSentBy: undefined,
-        quoteFollowUp: undefined,
         serviceScheduled: false,
         serviceScheduledFor: undefined,
         serviceScheduledTime: undefined,
@@ -1625,99 +1587,6 @@ export default function App({ initialState, user, onLogout }: any) {
                       </button>
                     </div>
                   )}
-                  <div className="quote-followup-note">
-                    <div className="quote-followup-heading">
-                      <span>
-                        <b>Bloco de notas e lembrete do orçamento</b>
-                        <small>
-                          Registre o retorno do cliente e a data para perguntar se
-                          deseja realizar o serviço.
-                        </small>
-                      </span>
-                      <strong>
-                        {DISPLAY_APPT.quoteFollowUp?.status === "sold_vehicle"
-                          ? "ENCERRADO · VEÍCULO VENDIDO"
-                          : DISPLAY_APPT.quoteFollowUp?.status === "declined"
-                            ? "ENCERRADO · NÃO REALIZARÁ"
-                            : DISPLAY_APPT.quoteSentAt
-                              ? "AGUARDANDO RETORNO"
-                              : "AGUARDANDO ENVIO"}
-                      </strong>
-                    </div>
-                    <div className="quote-followup-fields">
-                      <label>
-                        Situação do orçamento
-                        <select
-                          value={
-                            DISPLAY_APPT.quoteFollowUp?.status ?? "waiting"
-                          }
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              status: event.target.value as QuoteFollowUp["status"],
-                            })
-                          }
-                        >
-                          <option value="waiting">Aguardando retorno do cliente</option>
-                          <option value="sold_vehicle">
-                            Não realizará — vendeu o veículo
-                          </option>
-                          <option value="declined">
-                            Não realizará o serviço
-                          </option>
-                        </select>
-                      </label>
-                      <label>
-                        Criar lembrete para
-                        <input
-                          type="date"
-                          value={
-                            DISPLAY_APPT.quoteFollowUp?.reminderDate ?? ""
-                          }
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              reminderDate: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      <label className="quote-followup-text">
-                        Anotações internas
-                        <textarea
-                          value={DISPLAY_APPT.quoteFollowUp?.note ?? ""}
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              note: event.target.value,
-                            })
-                          }
-                          placeholder="Ex.: cliente pediu retorno na próxima semana; aguardando conversar com a família..."
-                        />
-                      </label>
-                    </div>
-                    <div className="quote-followup-actions">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateQuoteFollowUp(DISPLAY_APPT.id, {
-                            reminderCreatedAt: new Date().toISOString(),
-                          });
-                          alert("Lembrete do orçamento salvo.");
-                        }}
-                      >
-                        Salvar lembrete
-                      </button>
-                      <button
-                        type="button"
-                        className="wa"
-                        onClick={() =>
-                          setMessage(
-                            `Olá, ${DISPLAY_APPT.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${DISPLAY_APPT.vehicle || ""}${DISPLAY_APPT.plate ? `, placa ${DISPLAY_APPT.plate}` : ""}. Podemos ajudar com o agendamento?`,
-                          )
-                        }
-                      >
-                        Preparar mensagem
-                      </button>
-                    </div>
-                  </div>
                   <div className="startbox">
                     <label>
                       Quem está avaliando
@@ -3069,6 +2938,78 @@ export default function App({ initialState, user, onLogout }: any) {
                       Salvar e preparar mensagem
                     </button>
                     <button
+                      onClick={async () => {
+                        if (!activeAppointment) {
+                          alert("Selecione um atendimento antes de enviar o orçamento.");
+                          return;
+                        }
+                        const transferCode = encodeBudgetTransfer({
+                          version: 1,
+                          transferId: `${activeAppointment.id}-${Date.now()}`,
+                          serviceDate: activeAppointment.date,
+                          customerName: activeAppointment.client,
+                          phone: activeAppointment.phone,
+                          vehicle: activeAppointment.vehicle,
+                          plate: activeAppointment.plate,
+                          items: [
+                            ...parts
+                              .filter(
+                                (part: any) =>
+                                  String(part.item ?? "").trim() &&
+                                  Number(part.qty) > 0,
+                              )
+                              .map((part: any) => ({
+                                category: isTirePart(part) ? "tires" : "parts",
+                                description: [part.item, part.brand]
+                                  .filter(Boolean)
+                                  .join(" • "),
+                                quantity: Number(part.qty) || 1,
+                                unitPrice: saleOf(part, roundStep),
+                                unitCost: Number(part.cost) || 0,
+                                supplierName: String(part.supplier ?? ""),
+                              })),
+                            ...selectedServices.map((index: number) => ({
+                              category: /alinhamento técnico/i.test(
+                                SERVICES[index]?.[0] ?? "",
+                              )
+                                ? "gabaritagem"
+                                : "labor",
+                              description:
+                                SERVICES[index]?.[0] ?? "Serviço",
+                              quantity: Number(serviceQty[index]) || 1,
+                              unitPrice: servicePrice(index, servicePrices),
+                            })),
+                            ...manualServices
+                              .filter((service: any) => service.name?.trim())
+                              .map((service: any) => ({
+                                category: "labor",
+                                description: service.name.trim(),
+                                quantity: Number(service.qty) || 1,
+                                unitPrice: Number(service.value) || 0,
+                              })),
+                          ],
+                        });
+                        window.open(
+                          "https://monocenter-pos-servico.espa-o-de-tr-0239.chatgpt.site/?importar_orcamento=1",
+                          "_blank",
+                          "noopener,noreferrer",
+                        );
+                        try {
+                          await navigator.clipboard.writeText(transferCode);
+                          alert(
+                            "Orçamento copiado. No sistema de OS, toque em ‘Colar orçamento’.",
+                          );
+                        } catch {
+                          window.prompt(
+                            "Copie este código e cole no sistema de OS:",
+                            transferCode,
+                          );
+                        }
+                      }}
+                    >
+                      Enviar para Pós/OS
+                    </button>
+                    <button
                       className="primary"
                       onClick={() => {
                         if (activeAppointment) {
@@ -3521,12 +3462,7 @@ export default function App({ initialState, user, onLogout }: any) {
           <Reports
             data={appointments}
             user={user}
-            roundStep={roundStep}
-            initialMode={
-              view === "veiculos" ? "andamento" : reportStartMode
-            }
-            standaloneMode={view === "veiculos"}
-            updateFollowUp={updateQuoteFollowUp}
+            initialMode={view === "veiculos" ? "andamento" : reportStartMode}
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
@@ -4158,8 +4094,6 @@ function Agenda({
         a.type === "cliente" &&
         a.status === "avaliou" &&
         !a.serviceAppointmentId &&
-        a.quoteFollowUp?.status !== "sold_vehicle" &&
-        a.quoteFollowUp?.status !== "declined" &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     inProgressCount = (data as Appt[]).filter(
@@ -6643,91 +6577,10 @@ function AttendanceSummary({
     </section>
   );
 }
-function QuoteBudgetSummary({ appointment, roundStep = 5 }: any) {
-  const budget = appointment.budget ?? {},
-    parts = (budget.parts ?? []).filter((part: any) => part.item),
-    services = (budget.selectedServices ?? []).map((index: number) => ({
-      name: SERVICES[index]?.[0] ?? "Serviço",
-      qty: budget.serviceQty?.[index] ?? 0,
-      value: servicePrice(index, budget.servicePrices),
-      courtesy: serviceIsCourtesy(index),
-    })),
-    manualServices = (budget.manualServices ?? []).filter(
-      (service: any) => service.name,
-    ),
-    partsTotal = parts.reduce(
-      (sum: number, part: any) =>
-        sum + Number(part.qty || 0) * saleOf(part, roundStep),
-      0,
-    ),
-    servicesTotal =
-      services.reduce(
-        (sum: number, service: any) =>
-          sum + Number(service.qty || 0) * Number(service.value || 0),
-        0,
-      ) +
-      manualServices.reduce(
-        (sum: number, service: any) =>
-          sum + Number(service.qty || 0) * Number(service.value || 0),
-        0,
-      );
-
-  return (
-    <section className="quote-budget-summary" aria-label="Resumo do orçamento">
-      <div className="quote-budget-summary-head">
-        <span>
-          <b>Resumo do orçamento</b>
-          <small>
-            Somente consulta · {appointment.vehicle || "Veículo não informado"}
-            {appointment.plate ? ` · ${appointment.plate}` : ""}
-          </small>
-        </span>
-        <strong>{brl(partsTotal + servicesTotal)}</strong>
-      </div>
-      <div className="quote-budget-summary-columns">
-        <div>
-          <h3>Peças</h3>
-          {parts.length ? (
-            parts.map((part: any, index: number) => (
-              <p key={`${part.item}-${index}`}>
-                <span>{part.qty || 0}x {part.item}{part.brand ? ` · ${part.brand}` : ""}</span>
-                <b>{brl(Number(part.qty || 0) * saleOf(part, roundStep))}</b>
-              </p>
-            ))
-          ) : (
-            <small>Nenhuma peça informada.</small>
-          )}
-        </div>
-        <div>
-          <h3>Serviços</h3>
-          {[...services, ...manualServices].length ? (
-            [...services, ...manualServices].map((service: any, index: number) => (
-              <p key={`${service.name}-${index}`}>
-                <span>{service.qty || 0}x {service.name}</span>
-                <b>{service.courtesy && !service.value ? "Cortesia" : brl(Number(service.qty || 0) * Number(service.value || 0))}</b>
-              </p>
-            ))
-          ) : (
-            <small>Nenhum serviço informado.</small>
-          )}
-        </div>
-      </div>
-      {budget.patioNotes?.trim() && (
-        <div className="quote-budget-summary-note">
-          <b>Observações do orçamento</b>
-          <p>{budget.patioNotes}</p>
-        </div>
-      )}
-    </section>
-  );
-}
 function Reports({
   data,
   user,
-  roundStep,
   initialMode,
-  standaloneMode,
-  updateFollowUp,
   open,
   edit,
   remove,
@@ -6736,7 +6589,6 @@ function Reports({
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("todos"),
     [printRow, setPrintRow] = useState<Appt | null>(null),
-    [summaryId, setSummaryId] = useState<number | null>(null),
     [reportMode, setReportMode] = useState<
       "registros" | "semana" | "amanha" | "abertos" | "andamento"
     >(
@@ -6744,14 +6596,7 @@ function Reports({
         ? initialMode
         : "registros",
     ),
-    [quoteListFilter, setQuoteListFilter] = useState<
-      "open" | "closed" | "all"
-    >("open"),
     [weekDate, setWeekDate] = useState(iso(new Date()));
-  useEffect(() => {
-    if (initialMode === "abertos" || initialMode === "andamento")
-      setReportMode(initialMode);
-  }, [initialMode]);
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -6859,7 +6704,7 @@ function Reports({
         )
       : ["Nenhum agendamento para amanhã."]),
   ].join("\n\n");
-  const quoteRecords = (data as Appt[])
+  const openQuotes = (data as Appt[])
     .filter(
       (a) =>
         a.type === "cliente" &&
@@ -6867,21 +6712,7 @@ function Reports({
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     )
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
-    quoteIsClosed = (appointment: Appt) =>
-      appointment.quoteFollowUp?.status === "sold_vehicle" ||
-      appointment.quoteFollowUp?.status === "declined",
-    openQuotes = quoteRecords.filter((appointment) => {
-      if (quoteListFilter === "open") return !quoteIsClosed(appointment);
-      if (quoteListFilter === "closed") return quoteIsClosed(appointment);
-      return true;
-    }),
-    quoteCounts = {
-      all: quoteRecords.length,
-      open: quoteRecords.filter((appointment) => !quoteIsClosed(appointment))
-        .length,
-      closed: quoteRecords.filter(quoteIsClosed).length,
-    };
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   const inProgress = (data as Appt[])
     .filter(
       (a) =>
@@ -6917,7 +6748,7 @@ function Reports({
   return (
     <section className="page reports-page">
       <div className="report-screen">
-        {!standaloneMode && <div className="management-report-tabs">
+        <div className="management-report-tabs">
           <button
             className={reportMode === "registros" ? "active" : ""}
             onClick={() => setReportMode("registros")}
@@ -6950,7 +6781,7 @@ function Reports({
           >
             Veículos em andamento
           </button>
-        </div>}
+        </div>
         {isClissia && reportMode === "semana" && (
           <div className="management-report-panel weekly-report-panel">
             <div className="management-report-head">
@@ -7059,31 +6890,8 @@ function Reports({
             <div className="management-report-head">
               <span>
                 <h2>Orçamentos em aberto</h2>
-                <p>
-                  Acompanhe o envio, o retorno do cliente e os lembretes de
-                  contato.
-                </p>
+                <p>{openQuotes.length} aguardando retorno do cliente</p>
               </span>
-            </div>
-            <div className="open-quote-filters">
-              <button
-                className={quoteListFilter === "open" ? "active" : ""}
-                onClick={() => setQuoteListFilter("open")}
-              >
-                Em aberto <b>{quoteCounts.open}</b>
-              </button>
-              <button
-                className={quoteListFilter === "closed" ? "active closed" : ""}
-                onClick={() => setQuoteListFilter("closed")}
-              >
-                Encerrados <b>{quoteCounts.closed}</b>
-              </button>
-              <button
-                className={quoteListFilter === "all" ? "active" : ""}
-                onClick={() => setQuoteListFilter("all")}
-              >
-                Todos <b>{quoteCounts.all}</b>
-              </button>
             </div>
             <div className="open-quotes-list">
               {openQuotes.length ? (
@@ -7096,23 +6904,9 @@ function Reports({
                     ),
                   );
                   return (
-                    <article
-                      key={a.id}
-                      className={`open-quote-card ${quoteIsClosed(a) ? "closed" : a.quoteSentAt ? "sent" : "waiting-send"}`}
-                    >
+                    <article key={a.id}>
                       <span>
-                        <b>
-                          {a.client}
-                          <i className="open-quote-status">
-                            {a.quoteFollowUp?.status === "sold_vehicle"
-                              ? "Não realizará · veículo vendido"
-                              : a.quoteFollowUp?.status === "declined"
-                                ? "Não realizará o serviço"
-                                : a.quoteSentAt
-                                  ? "Aguardando retorno do cliente"
-                                  : "Aguardando envio do orçamento"}
-                          </i>
-                        </b>
+                        <b>{a.client}</b>
                         <small>
                           {a.vehicle || "Veículo não informado"} ·{" "}
                           {a.plate || "Sem placa"}
@@ -7132,75 +6926,9 @@ function Reports({
                             por {a.quoteSentBy || "não informado"}
                           </small>
                         )}
-                        {a.quoteFollowUp?.reminderDate && (
-                          <small
-                            className={`quote-reminder ${a.quoteFollowUp.reminderDate <= iso(new Date()) && !quoteIsClosed(a) ? "due" : ""}`}
-                          >
-                            ◷ Lembrar em{" "}
-                            {new Date(
-                              `${a.quoteFollowUp.reminderDate}T12:00:00`,
-                            ).toLocaleDateString("pt-BR")}
-                            {a.quoteFollowUp.reminderDate <= iso(new Date()) &&
-                            !quoteIsClosed(a)
-                              ? " · CONTATO PENDENTE"
-                              : ""}
-                          </small>
-                        )}
-                        {a.quoteFollowUp?.note && (
-                          <small className="quote-followup-preview">
-                            Nota: {a.quoteFollowUp.note}
-                          </small>
-                        )}
                       </span>
-                      <div className="open-quote-controls">
-                        <label>
-                          Situação
-                          <select
-                            value={a.quoteFollowUp?.status ?? "waiting"}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, {
-                                status: event.target.value as QuoteFollowUp["status"],
-                              })
-                            }
-                          >
-                            <option value="waiting">Aguardando retorno</option>
-                            <option value="sold_vehicle">
-                              Não fará — vendeu o veículo
-                            </option>
-                            <option value="declined">Não realizará</option>
-                          </select>
-                        </label>
-                        <label>
-                          Lembrar em
-                          <input
-                            type="date"
-                            value={a.quoteFollowUp?.reminderDate ?? ""}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, {
-                                reminderDate: event.target.value,
-                                reminderCreatedAt: new Date().toISOString(),
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="open-quote-note">
-                          Nota interna
-                          <textarea
-                            value={a.quoteFollowUp?.note ?? ""}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, { note: event.target.value })
-                            }
-                            placeholder="Anote o retorno do cliente..."
-                          />
-                        </label>
-                        <div className="open-quote-actions">
-                        <button
-                          onClick={() =>
-                            setSummaryId(summaryId === a.id ? null : a.id)
-                          }
-                        >
-                          {summaryId === a.id ? "Fechar resumo" : "Abrir resumo"}
-                        </button>
+                      <div>
+                        <button onClick={() => open(a)}>Abrir orçamento</button>
                         <button
                           onClick={() =>
                             message(
@@ -7210,19 +6938,12 @@ function Reports({
                         >
                           Preparar mensagem
                         </button>
-                        </div>
-                        {summaryId === a.id && (
-                          <QuoteBudgetSummary
-                            appointment={a}
-                            roundStep={roundStep}
-                          />
-                        )}
                       </div>
                     </article>
                   );
                 })
               ) : (
-                <p>Nenhum orçamento encontrado nesta situação.</p>
+                <p>Nenhum orçamento em aberto.</p>
               )}
             </div>
           </div>
