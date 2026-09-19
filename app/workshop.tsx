@@ -1,6 +1,5 @@
 "use client";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { CarFront } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 const ITEMS = [
   "Amortecedor Dianteiro Direito",
   "Amortecedor Dianteiro Esquerdo",
@@ -107,74 +106,6 @@ const FRONT = [
     "Torque de bieletas",
     "Torque conforme padrão técnico",
   ];
-
-const VEHICLE_CATALOG = [
-  ["Gol", "Volkswagen", "Hatch"],
-  ["Polo", "Volkswagen", "Hatch"],
-  ["Virtus", "Volkswagen", "Sedã"],
-  ["Voyage", "Volkswagen", "Sedã"],
-  ["T-Cross", "Volkswagen", "SUV"],
-  ["Nivus", "Volkswagen", "SUV"],
-  ["Saveiro", "Volkswagen", "Picape"],
-  ["Onix", "Chevrolet", "Hatch"],
-  ["Onix Plus", "Chevrolet", "Sedã"],
-  ["Celta", "Chevrolet", "Hatch"],
-  ["Corsa", "Chevrolet", "Hatch"],
-  ["Prisma", "Chevrolet", "Sedã"],
-  ["Tracker", "Chevrolet", "SUV"],
-  ["S10", "Chevrolet", "Picape"],
-  ["Uno", "Fiat", "Hatch"],
-  ["Mobi", "Fiat", "Hatch"],
-  ["Argo", "Fiat", "Hatch"],
-  ["Cronos", "Fiat", "Sedã"],
-  ["Pulse", "Fiat", "SUV"],
-  ["Strada", "Fiat", "Picape"],
-  ["Palio", "Fiat", "Hatch"],
-  ["HB20", "Hyundai", "Hatch"],
-  ["HB20S", "Hyundai", "Sedã"],
-  ["Creta", "Hyundai", "SUV"],
-  ["Ka", "Ford", "Hatch"],
-  ["Fiesta", "Ford", "Hatch"],
-  ["EcoSport", "Ford", "SUV"],
-  ["Ranger", "Ford", "Picape"],
-  ["Corolla", "Toyota", "Sedã"],
-  ["Yaris", "Toyota", "Hatch"],
-  ["Hilux", "Toyota", "Picape"],
-  ["Compass", "Jeep", "SUV"],
-  ["Renegade", "Jeep", "SUV"],
-  ["Kwid", "Renault", "Hatch"],
-  ["Sandero", "Renault", "Hatch"],
-  ["Duster", "Renault", "SUV"],
-  ["Civic", "Honda", "Sedã"],
-  ["City", "Honda", "Sedã"],
-  ["Fit", "Honda", "Hatch"],
-] as const;
-const VEHICLE_COLORS: Record<string, string> = {
-  branco: "#ffffff",
-  branca: "#ffffff",
-  preto: "#222831",
-  preta: "#222831",
-  prata: "#aeb7c2",
-  cinza: "#717b87",
-  vermelho: "#d71920",
-  vermelha: "#d71920",
-  azul: "#2877c7",
-  verde: "#3a9363",
-  amarelo: "#eab72f",
-  amarela: "#eab72f",
-  bege: "#c7b693",
-  marrom: "#795548",
-};
-const findVehicle = (value: string) => {
-  const normalized = value.trim().toLocaleLowerCase("pt-BR");
-  return VEHICLE_CATALOG.find(
-    ([model]) =>
-      normalized === model.toLocaleLowerCase("pt-BR") ||
-      normalized.startsWith(model.toLocaleLowerCase("pt-BR") + " "),
-  );
-};
-const vehicleColorHex = (value?: string) =>
-  VEHICLE_COLORS[(value || "").trim().toLocaleLowerCase("pt-BR")] ?? "#d8dde4";
 const SERVICES = [
   ["Alinhamento de direção - Passeio", 100],
   ["Alinhamento de direção - SUV", 120],
@@ -240,21 +171,6 @@ type EvaluationState = {
   custom: string[];
   notes?: Record<number, string>;
 };
-type GeometryEntry = {
-  frontLeft: string;
-  frontRight: string;
-  rearLeft: string;
-  rearRight: string;
-  condition: string;
-};
-type GeometryState = Record<string, GeometryEntry>;
-type InternalBudgetReview = {
-  signature: string;
-  totalQuantity: number;
-  checkedItems: string[];
-  confirmedAt: string;
-  confirmedBy: string;
-};
 type BudgetState = {
   parts: any[];
   selectedServices: number[];
@@ -263,7 +179,6 @@ type BudgetState = {
   manualServices: any[];
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
-  internalReview?: InternalBudgetReview;
 };
 type PurchaseCheck = {
   ordered: boolean;
@@ -273,22 +188,8 @@ type PurchaseCheck = {
   receivedBy?: string;
   updatedAt?: string;
 };
-type PurchaseOrderState = {
-  closed: boolean;
-  closedAt?: string;
-  closedBy?: string;
-};
-type QuoteFollowUp = {
-  status: "waiting" | "sold_vehicle" | "declined";
-  note: string;
-  reminderDate: string;
-  reminderCreatedAt?: string;
-  updatedAt?: string;
-  updatedBy?: string;
-};
 type View =
   | "agenda"
-  | "veiculos"
   | "atendimento"
   | "avaliacao"
   | "orcamento"
@@ -296,7 +197,6 @@ type View =
   | "torque"
   | "revisao"
   | "compras"
-  | "orcamentos_abertos"
   | "relatorios"
   | "historico"
   | "config";
@@ -308,9 +208,6 @@ type Appt = {
   client: string;
   phone: string;
   vehicle: string;
-  vehicleBrand?: string;
-  vehicleColor?: string;
-  vehicleBody?: string;
   plate: string;
   km: string;
   note: string;
@@ -323,7 +220,6 @@ type Appt = {
   budget?: BudgetState;
   conference?: {
     checks: Record<string, boolean>;
-    geometry?: GeometryState;
     finalizedAt?: string;
     finalizedBy?: string;
     finalization?: {
@@ -338,7 +234,6 @@ type Appt = {
   };
   quoteSentAt?: string;
   quoteSentBy?: string;
-  quoteFollowUp?: QuoteFollowUp;
   serviceScheduled?: boolean;
   serviceScheduledFor?: string;
   serviceScheduledTime?: string;
@@ -369,8 +264,6 @@ const iso = (d: Date) =>
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }),
-  quantityValue = (n: number) =>
-    Number.isInteger(Number(n)) ? String(Number(n)) : decimalValue(Number(n)),
   parseDecimalValue = (value: string) => {
     const normalized = value.includes(",")
       ? value.replace(/\./g, "").replace(",", ".")
@@ -460,9 +353,6 @@ const renderMessageTemplate = (template: string, appointment: Appt) =>
     .trim();
 const conferenceStarted = (a: Appt) =>
   Object.values(a.conference?.checks ?? {}).some(Boolean) ||
-  Object.values(a.conference?.geometry ?? {}).some((entry) =>
-    Object.values(entry).some((value) => value.trim()),
-  ) ||
   !!a.conference?.finalization?.serviceCompleted ||
   !!a.conference?.finalization?.vehicleReleased ||
   !!a.conference?.finalization?.clientOriented ||
@@ -474,33 +364,6 @@ const completedAttendanceLabel = (a: Appt) => {
     return "Atendimento finalizado (Serviço executado)";
   return "Atendimento finalizado (Avaliação)";
 };
-const inProgressLabel = (a: Appt) => {
-  if (!a.evaluation && a.status === "agendado") return "Aguardando avaliação";
-  if (a.type === "revisao") return "Revisão em andamento";
-  if (a.status === "avaliou") return "Aguardando orçamento";
-  if (conferenceStarted(a)) return "Em conferência";
-  return "Serviço em andamento";
-};
-
-function VehiclePicture({ appointment }: { appointment: Appt }) {
-  const catalog = findVehicle(appointment.vehicle || "");
-  const brand = appointment.vehicleBrand || catalog?.[1] || "Marca não informada";
-  const body = appointment.vehicleBody || catalog?.[2] || "Automóvel";
-  const color = appointment.vehicleColor || "Cor não informada";
-  return (
-    <div className="vehicle-picture" aria-label={`${appointment.vehicle || "Veículo"}, ${color}`}>
-      <CarFront
-        aria-hidden="true"
-        size={68}
-        strokeWidth={1.8}
-        fill={vehicleColorHex(appointment.vehicleColor)}
-      />
-      <small>{body}</small>
-      <b>{brand}</b>
-      <span>{color}</span>
-    </div>
-  );
-}
 const apptClass = (a: Appt) =>
   a.type === "bloqueio"
     ? "block"
@@ -532,10 +395,6 @@ const agendaStatusLabel = (a: Appt) => {
       `${a.serviceScheduledFor}T12:00:00`,
     ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
   if (a.status === "agendado" && a.inProgress) return "AGUARDANDO AVALIAÇÃO";
-  if (a.status === "avaliou" && a.quoteFollowUp?.status === "sold_vehicle")
-    return "ORÇAMENTO ENCERRADO · VEÍCULO VENDIDO";
-  if (a.status === "avaliou" && a.quoteFollowUp?.status === "declined")
-    return "ORÇAMENTO ENCERRADO · NÃO REALIZARÁ";
   if (a.status === "avaliou" && a.quoteSentAt)
     return "ORÇAMENTO ENVIADO EM ABERTO";
   if (a.status === "avaliou") return "AGUARDANDO ORÇAMENTO";
@@ -596,7 +455,6 @@ export default function App({ initialState, user, onLogout }: any) {
     [checks, setChecks] = useState<Record<string, boolean>>(
       shared.checks ?? {},
     ),
-    [geometry, setGeometry] = useState<GeometryState>({}),
     [finalization, setFinalization] = useState({
       serviceCompleted: false,
       vehicleReleased: false,
@@ -644,6 +502,7 @@ export default function App({ initialState, user, onLogout }: any) {
   }, [custom, evaluationSearch]);
   const [evaluator, setEvaluator] = useState(shared.evaluator ?? "Saulo"),
     [started, setStarted] = useState(shared.started ?? ""),
+    [geometryOpen, setGeometryOpen] = useState(false),
     [checkOpen, setCheckOpen] = useState(false),
     [partsOpen, setPartsOpen] = useState(false),
     [servicesOpen, setServicesOpen] = useState(false),
@@ -687,15 +546,7 @@ export default function App({ initialState, user, onLogout }: any) {
     ),
     [purchaseChecks, setPurchaseChecks] = useState<
       Record<string, PurchaseCheck>
-    >(shared.purchaseChecks ?? {}),
-    [purchaseOrderStates, setPurchaseOrderStates] = useState<
-      Record<string, PurchaseOrderState>
-    >(shared.purchaseOrderStates ?? {}),
-    [budgetReviewOpen, setBudgetReviewOpen] = useState(false),
-    [budgetReviewChecks, setBudgetReviewChecks] = useState<
-      Record<number, boolean>
-    >({}),
-    [budgetReviewCopied, setBudgetReviewCopied] = useState(false);
+    >(shared.purchaseChecks ?? {});
   const firstSave = useRef(true),
     skipSave = useRef(false),
     syncBlockedUntil = useRef(0),
@@ -733,7 +584,6 @@ export default function App({ initialState, user, onLogout }: any) {
         patioNotes,
         processStatus,
         purchaseChecks,
-        purchaseOrderStates,
       };
       fetch("/api/state", {
         method: "POST",
@@ -777,7 +627,6 @@ export default function App({ initialState, user, onLogout }: any) {
     patioNotes,
     processStatus,
     purchaseChecks,
-    purchaseOrderStates,
   ]);
   useEffect(() => {
     let alive = true;
@@ -810,11 +659,6 @@ export default function App({ initialState, user, onLogout }: any) {
           apply(setHolidays, holidays, s.holidays);
           apply(setTemplates, templates, s.templates);
           apply(setPurchaseChecks, purchaseChecks, s.purchaseChecks);
-          apply(
-            setPurchaseOrderStates,
-            purchaseOrderStates,
-            s.purchaseOrderStates,
-          );
           if (s.footerSize !== undefined && s.footerSize !== footerSize) {
             changed = true;
             setFooterSize(s.footerSize);
@@ -840,7 +684,6 @@ export default function App({ initialState, user, onLogout }: any) {
     holidays,
     templates,
     purchaseChecks,
-    purchaseOrderStates,
     footerSize,
     roundStep,
     onLogout,
@@ -877,66 +720,6 @@ export default function App({ initialState, user, onLogout }: any) {
     total = pieces + serviceTotal,
     totalCash = piecesCash + serviceTotal,
     totalInstallment = piecesInstallment + serviceTotal;
-  const reviewParts = parts
-      .map((part: any, index: number) => ({ part, index }))
-      .filter(
-        ({ part }: any) =>
-          String(part.item ?? "").trim() && Number(part.qty) > 0,
-      ),
-    totalPartQuantity = reviewParts.reduce(
-      (sum: number, { part }: any) => sum + (Number(part.qty) || 0),
-      0,
-    ),
-    allReviewPartsChecked = reviewParts.every(
-      ({ index }: any) => !!budgetReviewChecks[index],
-    ),
-    reviewServices = [
-      ...selectedServices.map(
-        (index: number) =>
-          `☐ ${quantityValue(serviceQty[index] ?? 0)}x ${SERVICES[index]?.[0] ?? "Serviço"}`,
-      ),
-      ...manualServices
-        .filter((service: any) => service.name?.trim())
-        .map(
-          (service: any) =>
-            `☐ ${quantityValue(Number(service.qty) || 0)}x ${service.name}`,
-        ),
-    ],
-    budgetReviewSignature = JSON.stringify({
-      parts: reviewParts.map(({ part }: any) => [
-        part.item,
-        part.brand,
-        part.supplier,
-        part.code,
-        Number(part.qty) || 0,
-      ]),
-      services: reviewServices,
-    }),
-    internalReviewMessage = [
-      "*CONFERÊNCIA INTERNA DO ORÇAMENTO*",
-      `Cliente: ${activeAppointment?.client || "Não informado"}`,
-      `Veículo: ${activeAppointment?.vehicle || "Não informado"} · Placa: ${activeAppointment?.plate || "Não informada"}`,
-      "",
-      "*PEÇAS*",
-      ...(reviewParts.length
-        ? reviewParts.map(({ part }: any) => {
-            const details = [
-              part.brand && `Marca: ${part.brand}`,
-              part.supplier && `Fornecedor: ${part.supplier}`,
-              part.code && `Código: ${part.code}`,
-            ].filter(Boolean);
-            return `☐ ${quantityValue(Number(part.qty) || 0)}x ${part.item}${details.length ? ` — ${details.join(" · ")}` : ""}`;
-          })
-        : ["Nenhuma peça incluída."]),
-      `*Quantidade total: ${quantityValue(totalPartQuantity)} peça(s)*`,
-      "",
-      "*SERVIÇOS*",
-      ...(reviewServices.length
-        ? reviewServices
-        : ["Nenhum serviço incluído."]),
-      "",
-      "Conferir os itens antes de liberar o orçamento ao cliente.",
-    ].join("\n");
   const updateRequiredVehicleField = (
     field: "vehicle" | "plate" | "km",
     value: string,
@@ -957,174 +740,13 @@ export default function App({ initialState, user, onLogout }: any) {
       ),
     );
   };
-  const updateQuoteFollowUp = (
-    appointmentId: number,
-    patch: Partial<QuoteFollowUp>,
-  ) => {
-    const source = appointments.find((item) => item.id === appointmentId);
-    if (!source) return;
-    const now = new Date().toISOString(),
-      followUp: QuoteFollowUp = {
-        status: "waiting",
-        note: "",
-        reminderDate: "",
-        ...source.quoteFollowUp,
-        ...patch,
-        updatedAt: now,
-        updatedBy: user.displayName,
-      },
-      updated: Appt = {
-        ...source,
-        quoteFollowUp: followUp,
-        lastEditedBy: user.displayName,
-        lastEditedAt: now,
-        _updatedAt: Date.now(),
-      };
-    syncBlockedUntil.current = Date.now() + 4000;
-    setAppointments((list) =>
-      list.map((item) => (item.id === appointmentId ? updated : item)),
-    );
-    if (activeAppointment?.id === appointmentId) {
-      DISPLAY_APPT = updated;
-      setActiveAppointment(updated);
-    }
-  };
-  const updateGeometryField = (
-    item: string,
-    field: keyof GeometryEntry,
-    value: string,
-  ) =>
-    setGeometry((current) => {
-      const previous = current[item];
-      return {
-        ...current,
-        [item]: previous
-          ? { ...previous, [field]: value }
-          : {
-              frontLeft: "",
-              frontRight: "",
-              rearLeft: "",
-              rearRight: "",
-              condition: "",
-              [field]: value,
-            },
-      };
-    });
-  const reverseEvaluation = () => {
-    if (!activeAppointment) return;
-    const source = activeAppointment.sourceAppointmentId
-        ? appointments.find(
-            (appointment) =>
-              appointment.id === activeAppointment.sourceAppointmentId,
-          ) ?? activeAppointment
-        : activeAppointment,
-      linkedServiceId = source.serviceAppointmentId;
-    if (
-      !confirm(
-        `ATENÇÃO: deseja estornar a avaliação de ${source.client}?\n\nA avaliação, o orçamento e uma eventual agenda de serviço vinculada serão apagados. O cliente permanecerá na agenda para uma nova avaliação.`,
-      )
-    )
-      return;
-    syncBlockedUntil.current = Date.now() + 4000;
-    const now = new Date().toISOString(),
-      reset: Appt = {
-        ...source,
-        status: "agendado",
-        evaluation: undefined,
-        budget: undefined,
-        conference: undefined,
-        quoteSentAt: undefined,
-        quoteSentBy: undefined,
-        quoteFollowUp: undefined,
-        serviceScheduled: false,
-        serviceScheduledFor: undefined,
-        serviceScheduledTime: undefined,
-        sourceAppointmentId: undefined,
-        serviceAppointmentId: undefined,
-        startedAt: undefined,
-        inProgress: true,
-        evaluationRecordedBy: undefined,
-        evaluationRecordedAt: undefined,
-        budgetEditedBy: undefined,
-        budgetEditedAt: undefined,
-        lastEditedBy: user.displayName,
-        lastEditedAt: now,
-        _updatedAt: Date.now(),
-      };
-    DISPLAY_APPT = reset;
-    setActiveAppointment(reset);
-    if (linkedServiceId)
-      setDeletedAppointmentIds((ids) => [
-        ...new Set([...ids, linkedServiceId]),
-      ]);
-    setAppointments((list) =>
-      list
-        .filter(
-          (appointment) =>
-            !linkedServiceId || appointment.id !== linkedServiceId,
-        )
-        .map((appointment) =>
-          appointment.id === reset.id ? reset : appointment,
-        ),
-    );
-    setStatus({});
-    setQuoteItems({});
-    setCustom([]);
-    setEvaluationNotes({});
-    setParts([]);
-    setSelectedServices([]);
-    setServiceQty({});
-    setServicePrices({});
-    setManualServices([]);
-    setPatioNotes("");
-    setChecks({});
-    setGeometry({});
-    setStarted("");
-    setProcessStatus("Em andamento");
-    setSavedAt("");
-    setCheckOpen(true);
-    setView("avaliacao");
-    scrollTo(0, 0);
-    alert("Avaliação estornada. O preenchimento foi reiniciado.");
-  };
-  const sanitizeBudgetParts = (savedParts: any[] = []) => {
-    const credentialValues = [user?.username, user?.displayName]
-        .filter(Boolean)
-        .map((value) => String(value).trim().toLocaleUpperCase("pt-BR")),
-      cleanText = (value: unknown) => {
-        const text = String(value ?? "").trim();
-        return credentialValues.includes(text.toLocaleUpperCase("pt-BR"))
-          ? ""
-          : text;
-      },
-      cleanNumber = (value: unknown) => {
-        const number = Number(value);
-        return Number.isFinite(number) ? number : 0;
-      };
-    return savedParts.map((part) => ({
-      ...part,
-      brand: cleanText(part.brand),
-      supplier: cleanText(part.supplier),
-      code: cleanText(part.code),
-      cost: cleanNumber(part.cost),
-      margin: cleanNumber(part.margin),
-      saleOverride:
-        part.saleOverride === null || part.saleOverride === undefined
-          ? null
-          : Number.isFinite(Number(part.saleOverride))
-            ? Number(part.saleOverride)
-            : null,
-    }));
-  };
   const nav: [View, string, string][] = [
     ["agenda", "Agenda", "▦"],
-    ["veiculos", "Veículos na oficina", "▣"],
     ["avaliacao", "Avaliação", "✓"],
     ["orcamento", "Orçamento", "$"],
     ["proposta", "Proposta", "▤"],
     ["torque", "Conferência", "◇"],
     ["compras", "Pedido de compra", "☑"],
-    ["orcamentos_abertos", "Orçamentos em aberto", "◷"],
     ["relatorios", "Relatórios", "▥"],
     ["historico", "Histórico", "↺"],
     ["config", "Configurações", "⚙"],
@@ -1137,25 +759,8 @@ export default function App({ initialState, user, onLogout }: any) {
         setView("agenda");
         return;
       }
-      if (
-        v === "proposta" &&
-        view === "orcamento" &&
-        !budgetReviewOpen &&
-        activeAppointment?.budget?.internalReview?.signature !==
-          budgetReviewSignature
-      ) {
-        if (!reviewParts.length && !reviewServices.length) {
-          alert(
-            "Inclua ao menos uma peça ou serviço antes de gerar o orçamento.",
-          );
-          return;
-        }
-        setBudgetReviewChecks({});
-        setBudgetReviewCopied(false);
-        setBudgetReviewOpen(true);
-        return;
-      }
       if (v === "avaliacao") {
+        setGeometryOpen(false);
         setCheckOpen(false);
       }
       if (v === "orcamento") {
@@ -1331,7 +936,6 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(a.evaluation?.custom ?? []);
               setEvaluationNotes(a.evaluation?.notes ?? {});
               setChecks(a.conference?.checks ?? {});
-              setGeometry(a.conference?.geometry ?? {});
               setFinalization(
                 a.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -1343,6 +947,7 @@ export default function App({ initialState, user, onLogout }: any) {
                   checker: "",
                 },
               );
+              setGeometryOpen(false);
               setCheckOpen(false);
               setPartsOpen(false);
               setServicesOpen(false);
@@ -1354,7 +959,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 final: false,
               });
               if (a.budget) {
-                setParts(sanitizeBudgetParts(a.budget.parts));
+                setParts(a.budget.parts ?? []);
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
@@ -1434,8 +1039,6 @@ export default function App({ initialState, user, onLogout }: any) {
                       activeAppointment.budget?.manualServices ?? [],
                     patioNotes: activeAppointment.budget?.patioNotes ?? "",
                     processStatus: "Finalizado",
-                    internalReview:
-                      activeAppointment.budget?.internalReview,
                   };
                 const updated: Appt = {
                   ...activeAppointment,
@@ -1458,7 +1061,6 @@ export default function App({ initialState, user, onLogout }: any) {
                     ? activeAppointment.conference
                     : {
                         checks: activeAppointment.conference?.checks ?? {},
-                        geometry: activeAppointment.conference?.geometry ?? {},
                         finalizedAt: finishedAt,
                         finalizedBy: user.displayName,
                         finalization: {
@@ -1547,8 +1149,6 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             patioNotes,
                             processStatus,
-                            internalReview:
-                              activeAppointment.budget?.internalReview,
                           };
                     const updated: Appt = {
                       ...activeAppointment,
@@ -1581,7 +1181,6 @@ export default function App({ initialState, user, onLogout }: any) {
                         view === "torque"
                           ? {
                               checks,
-                              geometry,
                               finalization,
                               finalizedBy:
                                 processStatus === "Finalizado"
@@ -1612,114 +1211,6 @@ export default function App({ initialState, user, onLogout }: any) {
               />
               {view === "avaliacao" && (
                 <>
-                  {(activeAppointment?.evaluation ||
-                    activeAppointment?.budget) && (
-                    <div className="reverse-evaluation-bar">
-                      <span>
-                        <b>Precisa refazer esta avaliação?</b>
-                        <small>
-                          Estorne para apagar a avaliação e o orçamento antigos
-                          e começar um novo preenchimento.
-                        </small>
-                      </span>
-                      <button onClick={reverseEvaluation}>
-                        ↺ Estornar avaliação
-                      </button>
-                    </div>
-                  )}
-                  <div className="quote-followup-note">
-                    <div className="quote-followup-heading">
-                      <span>
-                        <b>Bloco de notas e lembrete do orçamento</b>
-                        <small>
-                          Registre o retorno do cliente e a data para perguntar se
-                          deseja realizar o serviço.
-                        </small>
-                      </span>
-                      <strong>
-                        {DISPLAY_APPT.quoteFollowUp?.status === "sold_vehicle"
-                          ? "ENCERRADO · VEÍCULO VENDIDO"
-                          : DISPLAY_APPT.quoteFollowUp?.status === "declined"
-                            ? "ENCERRADO · NÃO REALIZARÁ"
-                            : DISPLAY_APPT.quoteSentAt
-                              ? "AGUARDANDO RETORNO"
-                              : "AGUARDANDO ENVIO"}
-                      </strong>
-                    </div>
-                    <div className="quote-followup-fields">
-                      <label>
-                        Situação do orçamento
-                        <select
-                          value={
-                            DISPLAY_APPT.quoteFollowUp?.status ?? "waiting"
-                          }
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              status: event.target.value as QuoteFollowUp["status"],
-                            })
-                          }
-                        >
-                          <option value="waiting">Aguardando retorno do cliente</option>
-                          <option value="sold_vehicle">
-                            Não realizará — vendeu o veículo
-                          </option>
-                          <option value="declined">
-                            Não realizará o serviço
-                          </option>
-                        </select>
-                      </label>
-                      <label>
-                        Criar lembrete para
-                        <input
-                          type="date"
-                          value={
-                            DISPLAY_APPT.quoteFollowUp?.reminderDate ?? ""
-                          }
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              reminderDate: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      <label className="quote-followup-text">
-                        Anotações internas
-                        <textarea
-                          value={DISPLAY_APPT.quoteFollowUp?.note ?? ""}
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              note: event.target.value,
-                            })
-                          }
-                          placeholder="Ex.: cliente pediu retorno na próxima semana; aguardando conversar com a família..."
-                        />
-                      </label>
-                    </div>
-                    <div className="quote-followup-actions">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateQuoteFollowUp(DISPLAY_APPT.id, {
-                            reminderCreatedAt: new Date().toISOString(),
-                          });
-                          alert("Lembrete do orçamento salvo.");
-                        }}
-                      >
-                        Salvar lembrete
-                      </button>
-                      <button
-                        type="button"
-                        className="wa"
-                        onClick={() =>
-                          setMessage(
-                            `Olá, ${DISPLAY_APPT.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${DISPLAY_APPT.vehicle || ""}${DISPLAY_APPT.plate ? `, placa ${DISPLAY_APPT.plate}` : ""}. Podemos ajudar com o agendamento?`,
-                          )
-                        }
-                      >
-                        Preparar mensagem
-                      </button>
-                    </div>
-                  </div>
                   <div className="startbox">
                     <label>
                       Quem está avaliando
@@ -1756,6 +1247,35 @@ export default function App({ initialState, user, onLogout }: any) {
                       Usar horário atual
                     </button>
                   </div>
+                  <Collapse
+                    title="⌖ Geometria / Alinhamento"
+                    subtitle="Medições de camber, caster e convergência"
+                    open={geometryOpen}
+                    set={() => setGeometryOpen(!geometryOpen)}
+                  >
+                    <div className="geometry bare">
+                      {[
+                        "Camber",
+                        "Caster",
+                        "Alinhamento (convergência)",
+                        "Posição do volante",
+                      ].map((x) => (
+                        <div key={x}>
+                          <b>{x}</b>
+                          <input placeholder="Diant. Esq." />
+                          <input placeholder="Diant. Dir." />
+                          <input placeholder="Tras. Esq." />
+                          <input placeholder="Tras. Dir." />
+                          <select>
+                            <option>Situação</option>
+                            <option>OK</option>
+                            <option>Atenção</option>
+                            <option>Não OK</option>
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </Collapse>
                   <Collapse
                     title="⚙ Suspensão e peças do veículo"
                     subtitle="Checklist de avaliação e itens para orçamento"
@@ -1835,18 +1355,12 @@ export default function App({ initialState, user, onLogout }: any) {
                             <input
                               type="checkbox"
                               checked={!!quoteItems[i + 1]}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
+                              onChange={(e) =>
                                 setQuoteItems({
                                   ...quoteItems,
-                                  [i + 1]: checked,
-                                });
-                                if (checked)
-                                  setStatus({
-                                    ...status,
-                                    [i + 1]: "r",
-                                  });
-                              }}
+                                  [i + 1]: e.target.checked,
+                                })
+                              }
                             />{" "}
                             Orçar
                           </label>
@@ -2112,9 +1626,6 @@ export default function App({ initialState, user, onLogout }: any) {
                             <label>
                               <input
                                 value={p.item}
-                                name={`budget-item-${activeAppointment?.id ?? "novo"}-${i}`}
-                                autoComplete="off"
-                                data-form-type="other"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].item = titleCase(e.target.value);
@@ -2124,10 +1635,6 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.brand}
                                 placeholder="Marca"
-                                name={`budget-brand-${activeAppointment?.id ?? "novo"}-${i}`}
-                                autoComplete="off"
-                                data-form-type="other"
-                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].brand = titleCase(e.target.value);
@@ -2142,9 +1649,6 @@ export default function App({ initialState, user, onLogout }: any) {
                               inputMode="numeric"
                               placeholder="0"
                               aria-label={`Quantidade de ${p.item || "peça"}`}
-                              name={`budget-quantity-${activeAppointment?.id ?? "novo"}-${i}`}
-                              autoComplete="off"
-                              data-form-type="other"
                               value={p.qty || ""}
                               onChange={(e) => {
                                 const a = [...parts];
@@ -2156,10 +1660,6 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.supplier}
                                 placeholder="Fornecedor"
-                                name={`budget-supplier-${activeAppointment?.id ?? "novo"}-${i}`}
-                                autoComplete="off"
-                                data-form-type="other"
-                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].supplier = titleCase(e.target.value);
@@ -2169,10 +1669,6 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.code}
                                 placeholder="Código"
-                                name={`budget-code-${activeAppointment?.id ?? "novo"}-${i}`}
-                                autoComplete="off"
-                                data-form-type="other"
-                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].code =
@@ -2182,18 +1678,12 @@ export default function App({ initialState, user, onLogout }: any) {
                               />
                             </label>
                             <input
-                              type="number"
-                              className={!costs ? "masked-budget-input" : ""}
-                              readOnly={!costs}
+                              type={costs ? "number" : "password"}
                               min="0"
                               step="0.01"
                               inputMode="decimal"
                               placeholder={costs ? "0,00" : ""}
                               aria-label={`Custo de ${p.item || "peça"} em reais`}
-                              name={`budget-cost-${activeAppointment?.id ?? "novo"}-${i}`}
-                              autoComplete="off"
-                              data-form-type="other"
-                              data-lpignore="true"
                               value={p.cost || ""}
                               onChange={(e) => {
                                 const a = [...parts];
@@ -2203,18 +1693,12 @@ export default function App({ initialState, user, onLogout }: any) {
                             />
                             <label>
                               <input
-                                type="number"
-                                className={!costs ? "masked-budget-input" : ""}
-                                readOnly={!costs}
+                                type={costs ? "number" : "password"}
                                 min="0"
                                 step="1"
                                 inputMode="numeric"
                                 placeholder={costs ? "0" : ""}
                                 aria-label={`Margem de ${p.item || "peça"} em porcentagem`}
-                                name={`budget-margin-${activeAppointment?.id ?? "novo"}-${i}`}
-                                autoComplete="off"
-                                data-form-type="other"
-                                data-lpignore="true"
                                 value={p.margin || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
@@ -2236,9 +1720,6 @@ export default function App({ initialState, user, onLogout }: any) {
                                 inputMode="decimal"
                                 placeholder="0,00"
                                 aria-label={`Venda unitária de ${p.item || "peça"} em reais`}
-                                name={`budget-sale-${activeAppointment?.id ?? "novo"}-${i}`}
-                                autoComplete="off"
-                                data-form-type="other"
                                 value={cashSaleOf(p, roundStep) || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
@@ -2523,28 +2004,6 @@ export default function App({ initialState, user, onLogout }: any) {
                               />
                             </label>
                             <b>{brl(x.qty * x.value)}</b>
-                            <button
-                              type="button"
-                              className="manual-service-delete"
-                              aria-label={`Excluir serviço ${x.name || "sem nome"}`}
-                              title="Excluir este serviço"
-                              onClick={() => {
-                                if (
-                                  confirm(
-                                    `Excluir o serviço “${x.name || "sem nome"}”?`,
-                                  )
-                                ) {
-                                  setManualServices((current) =>
-                                    current.filter(
-                                      (_: any, index: number) => index !== i,
-                                    ),
-                                  );
-                                  setServiceValueDrafts({});
-                                }
-                              }}
-                            >
-                              🗑
-                            </button>
                           </div>
                         ))}
                       </div>
@@ -2599,214 +2058,10 @@ export default function App({ initialState, user, onLogout }: any) {
                       }
                       go("avaliacao");
                     }}
-                    next={() => {
-                      if (!reviewParts.length && !reviewServices.length) {
-                        alert(
-                          "Inclua ao menos uma peça ou serviço antes de gerar o orçamento.",
-                        );
-                        return;
-                      }
-                      setBudgetReviewChecks({});
-                      setBudgetReviewCopied(false);
-                      setBudgetReviewOpen(true);
-                    }}
+                    next={() => go("proposta")}
                     b="Voltar à avaliação"
-                    n="Conferir e gerar orçamento"
+                    n="Gerar orçamento"
                   />
-                  {budgetReviewOpen && (
-                    <div className="backdrop" role="dialog" aria-modal="true">
-                      <div className="modal budget-review-modal">
-                        <div>
-                          <span>
-                            <h2>Conferência interna</h2>
-                            <p>
-                              Confira as quantidades antes de gerar o orçamento
-                              do cliente.
-                            </p>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setBudgetReviewOpen(false)}
-                            aria-label="Fechar conferência"
-                          >
-                            ×
-                          </button>
-                        </div>
-                        <div className="budget-review-client">
-                          <span>
-                            <b>{activeAppointment?.client}</b>
-                            <small>
-                              {activeAppointment?.vehicle || "Veículo não informado"}
-                              {activeAppointment?.plate
-                                ? ` · ${activeAppointment.plate}`
-                                : ""}
-                            </small>
-                          </span>
-                          <strong>
-                            {quantityValue(totalPartQuantity)} peça(s)
-                          </strong>
-                        </div>
-                        <div className="budget-review-heading">
-                          <b>Peças para conferir</b>
-                          <small>
-                            Marque cada linha depois de conferir a quantidade.
-                          </small>
-                        </div>
-                        <section className="budget-review-list">
-                          {reviewParts.length ? (
-                            reviewParts.map(({ part, index }: any) => (
-                              <label
-                                className={
-                                  budgetReviewChecks[index] ? "checked" : ""
-                                }
-                                key={`${index}-${part.item}`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={!!budgetReviewChecks[index]}
-                                  onChange={(event) =>
-                                    setBudgetReviewChecks({
-                                      ...budgetReviewChecks,
-                                      [index]: event.target.checked,
-                                    })
-                                  }
-                                />
-                                <strong>
-                                  {quantityValue(Number(part.qty) || 0)}x
-                                </strong>
-                                <span>
-                                  <b>{part.item}</b>
-                                  <small>
-                                    {[
-                                      part.brand,
-                                      part.supplier,
-                                      part.code,
-                                    ]
-                                      .filter(Boolean)
-                                      .join(" · ") || "Sem detalhes adicionais"}
-                                  </small>
-                                </span>
-                              </label>
-                            ))
-                          ) : (
-                            <p className="budget-review-empty">
-                              Nenhuma peça incluída. Confira os serviços abaixo.
-                            </p>
-                          )}
-                        </section>
-                        {reviewServices.length > 0 && (
-                          <div className="budget-review-services">
-                            <b>Serviços incluídos</b>
-                            {reviewServices.map((service: string, index: number) => (
-                              <span key={`${index}-${service}`}>
-                                {service.replace(/^☐\s*/, "")}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        <div className="budget-review-progress">
-                          <b>
-                            {reviewParts.filter(({ index }: any) =>
-                              budgetReviewChecks[index],
-                            ).length}
-                            /{reviewParts.length} peças conferidas
-                          </b>
-                          <small>
-                            O orçamento será liberado quando todas estiverem
-                            marcadas.
-                          </small>
-                        </div>
-                        <footer>
-                          <button
-                            type="button"
-                            onClick={() => setBudgetReviewOpen(false)}
-                          >
-                            Voltar e corrigir
-                          </button>
-                          <button
-                            type="button"
-                            className="wa budget-review-copy"
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(
-                                  internalReviewMessage,
-                                );
-                                setBudgetReviewCopied(true);
-                              } catch {
-                                alert(
-                                  "Não foi possível copiar automaticamente. Tente novamente pelo navegador.",
-                                );
-                              }
-                            }}
-                          >
-                            {budgetReviewCopied
-                              ? "Lista copiada ✓"
-                              : "Copiar para WhatsApp"}
-                          </button>
-                          <button
-                            type="button"
-                            className="primary"
-                            disabled={!allReviewPartsChecked}
-                            onClick={() => {
-                              if (!activeAppointment || !allReviewPartsChecked)
-                                return;
-                              const now = new Date().toISOString(),
-                                internalReview: InternalBudgetReview = {
-                                  signature: budgetReviewSignature,
-                                  totalQuantity: totalPartQuantity,
-                                  checkedItems: reviewParts.map(
-                                    ({ part }: any) =>
-                                      `${quantityValue(Number(part.qty) || 0)}x ${part.item}`,
-                                  ),
-                                  confirmedAt: now,
-                                  confirmedBy: user.displayName,
-                                },
-                                budget: BudgetState = {
-                                  parts,
-                                  selectedServices,
-                                  serviceQty,
-                                  servicePrices,
-                                  manualServices,
-                                  patioNotes,
-                                  processStatus,
-                                  internalReview,
-                                },
-                                updated: Appt = {
-                                  ...activeAppointment,
-                                  budget,
-                                  budgetEditedBy: user.displayName,
-                                  budgetEditedAt: now,
-                                  lastEditedBy: user.displayName,
-                                  lastEditedAt: now,
-                                  _updatedAt: Date.now(),
-                                };
-                              syncBlockedUntil.current = Date.now() + 4000;
-                              DISPLAY_APPT = updated;
-                              setActiveAppointment(updated);
-                              setAppointments((list) =>
-                                list.map((appointment) =>
-                                  appointment.id === updated.id
-                                    ? updated
-                                    : appointment,
-                                ),
-                              );
-                              setSavedAt(
-                                new Date().toLocaleTimeString("pt-BR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }),
-                              );
-                              setBudgetReviewOpen(false);
-                              setView("proposta");
-                              scrollTo(0, 0);
-                            }}
-                          >
-                            Salvar e gerar orçamento
-                          </button>
-                        </footer>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
               {view === "proposta" && (
@@ -2950,8 +2205,6 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
-                            internalReview:
-                              activeAppointment.budget?.internalReview,
                           },
                           source: Appt = {
                             ...activeAppointment,
@@ -3036,8 +2289,6 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
-                            internalReview:
-                              activeAppointment.budget?.internalReview,
                           };
                           const updated: Appt = {
                             ...activeAppointment,
@@ -3082,8 +2333,6 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
-                            internalReview:
-                              activeAppointment.budget?.internalReview,
                           };
                           const updated: Appt = {
                             ...activeAppointment,
@@ -3138,98 +2387,6 @@ export default function App({ initialState, user, onLogout }: any) {
                     {savedAt && <small>Salvo às {savedAt}</small>}
                   </div>
                   <div className="printable">
-                    <Collapse
-                      title="⌖ Geometria / Alinhamento"
-                      subtitle="Medições de camber, caster e convergência"
-                      open={!!torqueOpen.geometry}
-                      set={() =>
-                        setTorqueOpen({
-                          ...torqueOpen,
-                          geometry: !torqueOpen.geometry,
-                        })
-                      }
-                    >
-                      <div className="geometry bare">
-                        {[
-                          "Camber",
-                          "Caster",
-                          "Alinhamento (convergência)",
-                          "Posição do volante",
-                        ].map((item) => {
-                          const values = geometry[item] ?? {
-                            frontLeft: "",
-                            frontRight: "",
-                            rearLeft: "",
-                            rearRight: "",
-                            condition: "",
-                          };
-                          return (
-                            <div key={item}>
-                              <b>{item}</b>
-                              <input
-                                placeholder="Diant. Esq."
-                                value={values.frontLeft}
-                                onChange={(event) =>
-                                  updateGeometryField(
-                                    item,
-                                    "frontLeft",
-                                    event.target.value,
-                                  )
-                                }
-                              />
-                              <input
-                                placeholder="Diant. Dir."
-                                value={values.frontRight}
-                                onChange={(event) =>
-                                  updateGeometryField(
-                                    item,
-                                    "frontRight",
-                                    event.target.value,
-                                  )
-                                }
-                              />
-                              <input
-                                placeholder="Tras. Esq."
-                                value={values.rearLeft}
-                                onChange={(event) =>
-                                  updateGeometryField(
-                                    item,
-                                    "rearLeft",
-                                    event.target.value,
-                                  )
-                                }
-                              />
-                              <input
-                                placeholder="Tras. Dir."
-                                value={values.rearRight}
-                                onChange={(event) =>
-                                  updateGeometryField(
-                                    item,
-                                    "rearRight",
-                                    event.target.value,
-                                  )
-                                }
-                              />
-                              <select
-                                value={values.condition}
-                                onChange={(event) =>
-                                  updateGeometryField(
-                                    item,
-                                    "condition",
-                                    event.target.value,
-                                  )
-                                }
-                              >
-                                <option value="">Situação</option>
-                                <option>OK</option>
-                                <option>Atenção</option>
-                                <option>Não OK</option>
-                              </select>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </Collapse>
                     {[
                       ["front", "Suspensão dianteira", FRONT, true],
                       ["rear", "Suspensão traseira", REAR, true],
@@ -3458,12 +2615,9 @@ export default function App({ initialState, user, onLogout }: any) {
                           manualServices,
                           patioNotes,
                           processStatus: "Finalizado",
-                          internalReview:
-                            activeAppointment.budget?.internalReview,
                         },
                         conference: {
                           checks,
-                          geometry,
                           finalization,
                           finalizedBy: user.displayName,
                           finalizedAt: new Date().toISOString(),
@@ -3494,7 +2648,6 @@ export default function App({ initialState, user, onLogout }: any) {
             onBack={() => go("agenda")}
             onEditConference={() => {
               setChecks(activeAppointment.conference?.checks ?? {});
-              setGeometry(activeAppointment.conference?.geometry ?? {});
               setFinalization(
                 activeAppointment.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -3519,23 +2672,11 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
-        {(view === "relatorios" ||
-          view === "veiculos" ||
-          view === "orcamentos_abertos") && (
+        {view === "relatorios" && (
           <Reports
             data={appointments}
             user={user}
-            initialMode={
-              view === "veiculos"
-                ? "andamento"
-                : view === "orcamentos_abertos"
-                  ? "abertos"
-                  : reportStartMode
-            }
-            standaloneMode={
-              view === "veiculos" || view === "orcamentos_abertos"
-            }
-            updateFollowUp={updateQuoteFollowUp}
+            initialMode={reportStartMode}
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
@@ -3545,7 +2686,6 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(a.evaluation?.custom ?? []);
               setEvaluationNotes(a.evaluation?.notes ?? {});
               setChecks(a.conference?.checks ?? {});
-              setGeometry(a.conference?.geometry ?? {});
               setFinalization(
                 a.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -3558,7 +2698,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 },
               );
               if (a.budget) {
-                setParts(sanitizeBudgetParts(a.budget.parts));
+                setParts(a.budget.parts ?? []);
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
@@ -3606,15 +2746,10 @@ export default function App({ initialState, user, onLogout }: any) {
           <PurchaseOrders
             appointments={appointments}
             checks={purchaseChecks}
-            orderStates={purchaseOrderStates}
             currentUser={user.displayName}
             setChecks={(updater: any) => {
               syncBlockedUntil.current = Date.now() + 4000;
               setPurchaseChecks(updater);
-            }}
-            setOrderStates={(updater: any) => {
-              syncBlockedUntil.current = Date.now() + 4000;
-              setPurchaseOrderStates(updater);
             }}
             setWorkOrder={(ownerId: number, workOrder: string) => {
               syncBlockedUntil.current = Date.now() + 4000;
@@ -3739,7 +2874,6 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(opened.evaluation?.custom ?? []);
               setEvaluationNotes(opened.evaluation?.notes ?? {});
               setChecks(opened.conference?.checks ?? {});
-              setGeometry(opened.conference?.geometry ?? {});
               setFinalization(
                 opened.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -3752,7 +2886,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 },
               );
               if (opened.budget) {
-                setParts(sanitizeBudgetParts(opened.budget.parts));
+                setParts(opened.budget.parts ?? []);
                 setSelectedServices(opened.budget.selectedServices ?? []);
                 setServiceQty(opened.budget.serviceQty ?? {});
                 setServicePrices(opened.budget.servicePrices ?? {});
@@ -3768,6 +2902,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
+              setGeometryOpen(false);
               setCheckOpen(false);
               setPartsOpen(false);
               setServicesOpen(false);
@@ -3891,11 +3026,7 @@ function Vehicle() {
   );
 }
 function Steps({ view }: { view: View }) {
-  const n = (
-    { avaliacao: 1, orcamento: 2, proposta: 3, torque: 4 } as Partial<
-      Record<View, number>
-    >
-  )[view] ?? 1;
+  const n = { avaliacao: 1, orcamento: 2, proposta: 3, torque: 4 }[view] ?? 1;
   return (
     <div className="steps">
       {["Avaliação", "Orçamento", "Proposta", "Conferência"].map((x, i) => (
@@ -4102,7 +3233,6 @@ function Agenda({
     ),
     [mode, setMode] = useState<"dia" | "semana" | "mes">("mes"),
     [openCal, setOpenCal] = useState(true),
-    [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
   const carryLimitIso = todayIso,
     isBusinessDay = (targetDate: string) => {
@@ -4148,27 +3278,12 @@ function Agenda({
         return d;
       });
     }, [cursor, date, mode]);
-  const isOngoingVehicle = (appointment: Appt) =>
-      appointment.type !== "bloqueio" &&
-      !!appointment.inProgress &&
-      appointment.budget?.processStatus !== "Finalizado",
-    list = [...appointmentsForDate(date)].sort((first, second) => {
-      const groupDifference =
-        Number(isOngoingVehicle(first)) - Number(isOngoingVehicle(second));
-      if (groupDifference !== 0) return groupDifference;
-      return (
-        first.time.localeCompare(second.time, "pt-BR", { numeric: true }) ||
-        first.client.localeCompare(second.client, "pt-BR")
-      );
-    }),
-    ongoingVehicleCount = list.filter(isOngoingVehicle).length,
+  const list = appointmentsForDate(date),
     openQuotesCount = (data as Appt[]).filter(
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
         !a.serviceAppointmentId &&
-        a.quoteFollowUp?.status !== "sold_vehicle" &&
-        a.quoteFollowUp?.status !== "declined" &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     inProgressCount = (data as Appt[]).filter(
@@ -4354,38 +3469,13 @@ function Agenda({
               Nenhum agendamento. Clique em “Novo agendamento” para incluir.
             </div>
           )}
-          {list.map((a: Appt, index: number) => {
+          {list.map((a: Appt) => {
             const expanded = expandedAppointments.includes(a.id);
             return (
-              <Fragment key={a.id}>
-                {isOngoingVehicle(a) &&
-                  (index === 0 || !isOngoingVehicle(list[index - 1])) && (
-                    <button
-                      type="button"
-                      className="day-group-heading ongoing"
-                      onClick={() =>
-                        setShowOngoingVehicles((current) => !current)
-                      }
-                      aria-expanded={showOngoingVehicles}
-                    >
-                      <span>
-                        Veículos em andamento
-                        <small>
-                          {ongoingVehicleCount}{" "}
-                          {ongoingVehicleCount === 1 ? "veículo" : "veículos"}
-                        </small>
-                      </span>
-                      <strong>
-                        {showOngoingVehicles
-                          ? "Recolher ▲"
-                          : "Mostrar veículos ▼"}
-                      </strong>
-                    </button>
-                  )}
-                {(!isOngoingVehicle(a) || showOngoingVehicles) && (
-                  <article
-                    className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
-                  >
+              <article
+                className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
+                key={a.id}
+              >
                 <time>
                   <b>{a.time}</b>
                   <small>
@@ -4425,7 +3515,7 @@ function Agenda({
                       }
                       title={expanded ? "Recolher" : "Ver atendimento completo"}
                     >
-                      {expanded ? "Recolher ▲" : "Ver detalhes ▼"}
+                      {expanded ? "⌃" : "⌄"}
                     </button>
                   </div>
                   <p>
@@ -4582,9 +3672,7 @@ function Agenda({
                     )}
                   </div>
                 )}
-                  </article>
-                )}
-              </Fragment>
+              </article>
             );
           })}
         </div>
@@ -4600,11 +3688,11 @@ function Agenda({
         </button>
         <button className="in-progress-alert" onClick={showInProgress}>
           <span>
-            <b>Veículos na oficina</b>
-            <small>Aguardando avaliação, revisão ou conclusão</small>
+            <b>Atendimentos em andamento</b>
+            <small>Veículos em execução aguardando conclusão</small>
           </span>
           <strong>{inProgressCount}</strong>
-          <i>Ver veículos →</i>
+          <i>Ver atendimentos →</i>
         </button>
       </div>
     </section>
@@ -4967,9 +4055,6 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         client: "",
         phone: "",
         vehicle: "",
-        vehicleBrand: "",
-        vehicleColor: "",
-        vehicleBody: "",
         plate: "",
         km: "",
         note: "",
@@ -5082,66 +4167,11 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             />
           </label>
           <label>
-            Modelo do veículo
+            Veículo
             <input
-              list="vehicle-model-list"
               value={f.vehicle}
-              onChange={(e) => {
-                const vehicle = e.target.value;
-                const found = findVehicle(vehicle);
-                setF({
-                  ...f,
-                  vehicle,
-                  vehicleBrand: found?.[1] ?? f.vehicleBrand,
-                  vehicleBody: found?.[2] ?? f.vehicleBody,
-                });
-              }}
-              placeholder="Digite, por exemplo: Gol"
+              onChange={(e) => setF({ ...f, vehicle: e.target.value })}
             />
-            <datalist id="vehicle-model-list">
-              {VEHICLE_CATALOG.map(([model, brand]) => (
-                <option key={`${brand}-${model}`} value={model}>
-                  {brand}
-                </option>
-              ))}
-            </datalist>
-            <small>Ao reconhecer o modelo, o sistema preenche a marca.</small>
-          </label>
-          <label>
-            Marca
-            <input
-              value={f.vehicleBrand || ""}
-              onChange={(e) => setF({ ...f, vehicleBrand: e.target.value })}
-              placeholder="Ex.: Volkswagen"
-            />
-          </label>
-          <label>
-            Cor do veículo
-            <input
-              list="vehicle-color-list"
-              value={f.vehicleColor || ""}
-              onChange={(e) => setF({ ...f, vehicleColor: e.target.value })}
-              placeholder="Ex.: Branco"
-            />
-            <datalist id="vehicle-color-list">
-              {["Branco", "Preto", "Prata", "Cinza", "Vermelho", "Azul", "Verde", "Bege", "Marrom"].map((color) => (
-                <option key={color} value={color} />
-              ))}
-            </datalist>
-          </label>
-          <label>
-            Tipo do veículo
-            <select
-              value={f.vehicleBody || ""}
-              onChange={(e) => setF({ ...f, vehicleBody: e.target.value })}
-            >
-              <option value="">Automóvel</option>
-              <option>Hatch</option>
-              <option>Sedã</option>
-              <option>SUV</option>
-              <option>Picape</option>
-              <option>Van</option>
-            </select>
           </label>
           <label>
             Placa (opcional)
@@ -5401,9 +4431,6 @@ function PrintDocuments({
             <b>{p.qty}x</b>
             <span>
               {p.item} - {p.brand}
-              {budgetApproved && (
-                <small className="print-approved">✓ APROVADO</small>
-              )}
             </span>
             <em>{brl(p.qty * saleOf(p, roundStep))}</em>
           </div>
@@ -5461,10 +4488,7 @@ function PrintDocuments({
         </div>
       </section>
       <section className="a4 proposal-a4">
-        <BudgetHead
-          title="PROPOSTA DE ORÇAMENTO"
-          approvalBadge={budgetApproved}
-        />
+        <BudgetHead title="PROPOSTA DE ORÇAMENTO" />
         <div className="a4-client">
           <span>
             <b>Cliente</b>
@@ -5488,9 +4512,6 @@ function PrintDocuments({
             <b>{p.qty}x</b>
             <span>
               {p.item} - {p.brand}
-              {budgetApproved && (
-                <small className="print-approved">✓ APROVADO</small>
-              )}
             </span>
           </div>
         ))}
@@ -5603,13 +4624,7 @@ function PrintHead({ title }: { title: string }) {
     </header>
   );
 }
-function BudgetHead({
-  title,
-  approvalBadge = false,
-}: {
-  title: string;
-  approvalBadge?: boolean;
-}) {
+function BudgetHead({ title }: { title: string }) {
   return (
     <header className="a4-head budget-head">
       <img src="/logo-monocenter.jpg" alt="Monocenter" />
@@ -5619,9 +4634,7 @@ function BudgetHead({
         <p>WhatsApp (15) 99657-4741</p>
         <h2>{title}</h2>
       </div>
-      <strong className={approvalBadge ? "approval-head-badge" : ""}>
-        {approvalBadge ? "APROVADO 👍" : DISPLAY_APPT.plate || "SEM PLACA"}
-      </strong>
+      <strong>{DISPLAY_APPT.plate || "SEM PLACA"}</strong>
     </header>
   );
 }
@@ -6003,13 +5016,12 @@ function PurchaseOrders({
   appointments,
   checks,
   setChecks,
-  orderStates,
-  setOrderStates,
   setWorkOrder,
   currentUser,
 }: any) {
-  const [filter, setFilter] = useState<"all" | "open" | "closed">("all"),
-    [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [filter, setFilter] = useState<
+    "all" | "pending" | "ordered" | "received"
+  >("all");
   const rows = useMemo(() => {
     const unique = new Map<string, any>();
     for (const appointment of appointments as Appt[]) {
@@ -6049,14 +5061,21 @@ function PurchaseOrders({
       );
     });
   }, [appointments, checks]);
-  const itemCounts = {
+  const counts = {
       pending: rows.filter((row) => !checks[row.key]?.ordered).length,
       ordered: rows.filter(
         (row) => checks[row.key]?.ordered && !checks[row.key]?.received,
       ).length,
       received: rows.filter((row) => checks[row.key]?.received).length,
     },
-    allGroups = rows.reduce((result: any[], row: any) => {
+    visibleRows = rows.filter((row) => {
+      const state = checks[row.key];
+      if (filter === "pending") return !state?.ordered;
+      if (filter === "ordered") return state?.ordered && !state?.received;
+      if (filter === "received") return state?.received;
+      return true;
+    }),
+    groups = visibleRows.reduce((result: any[], row: any) => {
       let group = result.find((item) => item.ownerId === row.ownerId);
       if (!group) {
         group = {
@@ -6070,84 +5089,18 @@ function PurchaseOrders({
       group.rows.push(row);
       return result;
     }, []),
-    groups = allGroups
-      .map((group: any) => {
-        const savedState: PurchaseOrderState = orderStates[group.ownerId] ?? {
-            closed: false,
-          },
-          allReceived =
-            group.rows.length > 0 &&
-            group.rows.every((row: any) => checks[row.key]?.received),
-          totalQuantity = group.rows.reduce(
-            (total: number, row: any) => total + (Number(row.part.qty) || 0),
-            0,
-          );
-        return { ...group, savedState, allReceived, totalQuantity };
-      })
-      .filter((group: any) => {
-        if (filter === "open") return !group.savedState.closed;
-        if (filter === "closed") return group.savedState.closed;
-        return true;
-      })
-      .sort(
-        (a: any, b: any) =>
-          Number(a.savedState.closed) - Number(b.savedState.closed) ||
-          a.serviceDate.localeCompare(b.serviceDate),
-      ),
-    orderCounts = {
-      all: allGroups.length,
-      open: allGroups.filter(
-        (group: any) => !orderStates[group.ownerId]?.closed,
-      ).length,
-      closed: allGroups.filter(
-        (group: any) => orderStates[group.ownerId]?.closed,
-      ).length,
-    },
-    update = (
-      ownerId: number,
-      key: string,
-      patch: Partial<PurchaseCheck>,
-    ) => {
-      setChecks((current: Record<string, PurchaseCheck>) => {
-        const previous = current[key];
-        return {
-          ...current,
-          [key]: {
-            ...previous,
-            ...patch,
-            ordered: patch.ordered ?? previous?.ordered ?? false,
-            received: patch.received ?? previous?.received ?? false,
-            note: patch.note ?? previous?.note ?? "",
-            updatedAt: new Date().toISOString(),
-          },
-        };
-      });
-      if (orderStates[ownerId]?.closed)
-        setOrderStates(
-          (current: Record<string, PurchaseOrderState>) => ({
-            ...current,
-            [ownerId]: { closed: false },
-          }),
-        );
-    },
-    closeOrder = (ownerId: number) => {
-      setOrderStates((current: Record<string, PurchaseOrderState>) => ({
+    update = (key: string, patch: Partial<PurchaseCheck>) =>
+      setChecks((current: Record<string, PurchaseCheck>) => ({
         ...current,
-        [ownerId]: {
-          closed: true,
-          closedAt: new Date().toISOString(),
-          closedBy: currentUser,
+        [key]: {
+          ordered: false,
+          received: false,
+          note: "",
+          ...current[key],
+          ...patch,
+          updatedAt: new Date().toISOString(),
         },
       }));
-      setExpanded((current) => ({ ...current, [ownerId]: false }));
-    },
-    reopenOrder = (ownerId: number) => {
-      setOrderStates((current: Record<string, PurchaseOrderState>) => ({
-        ...current,
-        [ownerId]: { closed: false },
-      }));
-      setExpanded((current) => ({ ...current, [ownerId]: true }));
-    };
   return (
     <section className="page purchase-page">
       <div className="purchase-summary">
@@ -6155,89 +5108,43 @@ function PurchaseOrders({
           className={filter === "all" ? "active" : ""}
           onClick={() => setFilter("all")}
         >
-          Todos os pedidos <b>{orderCounts.all}</b>
+          Todos <b>{rows.length}</b>
         </button>
         <button
-          className={filter === "open" ? "active pending" : ""}
-          onClick={() => setFilter("open")}
+          className={filter === "pending" ? "active pending" : ""}
+          onClick={() => setFilter("pending")}
         >
-          Pedidos abertos <b>{orderCounts.open}</b>
+          A comprar <b>{counts.pending}</b>
         </button>
         <button
-          className={filter === "closed" ? "active received" : ""}
-          onClick={() => setFilter("closed")}
+          className={filter === "ordered" ? "active ordered" : ""}
+          onClick={() => setFilter("ordered")}
         >
-          Pedidos fechados <b>{orderCounts.closed}</b>
+          Comprados <b>{counts.ordered}</b>
+        </button>
+        <button
+          className={filter === "received" ? "active received" : ""}
+          onClick={() => setFilter("received")}
+        >
+          Conferidos <b>{counts.received}</b>
         </button>
       </div>
       <div className="purchase-guidance">
         <b>Conferência do pedido</b>
         <span>
           Primeiro marque “Comprado”. Quando a peça chegar, marque “Recebido e
-          conferido”. Depois clique em “Salvar e fechar pedido”.
+          conferido”. As alterações são salvas automaticamente.
         </span>
-        <small className="purchase-item-totals">
-          Peças: <b>{itemCounts.pending}</b> a comprar · <b>{itemCounts.ordered}</b>{" "}
-          compradas · <b>{itemCounts.received}</b> conferidas
-        </small>
       </div>
-      {groups.length === 0 ? (
+      {visibleRows.length === 0 ? (
         <div className="emptyday">
-          Nenhum pedido encontrado nesta situação. Os itens aparecerão após o
+          Nenhuma peça encontrada nesta situação. Os itens aparecerão após o
           orçamento ser aprovado ou o serviço ser agendado.
         </div>
       ) : (
         <div className="purchase-os-list">
-          {groups.map((group: any) => {
-            const isClosed = group.savedState.closed,
-              isExpanded = expanded[group.ownerId] ?? !isClosed,
-              pendingToClose = group.rows.filter(
-                (row: any) => !checks[row.key]?.received,
-              ).length;
-            return (
-            <section
-              className={`purchase-os-card ${isClosed ? "closed" : "open"}`}
-              key={group.ownerId}
-            >
-              <button
-                type="button"
-                className="purchase-os-summary"
-                aria-expanded={isExpanded}
-                onClick={() =>
-                  setExpanded((current) => ({
-                    ...current,
-                    [group.ownerId]: !isExpanded,
-                  }))
-                }
-              >
-                <span className="purchase-os-chevron">
-                  {isExpanded ? "▾" : "▸"}
-                </span>
-                <span>
-                  <small>OS</small>
-                  <b>{group.appointment.workOrder || "Sem número"}</b>
-                </span>
-                <span className="purchase-os-customer">
-                  <small>Cliente / veículo</small>
-                  <b>
-                    {group.appointment.client} ·{" "}
-                    {group.appointment.vehicle || "Veículo não informado"} ·{" "}
-                    {group.appointment.plate || "Sem placa"}
-                  </b>
-                </span>
-                <span>
-                  <small>Resumo</small>
-                  <b>
-                    {group.rows.length} {group.rows.length === 1 ? "item" : "itens"}
-                    {" · "}{group.totalQuantity} peças
-                  </b>
-                </span>
-                <strong className={`purchase-order-badge ${isClosed ? "closed" : "open"}`}>
-                  {isClosed ? "FECHADO" : "ABERTO"}
-                </strong>
-              </button>
-              {isExpanded && (
-                <>
+          {groups.map((group: any) => (
+            <section className="purchase-os-card" key={group.ownerId}>
               <header className="purchase-os-head">
                 <label>
                   <span>Número da OS</span>
@@ -6313,7 +5220,7 @@ function PurchaseOrders({
                           type="checkbox"
                           checked={state.ordered}
                           onChange={(event) =>
-                            update(group.ownerId, key, {
+                            update(key, {
                               ordered: event.target.checked,
                               received: event.target.checked
                                 ? state.received
@@ -6341,7 +5248,7 @@ function PurchaseOrders({
                           type="checkbox"
                           checked={state.received}
                           onChange={(event) =>
-                            update(group.ownerId, key, {
+                            update(key, {
                               ordered: event.target.checked
                                 ? true
                                 : state.ordered,
@@ -6361,42 +5268,8 @@ function PurchaseOrders({
                   );
                 })}
               </div>
-              <footer className="purchase-order-actions">
-                {isClosed ? (
-                  <>
-                    <span className="purchase-order-saved">
-                      ✓ Pedido fechado
-                      {group.savedState.closedBy
-                        ? ` por ${group.savedState.closedBy}`
-                        : ""}
-                    </span>
-                    <button type="button" onClick={() => reopenOrder(group.ownerId)}>
-                      Reabrir pedido
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className={group.allReceived ? "ready" : "waiting"}>
-                      {group.allReceived
-                        ? "✓ Todas as peças foram conferidas."
-                        : `Falta conferir ${pendingToClose} ${pendingToClose === 1 ? "item" : "itens"}.`}
-                    </span>
-                    <button
-                      type="button"
-                      className="close-order"
-                      disabled={!group.allReceived}
-                      onClick={() => closeOrder(group.ownerId)}
-                    >
-                      Salvar e fechar pedido
-                    </button>
-                  </>
-                )}
-              </footer>
-                </>
-              )}
             </section>
-            );
-          })}
+          ))}
         </div>
       )}
     </section>
@@ -6656,8 +5529,6 @@ function Reports({
   data,
   user,
   initialMode,
-  standaloneMode,
-  updateFollowUp,
   open,
   edit,
   remove,
@@ -6667,20 +5538,13 @@ function Reports({
     [filter, setFilter] = useState("todos"),
     [printRow, setPrintRow] = useState<Appt | null>(null),
     [reportMode, setReportMode] = useState<
-      "registros" | "semana" | "amanha" | "abertos" | "andamento"
+      "registros" | "semana" | "abertos" | "andamento"
     >(
       initialMode === "abertos" || initialMode === "andamento"
         ? initialMode
         : "registros",
     ),
-    [quoteListFilter, setQuoteListFilter] = useState<
-      "open" | "closed" | "all"
-    >("open"),
     [weekDate, setWeekDate] = useState(iso(new Date()));
-  useEffect(() => {
-    if (initialMode === "abertos" || initialMode === "andamento")
-      setReportMode(initialMode);
-  }, [initialMode]);
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -6763,32 +5627,7 @@ function Reports({
     ["Garantias", weeklyRows.filter((a) => a.type === "garantia").length],
     ["Revisões 30 dias", weeklyRows.filter((a) => a.type === "revisao").length],
   ];
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowIso = iso(tomorrow);
-  const tomorrowRows = (data as Appt[])
-    .filter((a) => a.type !== "bloqueio" && a.date === tomorrowIso)
-    .sort((a, b) => a.time.localeCompare(b.time));
-  const tomorrowMessage = [
-    `*AGENDA MONOCENTER - ${tomorrow.toLocaleDateString("pt-BR", {
-      weekday: "long",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).toUpperCase()}*`,
-    "",
-    ...(tomorrowRows.length
-      ? tomorrowRows.map((a) =>
-          [
-            `*${a.time} - ${a.client}*`,
-            `${a.vehicle || "Veículo não informado"}${a.plate ? ` - ${a.plate}` : ""}`,
-            `Situação: ${category(a)}${a.inProgress ? " - veículo na oficina" : ""}`,
-            a.note ? `Observação: ${a.note}` : "",
-          ].filter(Boolean).join("\n"),
-        )
-      : ["Nenhum agendamento para amanhã."]),
-  ].join("\n\n");
-  const quoteRecords = (data as Appt[])
+  const openQuotes = (data as Appt[])
     .filter(
       (a) =>
         a.type === "cliente" &&
@@ -6796,27 +5635,11 @@ function Reports({
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     )
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
-    quoteIsClosed = (appointment: Appt) =>
-      appointment.quoteFollowUp?.status === "sold_vehicle" ||
-      appointment.quoteFollowUp?.status === "declined",
-    openQuotes = quoteRecords.filter((appointment) => {
-      if (quoteListFilter === "open") return !quoteIsClosed(appointment);
-      if (quoteListFilter === "closed") return quoteIsClosed(appointment);
-      return true;
-    }),
-    quoteCounts = {
-      all: quoteRecords.length,
-      open: quoteRecords.filter((appointment) => !quoteIsClosed(appointment))
-        .length,
-      closed: quoteRecords.filter(quoteIsClosed).length,
-    };
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   const inProgress = (data as Appt[])
     .filter(
       (a) =>
-        (a.inProgress ||
-          a.status === "servico" ||
-          (a.type === "revisao" && a.reviewWithService && !!a.review)) &&
+        (a.inProgress || a.status === "servico") &&
         a.type !== "bloqueio" &&
         a.budget?.processStatus !== "Finalizado",
     )
@@ -6846,7 +5669,7 @@ function Reports({
   return (
     <section className="page reports-page">
       <div className="report-screen">
-        {!standaloneMode && <div className="management-report-tabs">
+        <div className="management-report-tabs">
           <button
             className={reportMode === "registros" ? "active" : ""}
             onClick={() => setReportMode("registros")}
@@ -6862,12 +5685,6 @@ function Reports({
             </button>
           )}
           <button
-            className={reportMode === "amanha" ? "active" : ""}
-            onClick={() => setReportMode("amanha")}
-          >
-            Agenda de amanhã
-          </button>
-          <button
             className={reportMode === "abertos" ? "active" : ""}
             onClick={() => setReportMode("abertos")}
           >
@@ -6877,9 +5694,9 @@ function Reports({
             className={reportMode === "andamento" ? "active" : ""}
             onClick={() => setReportMode("andamento")}
           >
-            Veículos em andamento
+            Atendimentos em andamento
           </button>
-        </div>}
+        </div>
         {isClissia && reportMode === "semana" && (
           <div className="management-report-panel weekly-report-panel">
             <div className="management-report-head">
@@ -6946,73 +5763,13 @@ function Reports({
             </div>
           </div>
         )}
-        {reportMode === "amanha" && (
-          <div className="management-report-panel tomorrow-agenda-panel">
-            <div className="management-report-head">
-              <span>
-                <h2>Agenda do dia seguinte</h2>
-                <p>
-                  {tomorrow.toLocaleDateString("pt-BR", {
-                    weekday: "long",
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                  })} · {tomorrowRows.length} {tomorrowRows.length === 1 ? "registro" : "registros"}
-                </p>
-              </span>
-              <button className="wa" onClick={() => message(tomorrowMessage)}>
-                Copiar para WhatsApp
-              </button>
-            </div>
-            <div className="tomorrow-agenda-list">
-              {tomorrowRows.length ? (
-                tomorrowRows.map((a) => (
-                  <article key={a.id}>
-                    <time>{a.time}</time>
-                    <span>
-                      <b>{a.client}</b>
-                      <small>{a.vehicle || "Veículo não informado"} · {a.plate || "Sem placa"}</small>
-                      {a.note && <small>Observação: {a.note}</small>}
-                    </span>
-                    <strong>{category(a)}</strong>
-                  </article>
-                ))
-              ) : (
-                <p>Nenhum agendamento para amanhã.</p>
-              )}
-            </div>
-          </div>
-        )}
         {reportMode === "abertos" && (
           <div className="management-report-panel open-quotes-panel">
             <div className="management-report-head">
               <span>
                 <h2>Orçamentos em aberto</h2>
-                <p>
-                  Acompanhe o envio, o retorno do cliente e os lembretes de
-                  contato.
-                </p>
+                <p>{openQuotes.length} aguardando retorno do cliente</p>
               </span>
-            </div>
-            <div className="open-quote-filters">
-              <button
-                className={quoteListFilter === "open" ? "active" : ""}
-                onClick={() => setQuoteListFilter("open")}
-              >
-                Em aberto <b>{quoteCounts.open}</b>
-              </button>
-              <button
-                className={quoteListFilter === "closed" ? "active closed" : ""}
-                onClick={() => setQuoteListFilter("closed")}
-              >
-                Encerrados <b>{quoteCounts.closed}</b>
-              </button>
-              <button
-                className={quoteListFilter === "all" ? "active" : ""}
-                onClick={() => setQuoteListFilter("all")}
-              >
-                Todos <b>{quoteCounts.all}</b>
-              </button>
             </div>
             <div className="open-quotes-list">
               {openQuotes.length ? (
@@ -7025,23 +5782,9 @@ function Reports({
                     ),
                   );
                   return (
-                    <article
-                      key={a.id}
-                      className={`open-quote-card ${quoteIsClosed(a) ? "closed" : a.quoteSentAt ? "sent" : "waiting-send"}`}
-                    >
+                    <article key={a.id}>
                       <span>
-                        <b>
-                          {a.client}
-                          <i className="open-quote-status">
-                            {a.quoteFollowUp?.status === "sold_vehicle"
-                              ? "Não realizará · veículo vendido"
-                              : a.quoteFollowUp?.status === "declined"
-                                ? "Não realizará o serviço"
-                                : a.quoteSentAt
-                                  ? "Aguardando retorno do cliente"
-                                  : "Aguardando envio do orçamento"}
-                          </i>
-                        </b>
+                        <b>{a.client}</b>
                         <small>
                           {a.vehicle || "Veículo não informado"} ·{" "}
                           {a.plate || "Sem placa"}
@@ -7061,68 +5804,8 @@ function Reports({
                             por {a.quoteSentBy || "não informado"}
                           </small>
                         )}
-                        {a.quoteFollowUp?.reminderDate && (
-                          <small
-                            className={`quote-reminder ${a.quoteFollowUp.reminderDate <= iso(new Date()) && !quoteIsClosed(a) ? "due" : ""}`}
-                          >
-                            ◷ Lembrar em{" "}
-                            {new Date(
-                              `${a.quoteFollowUp.reminderDate}T12:00:00`,
-                            ).toLocaleDateString("pt-BR")}
-                            {a.quoteFollowUp.reminderDate <= iso(new Date()) &&
-                            !quoteIsClosed(a)
-                              ? " · CONTATO PENDENTE"
-                              : ""}
-                          </small>
-                        )}
-                        {a.quoteFollowUp?.note && (
-                          <small className="quote-followup-preview">
-                            Nota: {a.quoteFollowUp.note}
-                          </small>
-                        )}
                       </span>
-                      <div className="open-quote-controls">
-                        <label>
-                          Situação
-                          <select
-                            value={a.quoteFollowUp?.status ?? "waiting"}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, {
-                                status: event.target.value as QuoteFollowUp["status"],
-                              })
-                            }
-                          >
-                            <option value="waiting">Aguardando retorno</option>
-                            <option value="sold_vehicle">
-                              Não fará — vendeu o veículo
-                            </option>
-                            <option value="declined">Não realizará</option>
-                          </select>
-                        </label>
-                        <label>
-                          Lembrar em
-                          <input
-                            type="date"
-                            value={a.quoteFollowUp?.reminderDate ?? ""}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, {
-                                reminderDate: event.target.value,
-                                reminderCreatedAt: new Date().toISOString(),
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="open-quote-note">
-                          Nota interna
-                          <textarea
-                            value={a.quoteFollowUp?.note ?? ""}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, { note: event.target.value })
-                            }
-                            placeholder="Anote o retorno do cliente..."
-                          />
-                        </label>
-                        <div className="open-quote-actions">
+                      <div>
                         <button onClick={() => open(a)}>Abrir orçamento</button>
                         <button
                           onClick={() =>
@@ -7133,13 +5816,12 @@ function Reports({
                         >
                           Preparar mensagem
                         </button>
-                        </div>
                       </div>
                     </article>
                   );
                 })
               ) : (
-                <p>Nenhum orçamento encontrado nesta situação.</p>
+                <p>Nenhum orçamento em aberto.</p>
               )}
             </div>
           </div>
@@ -7148,13 +5830,11 @@ function Reports({
           <div className="management-report-panel open-quotes-panel">
             <div className="management-report-head">
               <span>
-                <h2>Veículos na oficina</h2>
-                <p>
-                  {inProgress.length} {inProgress.length === 1 ? "veículo" : "veículos"} aguardando avaliação ou conclusão
-                </p>
+                <h2>Atendimentos em andamento</h2>
+                <p>{inProgress.length} veículos aguardando conclusão</p>
               </span>
             </div>
-            <div className="open-quotes-list vehicle-progress-list">
+            <div className="open-quotes-list">
               {inProgress.length ? (
                 inProgress.map((a) => {
                   const daysInProgress = Math.max(
@@ -7165,18 +5845,12 @@ function Reports({
                     ),
                   );
                   return (
-                    <article key={a.id} className="vehicle-progress-card">
-                      <VehiclePicture appointment={a} />
+                    <article key={a.id}>
                       <span>
-                        <strong className="vehicle-progress-status">
-                          {inProgressLabel(a)}
-                        </strong>
-                        <b className="vehicle-progress-model">
-                          {a.vehicle || "Modelo não informado"}
-                          {a.vehicleColor ? ` · ${a.vehicleColor}` : ""}
-                        </b>
+                        <b>{a.client}</b>
                         <small>
-                          Cliente: {a.client} · {a.plate || "Sem placa"}
+                          {a.vehicle || "Veículo não informado"} ·{" "}
+                          {a.plate || "Sem placa"}
                         </small>
                         <small>
                           Iniciado em{" "}
@@ -7385,17 +6059,13 @@ const TITLES: Record<View, [string, string]> = {
     "Agenda Monocenter",
     "Agendamentos, ausências e situação dos atendimentos.",
   ],
-  veiculos: [
-    "Veículos na oficina",
-    "Modelos aguardando avaliação, revisão ou conclusão do serviço.",
-  ],
   atendimento: [
     "Atendimento concluído",
     "Avaliação, orçamento aprovado e conferência final.",
   ],
   avaliacao: [
     "Avaliação veicular",
-    "Checklist técnico de suspensão, freios e peças do veículo.",
+    "Checklist técnico de suspensão, freios e geometria.",
   ],
   orcamento: [
     "Montar orçamento",
@@ -7404,7 +6074,7 @@ const TITLES: Record<View, [string, string]> = {
   proposta: ["Orçamento do cliente", "Data, placa, pagamento e mensagem."],
   torque: [
     "Conferência de torque",
-    "Geometria, alinhamento, segurança e finalização do serviço.",
+    "Abra apenas as áreas necessárias para o serviço.",
   ],
   revisao: [
     "Revisão de 30 dias",
