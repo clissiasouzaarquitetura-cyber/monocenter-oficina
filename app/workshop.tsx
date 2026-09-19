@@ -2989,15 +2989,10 @@ export default function App({ initialState, user, onLogout }: any) {
                               })),
                           ],
                         });
-                        window.open(
-                          "https://monocenter-pos-servico.espa-o-de-tr-0239.chatgpt.site/?importar_orcamento=1",
-                          "_blank",
-                          "noopener,noreferrer",
-                        );
                         try {
                           await navigator.clipboard.writeText(transferCode);
                           alert(
-                            "Orçamento copiado. No sistema de OS, toque em ‘Colar orçamento’.",
+                            "Orçamento copiado. Vá para o Pós/OS e clique em ‘Importar orçamento’ e depois em ‘Colar orçamento’.",
                           );
                         } catch {
                           window.prompt(
