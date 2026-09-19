@@ -278,14 +278,6 @@ type PurchaseOrderState = {
   closedAt?: string;
   closedBy?: string;
 };
-type QuoteFollowUp = {
-  status: "waiting" | "sold_vehicle" | "declined";
-  note: string;
-  reminderDate: string;
-  reminderCreatedAt?: string;
-  updatedAt?: string;
-  updatedBy?: string;
-};
 type View =
   | "agenda"
   | "veiculos"
@@ -296,7 +288,6 @@ type View =
   | "torque"
   | "revisao"
   | "compras"
-  | "orcamentos_abertos"
   | "relatorios"
   | "historico"
   | "config";
@@ -338,7 +329,6 @@ type Appt = {
   };
   quoteSentAt?: string;
   quoteSentBy?: string;
-  quoteFollowUp?: QuoteFollowUp;
   serviceScheduled?: boolean;
   serviceScheduledFor?: string;
   serviceScheduledTime?: string;
@@ -532,10 +522,6 @@ const agendaStatusLabel = (a: Appt) => {
       `${a.serviceScheduledFor}T12:00:00`,
     ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
   if (a.status === "agendado" && a.inProgress) return "AGUARDANDO AVALIAÇÃO";
-  if (a.status === "avaliou" && a.quoteFollowUp?.status === "sold_vehicle")
-    return "ORÇAMENTO ENCERRADO · VEÍCULO VENDIDO";
-  if (a.status === "avaliou" && a.quoteFollowUp?.status === "declined")
-    return "ORÇAMENTO ENCERRADO · NÃO REALIZARÁ";
   if (a.status === "avaliou" && a.quoteSentAt)
     return "ORÇAMENTO ENVIADO EM ABERTO";
   if (a.status === "avaliou") return "AGUARDANDO ORÇAMENTO";
@@ -957,38 +943,6 @@ export default function App({ initialState, user, onLogout }: any) {
       ),
     );
   };
-  const updateQuoteFollowUp = (
-    appointmentId: number,
-    patch: Partial<QuoteFollowUp>,
-  ) => {
-    const source = appointments.find((item) => item.id === appointmentId);
-    if (!source) return;
-    const now = new Date().toISOString(),
-      followUp: QuoteFollowUp = {
-        status: "waiting",
-        note: "",
-        reminderDate: "",
-        ...source.quoteFollowUp,
-        ...patch,
-        updatedAt: now,
-        updatedBy: user.displayName,
-      },
-      updated: Appt = {
-        ...source,
-        quoteFollowUp: followUp,
-        lastEditedBy: user.displayName,
-        lastEditedAt: now,
-        _updatedAt: Date.now(),
-      };
-    syncBlockedUntil.current = Date.now() + 4000;
-    setAppointments((list) =>
-      list.map((item) => (item.id === appointmentId ? updated : item)),
-    );
-    if (activeAppointment?.id === appointmentId) {
-      DISPLAY_APPT = updated;
-      setActiveAppointment(updated);
-    }
-  };
   const updateGeometryField = (
     item: string,
     field: keyof GeometryEntry,
@@ -1035,7 +989,6 @@ export default function App({ initialState, user, onLogout }: any) {
         conference: undefined,
         quoteSentAt: undefined,
         quoteSentBy: undefined,
-        quoteFollowUp: undefined,
         serviceScheduled: false,
         serviceScheduledFor: undefined,
         serviceScheduledTime: undefined,
@@ -1124,7 +1077,6 @@ export default function App({ initialState, user, onLogout }: any) {
     ["proposta", "Proposta", "▤"],
     ["torque", "Conferência", "◇"],
     ["compras", "Pedido de compra", "☑"],
-    ["orcamentos_abertos", "Orçamentos em aberto", "◷"],
     ["relatorios", "Relatórios", "▥"],
     ["historico", "Histórico", "↺"],
     ["config", "Configurações", "⚙"],
@@ -1627,99 +1579,6 @@ export default function App({ initialState, user, onLogout }: any) {
                       </button>
                     </div>
                   )}
-                  <div className="quote-followup-note">
-                    <div className="quote-followup-heading">
-                      <span>
-                        <b>Bloco de notas e lembrete do orçamento</b>
-                        <small>
-                          Registre o retorno do cliente e a data para perguntar se
-                          deseja realizar o serviço.
-                        </small>
-                      </span>
-                      <strong>
-                        {DISPLAY_APPT.quoteFollowUp?.status === "sold_vehicle"
-                          ? "ENCERRADO · VEÍCULO VENDIDO"
-                          : DISPLAY_APPT.quoteFollowUp?.status === "declined"
-                            ? "ENCERRADO · NÃO REALIZARÁ"
-                            : DISPLAY_APPT.quoteSentAt
-                              ? "AGUARDANDO RETORNO"
-                              : "AGUARDANDO ENVIO"}
-                      </strong>
-                    </div>
-                    <div className="quote-followup-fields">
-                      <label>
-                        Situação do orçamento
-                        <select
-                          value={
-                            DISPLAY_APPT.quoteFollowUp?.status ?? "waiting"
-                          }
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              status: event.target.value as QuoteFollowUp["status"],
-                            })
-                          }
-                        >
-                          <option value="waiting">Aguardando retorno do cliente</option>
-                          <option value="sold_vehicle">
-                            Não realizará — vendeu o veículo
-                          </option>
-                          <option value="declined">
-                            Não realizará o serviço
-                          </option>
-                        </select>
-                      </label>
-                      <label>
-                        Criar lembrete para
-                        <input
-                          type="date"
-                          value={
-                            DISPLAY_APPT.quoteFollowUp?.reminderDate ?? ""
-                          }
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              reminderDate: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      <label className="quote-followup-text">
-                        Anotações internas
-                        <textarea
-                          value={DISPLAY_APPT.quoteFollowUp?.note ?? ""}
-                          onChange={(event) =>
-                            updateQuoteFollowUp(DISPLAY_APPT.id, {
-                              note: event.target.value,
-                            })
-                          }
-                          placeholder="Ex.: cliente pediu retorno na próxima semana; aguardando conversar com a família..."
-                        />
-                      </label>
-                    </div>
-                    <div className="quote-followup-actions">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateQuoteFollowUp(DISPLAY_APPT.id, {
-                            reminderCreatedAt: new Date().toISOString(),
-                          });
-                          alert("Lembrete do orçamento salvo.");
-                        }}
-                      >
-                        Salvar lembrete
-                      </button>
-                      <button
-                        type="button"
-                        className="wa"
-                        onClick={() =>
-                          setMessage(
-                            `Olá, ${DISPLAY_APPT.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${DISPLAY_APPT.vehicle || ""}${DISPLAY_APPT.plate ? `, placa ${DISPLAY_APPT.plate}` : ""}. Podemos ajudar com o agendamento?`,
-                          )
-                        }
-                      >
-                        Preparar mensagem
-                      </button>
-                    </div>
-                  </div>
                   <div className="startbox">
                     <label>
                       Quem está avaliando
@@ -3519,23 +3378,11 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
-        {(view === "relatorios" ||
-          view === "veiculos" ||
-          view === "orcamentos_abertos") && (
+        {(view === "relatorios" || view === "veiculos") && (
           <Reports
             data={appointments}
             user={user}
-            initialMode={
-              view === "veiculos"
-                ? "andamento"
-                : view === "orcamentos_abertos"
-                  ? "abertos"
-                  : reportStartMode
-            }
-            standaloneMode={
-              view === "veiculos" || view === "orcamentos_abertos"
-            }
-            updateFollowUp={updateQuoteFollowUp}
+            initialMode={view === "veiculos" ? "andamento" : reportStartMode}
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
@@ -4167,8 +4014,6 @@ function Agenda({
         a.type === "cliente" &&
         a.status === "avaliou" &&
         !a.serviceAppointmentId &&
-        a.quoteFollowUp?.status !== "sold_vehicle" &&
-        a.quoteFollowUp?.status !== "declined" &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     inProgressCount = (data as Appt[]).filter(
@@ -6656,8 +6501,6 @@ function Reports({
   data,
   user,
   initialMode,
-  standaloneMode,
-  updateFollowUp,
   open,
   edit,
   remove,
@@ -6673,14 +6516,7 @@ function Reports({
         ? initialMode
         : "registros",
     ),
-    [quoteListFilter, setQuoteListFilter] = useState<
-      "open" | "closed" | "all"
-    >("open"),
     [weekDate, setWeekDate] = useState(iso(new Date()));
-  useEffect(() => {
-    if (initialMode === "abertos" || initialMode === "andamento")
-      setReportMode(initialMode);
-  }, [initialMode]);
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -6788,7 +6624,7 @@ function Reports({
         )
       : ["Nenhum agendamento para amanhã."]),
   ].join("\n\n");
-  const quoteRecords = (data as Appt[])
+  const openQuotes = (data as Appt[])
     .filter(
       (a) =>
         a.type === "cliente" &&
@@ -6796,21 +6632,7 @@ function Reports({
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     )
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
-    quoteIsClosed = (appointment: Appt) =>
-      appointment.quoteFollowUp?.status === "sold_vehicle" ||
-      appointment.quoteFollowUp?.status === "declined",
-    openQuotes = quoteRecords.filter((appointment) => {
-      if (quoteListFilter === "open") return !quoteIsClosed(appointment);
-      if (quoteListFilter === "closed") return quoteIsClosed(appointment);
-      return true;
-    }),
-    quoteCounts = {
-      all: quoteRecords.length,
-      open: quoteRecords.filter((appointment) => !quoteIsClosed(appointment))
-        .length,
-      closed: quoteRecords.filter(quoteIsClosed).length,
-    };
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   const inProgress = (data as Appt[])
     .filter(
       (a) =>
@@ -6846,7 +6668,7 @@ function Reports({
   return (
     <section className="page reports-page">
       <div className="report-screen">
-        {!standaloneMode && <div className="management-report-tabs">
+        <div className="management-report-tabs">
           <button
             className={reportMode === "registros" ? "active" : ""}
             onClick={() => setReportMode("registros")}
@@ -6879,7 +6701,7 @@ function Reports({
           >
             Veículos em andamento
           </button>
-        </div>}
+        </div>
         {isClissia && reportMode === "semana" && (
           <div className="management-report-panel weekly-report-panel">
             <div className="management-report-head">
@@ -6988,31 +6810,8 @@ function Reports({
             <div className="management-report-head">
               <span>
                 <h2>Orçamentos em aberto</h2>
-                <p>
-                  Acompanhe o envio, o retorno do cliente e os lembretes de
-                  contato.
-                </p>
+                <p>{openQuotes.length} aguardando retorno do cliente</p>
               </span>
-            </div>
-            <div className="open-quote-filters">
-              <button
-                className={quoteListFilter === "open" ? "active" : ""}
-                onClick={() => setQuoteListFilter("open")}
-              >
-                Em aberto <b>{quoteCounts.open}</b>
-              </button>
-              <button
-                className={quoteListFilter === "closed" ? "active closed" : ""}
-                onClick={() => setQuoteListFilter("closed")}
-              >
-                Encerrados <b>{quoteCounts.closed}</b>
-              </button>
-              <button
-                className={quoteListFilter === "all" ? "active" : ""}
-                onClick={() => setQuoteListFilter("all")}
-              >
-                Todos <b>{quoteCounts.all}</b>
-              </button>
             </div>
             <div className="open-quotes-list">
               {openQuotes.length ? (
@@ -7025,23 +6824,9 @@ function Reports({
                     ),
                   );
                   return (
-                    <article
-                      key={a.id}
-                      className={`open-quote-card ${quoteIsClosed(a) ? "closed" : a.quoteSentAt ? "sent" : "waiting-send"}`}
-                    >
+                    <article key={a.id}>
                       <span>
-                        <b>
-                          {a.client}
-                          <i className="open-quote-status">
-                            {a.quoteFollowUp?.status === "sold_vehicle"
-                              ? "Não realizará · veículo vendido"
-                              : a.quoteFollowUp?.status === "declined"
-                                ? "Não realizará o serviço"
-                                : a.quoteSentAt
-                                  ? "Aguardando retorno do cliente"
-                                  : "Aguardando envio do orçamento"}
-                          </i>
-                        </b>
+                        <b>{a.client}</b>
                         <small>
                           {a.vehicle || "Veículo não informado"} ·{" "}
                           {a.plate || "Sem placa"}
@@ -7061,68 +6846,8 @@ function Reports({
                             por {a.quoteSentBy || "não informado"}
                           </small>
                         )}
-                        {a.quoteFollowUp?.reminderDate && (
-                          <small
-                            className={`quote-reminder ${a.quoteFollowUp.reminderDate <= iso(new Date()) && !quoteIsClosed(a) ? "due" : ""}`}
-                          >
-                            ◷ Lembrar em{" "}
-                            {new Date(
-                              `${a.quoteFollowUp.reminderDate}T12:00:00`,
-                            ).toLocaleDateString("pt-BR")}
-                            {a.quoteFollowUp.reminderDate <= iso(new Date()) &&
-                            !quoteIsClosed(a)
-                              ? " · CONTATO PENDENTE"
-                              : ""}
-                          </small>
-                        )}
-                        {a.quoteFollowUp?.note && (
-                          <small className="quote-followup-preview">
-                            Nota: {a.quoteFollowUp.note}
-                          </small>
-                        )}
                       </span>
-                      <div className="open-quote-controls">
-                        <label>
-                          Situação
-                          <select
-                            value={a.quoteFollowUp?.status ?? "waiting"}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, {
-                                status: event.target.value as QuoteFollowUp["status"],
-                              })
-                            }
-                          >
-                            <option value="waiting">Aguardando retorno</option>
-                            <option value="sold_vehicle">
-                              Não fará — vendeu o veículo
-                            </option>
-                            <option value="declined">Não realizará</option>
-                          </select>
-                        </label>
-                        <label>
-                          Lembrar em
-                          <input
-                            type="date"
-                            value={a.quoteFollowUp?.reminderDate ?? ""}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, {
-                                reminderDate: event.target.value,
-                                reminderCreatedAt: new Date().toISOString(),
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="open-quote-note">
-                          Nota interna
-                          <textarea
-                            value={a.quoteFollowUp?.note ?? ""}
-                            onChange={(event) =>
-                              updateFollowUp(a.id, { note: event.target.value })
-                            }
-                            placeholder="Anote o retorno do cliente..."
-                          />
-                        </label>
-                        <div className="open-quote-actions">
+                      <div>
                         <button onClick={() => open(a)}>Abrir orçamento</button>
                         <button
                           onClick={() =>
@@ -7133,13 +6858,12 @@ function Reports({
                         >
                           Preparar mensagem
                         </button>
-                        </div>
                       </div>
                     </article>
                   );
                 })
               ) : (
-                <p>Nenhum orçamento encontrado nesta situação.</p>
+                <p>Nenhum orçamento em aberto.</p>
               )}
             </div>
           </div>
