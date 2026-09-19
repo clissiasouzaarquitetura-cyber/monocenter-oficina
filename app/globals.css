@@ -7035,6 +7035,77 @@ header > button {
   justify-content: flex-end;
   gap: 7px;
 }
+.quote-budget-summary {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  border: 1px solid #b9c9d8;
+  border-radius: 10px;
+  padding: 14px;
+  background: #fff;
+}
+.quote-budget-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dce4eb;
+}
+.quote-budget-summary-head span {
+  display: grid;
+  gap: 3px;
+}
+.quote-budget-summary-head small {
+  color: var(--muted);
+}
+.quote-budget-summary-head strong {
+  color: #137340;
+  font-size: 20px;
+  white-space: nowrap;
+}
+.quote-budget-summary-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.quote-budget-summary-columns > div {
+  min-width: 0;
+  border: 1px solid #e1e7ec;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fafc;
+}
+.quote-budget-summary h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.quote-budget-summary-columns p {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 7px 0;
+  border-top: 1px solid #e4e9ee;
+  font-size: 11px;
+}
+.quote-budget-summary-columns p span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.quote-budget-summary-columns p b {
+  white-space: nowrap;
+}
+.quote-budget-summary-note {
+  border-left: 4px solid #7894aa;
+  border-radius: 6px;
+  padding: 9px 11px;
+  background: #eef4f8;
+}
+.quote-budget-summary-note p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
 .app.dark .quote-followup-note,
 .app.dark .open-quotes-list .open-quote-card,
 .app.dark .open-quote-filters button {
@@ -7055,6 +7126,13 @@ header > button {
   border-color: #527da3;
   background: #1d2d3d;
   color: #fff;
+}
+.app.dark .quote-budget-summary,
+.app.dark .quote-budget-summary-columns > div,
+.app.dark .quote-budget-summary-note {
+  border-color: #465467;
+  background: #1a2634;
+  color: #f3f6fa;
 }
 
 /* Celular e tablet: navegação somente vertical, sem a página escapar para os lados. */
@@ -7102,8 +7180,16 @@ body,
     grid-template-columns: 1fr;
   }
   .open-quote-note,
-  .open-quote-actions {
+  .open-quote-actions,
+  .quote-budget-summary {
     grid-column: 1;
+  }
+  .quote-budget-summary-columns {
+    grid-template-columns: 1fr;
+  }
+  .quote-budget-summary-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .quote-followup-actions,
   .open-quote-actions {
