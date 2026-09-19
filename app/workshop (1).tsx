@@ -49,12 +49,13 @@ const ITEMS = [
   "Junta Homocinética Externa",
   "Coifa",
   "Semi-eixo",
-  "Pneus (Desgaste/Condição)",
+  "Pneu",
   "Pastilha de Freio",
   "Disco de freio",
   "Cilindro de Freio (Tras. Esq./Dir.) Mestre",
   "Sapata de freio Traseira",
   "Pastilha de freio Traseira",
+  "Válvula de Pneus (Bico)",
 ];
 const FRONT = [
     "Amortecedores dianteiros",
@@ -116,7 +117,33 @@ const SERVICES = [
   ["Montagem de pneu - aro 16, 17 ou 18", 25],
   ["Montagem especial de pneu", 50],
   ["Rodízio - cortesia", 0],
+  ["Mão de Obra Troca Amortecedores Dianteiros", 0],
+  ["Mão de Obra Troca Amortecedores Traseiros", 0],
+  ["Mão de Obra Dianteira", 0],
+  ["Mão de Obra Traseira", 0],
+  ["Alinhamento Técnico Longarinas", 0],
+  ["Alinhamento Técnico Eixo Traseiro", 0],
 ] as [string, number][];
+const SERVICE_GROUPS = [
+  { title: "1. Montagem de pneus", indexes: [6, 7, 8] },
+  { title: "2. Balanceamento", indexes: [3, 4, 5] },
+  { title: "3. Rodízio", indexes: [9] },
+  { title: "4. Alinhamento de direção", indexes: [0, 1, 2] },
+  {
+    title: "5. Mãos de obra e alinhamentos técnicos",
+    indexes: [10, 11, 12, 13, 14, 15],
+  },
+];
+const serviceIsCourtesy = (index: number) =>
+  /cortesia/i.test(SERVICES[index]?.[0] ?? "");
+const servicePrice = (index: number, prices?: Record<number, number>) =>
+  prices?.[index] ?? SERVICES[index]?.[1] ?? 0;
+const normalizeSearch = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
 const REVIEW_ITEMS = [
   "Aperto das rodas",
   "Torque das peças substituídas",
@@ -148,9 +175,18 @@ type BudgetState = {
   parts: any[];
   selectedServices: number[];
   serviceQty: Record<number, number>;
+  servicePrices?: Record<number, number>;
   manualServices: any[];
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
+};
+type PurchaseCheck = {
+  ordered: boolean;
+  received: boolean;
+  note: string;
+  orderedBy?: string;
+  receivedBy?: string;
+  updatedAt?: string;
 };
 type View =
   | "agenda"
@@ -160,11 +196,13 @@ type View =
   | "proposta"
   | "torque"
   | "revisao"
+  | "compras"
   | "relatorios"
   | "historico"
   | "config";
 type Appt = {
   id: number;
+  workOrder?: string;
   date: string;
   time: string;
   client: string;
@@ -196,6 +234,11 @@ type Appt = {
   };
   quoteSentAt?: string;
   quoteSentBy?: string;
+  serviceScheduled?: boolean;
+  serviceScheduledFor?: string;
+  serviceScheduledTime?: string;
+  sourceAppointmentId?: number;
+  serviceAppointmentId?: number;
   scheduledBy?: string;
   createdAt?: string;
   evaluationRecordedBy?: string;
@@ -216,12 +259,30 @@ const iso = (d: Date) =>
     ].join("-"),
   brl = (n: number) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
+  decimalValue = (n: number) =>
+    Number(n || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
+  parseDecimalValue = (value: string) => {
+    const normalized = value.includes(",")
+      ? value.replace(/\./g, "").replace(",", ".")
+      : value;
+    return Number(normalized.replace(/[^0-9.-]/g, "")) || 0;
+  },
   roundUp = (n: number, step: number) =>
     Math.ceil(n / Math.max(1, step)) * Math.max(1, step),
-  saleOf = (p: any, step = 5) =>
+  cashSaleOf = (p: any, step = 5) =>
     p.saleOverride === undefined || p.saleOverride === null
       ? roundUp(p.cost * (1 + p.margin / 100), step)
       : p.saleOverride,
+  isTirePart = (p: any) => /^pneus?\b/i.test((p.item ?? "").trim()),
+  tireInstallmentSaleOf = (p: any, step = 5) =>
+    Math.round(cashSaleOf(p, step) * 1.1 * 100) / 100,
+  saleOf = (p: any, step = 5) =>
+    isTirePart(p) && p.tirePayment === "installment"
+      ? tireInstallmentSaleOf(p, step)
+      : cashSaleOf(p, step),
   fmt = (s: string) =>
     new Date(s + "T12:00:00").toLocaleDateString("pt-BR", {
       weekday: "long",
@@ -236,6 +297,24 @@ const titleCase = (value: string) =>
       /(^|[\s/()\-])(\p{L})/gu,
       (_, separator, letter) => separator + letter.toLocaleUpperCase("pt-BR"),
     );
+const quoteWaitingLabel = (appointment: Appt) => {
+  const reference = appointment.evaluationRecordedAt || appointment.createdAt;
+  if (!reference) return "⚠ Aguardando orçamento";
+
+  const started = new Date(reference);
+  if (Number.isNaN(started.getTime())) return "⚠ Aguardando orçamento";
+
+  const today = new Date();
+  started.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  const days = Math.max(
+    0,
+    Math.floor((today.getTime() - started.getTime()) / 86_400_000),
+  );
+
+  if (days === 0) return "⚠ Aguardando orçamento desde hoje";
+  return `⚠ Aguardando orçamento há ${days} ${days === 1 ? "dia" : "dias"}`;
+};
 const messagePartName = (value: string) =>
   titleCase(
     value
@@ -272,18 +351,60 @@ const renderMessageTemplate = (template: string, appointment: Appt) =>
     .replace(/\b(?:vamos|podemos)\s+fechar\s*[?.!]?/giu, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+const conferenceStarted = (a: Appt) =>
+  Object.values(a.conference?.checks ?? {}).some(Boolean) ||
+  !!a.conference?.finalization?.serviceCompleted ||
+  !!a.conference?.finalization?.vehicleReleased ||
+  !!a.conference?.finalization?.clientOriented ||
+  !!a.conference?.finalization?.note?.trim();
+const completedAttendanceLabel = (a: Appt) => {
+  if (a.type === "revisao" && !a.reviewWithService)
+    return "Atendimento finalizado (Revisão 30 dias)";
+  if (a.status === "servico")
+    return "Atendimento finalizado (Serviço executado)";
+  return "Atendimento finalizado (Avaliação)";
+};
 const apptClass = (a: Appt) =>
   a.type === "bloqueio"
     ? "block"
-    : a.type === "retorno"
-      ? "retorno"
-      : a.type === "garantia"
-        ? "garantia"
-        : a.type === "revisao"
-          ? "revisao"
-          : a.inProgress && a.status !== "servico"
-            ? "inprogress"
-            : a.status;
+    : (a.serviceScheduled && a.status === "agendado") ||
+        !!a.serviceAppointmentId
+      ? "scheduled-service"
+      : a.type === "retorno"
+        ? "retorno"
+        : a.type === "garantia"
+          ? "garantia"
+          : a.type === "revisao" && !a.review
+            ? "revisao"
+            : a.status === "servico" && conferenceStarted(a)
+              ? "conference"
+              : a.inProgress && a.status !== "servico"
+                ? "inprogress"
+                : a.status;
+const agendaStatusLabel = (a: Appt) => {
+  if (a.type === "bloqueio") return "AUSENTE";
+  if (a.budget?.processStatus === "Finalizado")
+    return completedAttendanceLabel(a).toLocaleUpperCase("pt-BR");
+  if (a.type === "retorno") return "RETORNO";
+  if (a.type === "garantia") return "GARANTIA";
+  if (a.type === "revisao" && !a.review)
+    return a.reviewWithService ? "REVISÃO + SERVIÇO" : "REVISÃO 30 DIAS";
+  if (a.serviceScheduled && a.status === "agendado") return "SERVIÇO AGENDADO";
+  if (a.serviceAppointmentId && a.serviceScheduledFor)
+    return `SERVIÇO AGENDADO ${new Date(
+      `${a.serviceScheduledFor}T12:00:00`,
+    ).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+  if (a.status === "agendado" && a.inProgress) return "AGUARDANDO AVALIAÇÃO";
+  if (a.status === "avaliou" && a.quoteSentAt)
+    return "ORÇAMENTO ENVIADO EM ABERTO";
+  if (a.status === "avaliou") return "AGUARDANDO ORÇAMENTO";
+  if (a.status === "servico" && conferenceStarted(a)) return "EM CONFERÊNCIA";
+  if (a.status === "servico" && a.inProgress)
+    return "SERVIÇO APROVADO · EM ANDAMENTO";
+  if (a.status === "servico") return "AGUARDANDO CONFERÊNCIA";
+  if (a.inProgress) return "AGUARDANDO AVALIAÇÃO";
+  return a.status.toUpperCase();
+};
 const INITIAL: Appt[] = [];
 const EMPTY_APPT: Appt = {
   id: 0,
@@ -313,11 +434,14 @@ export default function App({ initialState, user, onLogout }: any) {
       shared.deletedAppointmentIds ?? [],
     ),
     [modal, setModal] = useState<Appt | boolean>(false),
+    [evaluationEntry, setEvaluationEntry] = useState<Appt | null>(null),
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
     [message, setMessage] = useState(""),
     [quoteMessageFor, setQuoteMessageFor] = useState<number | null>(null),
+    [serviceScheduleDate, setServiceScheduleDate] = useState(""),
+    [serviceScheduleTime, setServiceScheduleTime] = useState(""),
     [status, setStatus] = useState<Record<number, string>>({}),
     [quoteItems, setQuoteItems] = useState<Record<number, boolean>>({}),
     [evaluationNotes, setEvaluationNotes] = useState<Record<number, string>>(
@@ -341,8 +465,12 @@ export default function App({ initialState, user, onLogout }: any) {
       checker: "",
     }),
     [custom, setCustom] = useState<string[]>([]),
+    [evaluationSearch, setEvaluationSearch] = useState(""),
+    [serviceValueDrafts, setServiceValueDrafts] = useState<
+      Record<string, string>
+    >({}),
     [techs, setTechs] = useState<string[]>(
-      (shared.techs ?? ["Saulo", "Tiago"]).filter(
+      (shared.techs ?? ["Saulo", "Tiago", "Vitor"]).filter(
         (name: string) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
       ),
     ),
@@ -355,6 +483,23 @@ export default function App({ initialState, user, onLogout }: any) {
   const availableTechs = techs.filter(
     (name) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
   );
+  const evaluationRows = useMemo(() => {
+    const search = normalizeSearch(evaluationSearch);
+    return [...ITEMS, ...custom]
+      .map((name, index) => ({ name, index }))
+      .sort((a, b) => {
+        if (!search) return a.index - b.index;
+        const aName = normalizeSearch(a.name),
+          bName = normalizeSearch(b.name),
+          aStarts = aName.startsWith(search),
+          bStarts = bName.startsWith(search),
+          aIncludes = aName.includes(search),
+          bIncludes = bName.includes(search);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        if (aIncludes !== bIncludes) return aIncludes ? -1 : 1;
+        return a.index - b.index;
+      });
+  }, [custom, evaluationSearch]);
   const [evaluator, setEvaluator] = useState(shared.evaluator ?? "Saulo"),
     [started, setStarted] = useState(shared.started ?? ""),
     [geometryOpen, setGeometryOpen] = useState(false),
@@ -391,13 +536,20 @@ export default function App({ initialState, user, onLogout }: any) {
     [serviceQty, setServiceQty] = useState<Record<number, number>>(
       shared.serviceQty ?? {},
     ),
+    [servicePrices, setServicePrices] = useState<Record<number, number>>(
+      shared.servicePrices ?? {},
+    ),
     [manualServices, setManualServices] = useState(shared.manualServices ?? []),
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
       shared.processStatus ?? "Em andamento",
-    );
+    ),
+    [purchaseChecks, setPurchaseChecks] = useState<
+      Record<string, PurchaseCheck>
+    >(shared.purchaseChecks ?? {});
   const firstSave = useRef(true),
     skipSave = useRef(false),
+    syncBlockedUntil = useRef(0),
     saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (skipSave.current) {
@@ -427,9 +579,11 @@ export default function App({ initialState, user, onLogout }: any) {
         parts,
         selectedServices,
         serviceQty,
+        servicePrices,
         manualServices,
         patioNotes,
         processStatus,
+        purchaseChecks,
       };
       fetch("/api/state", {
         method: "POST",
@@ -468,14 +622,17 @@ export default function App({ initialState, user, onLogout }: any) {
     parts,
     selectedServices,
     serviceQty,
+    servicePrices,
     manualServices,
     patioNotes,
     processStatus,
+    purchaseChecks,
   ]);
   useEffect(() => {
     let alive = true;
     const same = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b),
       sync = async () => {
+        if (Date.now() < syncBlockedUntil.current) return;
         try {
           const r = await fetch("/api/state", { cache: "no-store" });
           if (r.status === 401) {
@@ -484,7 +641,7 @@ export default function App({ initialState, user, onLogout }: any) {
           }
           const d = await r.json(),
             s = d.state;
-          if (!alive || !s) return;
+          if (!alive || !s || Date.now() < syncBlockedUntil.current) return;
           let changed = false;
           const apply = (setter: any, current: any, next: any) => {
             if (next !== undefined && !same(current, next)) {
@@ -501,6 +658,7 @@ export default function App({ initialState, user, onLogout }: any) {
           apply(setTechs, techs, s.techs);
           apply(setHolidays, holidays, s.holidays);
           apply(setTemplates, templates, s.templates);
+          apply(setPurchaseChecks, purchaseChecks, s.purchaseChecks);
           if (s.footerSize !== undefined && s.footerSize !== footerSize) {
             changed = true;
             setFooterSize(s.footerSize);
@@ -525,26 +683,70 @@ export default function App({ initialState, user, onLogout }: any) {
     techs,
     holidays,
     templates,
+    purchaseChecks,
     footerSize,
     roundStep,
     onLogout,
   ]);
-  const pieces = parts.reduce(
+  const tireParts = parts.filter(isTirePart),
+    tirePaymentMode = tireParts.some(
+      (part: any) => part.tirePayment === "installment",
+    )
+      ? "installment"
+      : "cash",
+    piecesCash = parts.reduce(
+      (sum: number, part: any) => sum + part.qty * cashSaleOf(part, roundStep),
+      0,
+    ),
+    piecesInstallment = parts.reduce(
+      (sum: number, part: any) =>
+        sum +
+        part.qty *
+          (isTirePart(part)
+            ? tireInstallmentSaleOf(part, roundStep)
+            : cashSaleOf(part, roundStep)),
+      0,
+    ),
+    pieces = parts.reduce(
       (s: number, p: any) => s + p.qty * saleOf(p, roundStep),
       0,
     ),
     serviceTotal =
       selectedServices.reduce(
-        (s: number, i: number) => s + SERVICES[i][1] * (serviceQty[i] ?? 0),
+        (s: number, i: number) =>
+          s + servicePrice(i, servicePrices) * (serviceQty[i] ?? 0),
         0,
       ) + manualServices.reduce((s: number, x: any) => s + x.qty * x.value, 0),
-    total = pieces + serviceTotal;
+    total = pieces + serviceTotal,
+    totalCash = piecesCash + serviceTotal,
+    totalInstallment = piecesInstallment + serviceTotal;
+  const updateRequiredVehicleField = (
+    field: "vehicle" | "plate" | "km",
+    value: string,
+  ) => {
+    if (!activeAppointment) return;
+    const updated: Appt = {
+      ...activeAppointment,
+      [field]: field === "plate" ? value.toLocaleUpperCase("pt-BR") : value,
+      lastEditedBy: user.displayName,
+      lastEditedAt: new Date().toISOString(),
+      _updatedAt: Date.now(),
+    };
+    DISPLAY_APPT = updated;
+    setActiveAppointment(updated);
+    setAppointments((list) =>
+      list.map((appointment) =>
+        appointment.id === updated.id ? updated : appointment,
+      ),
+    );
+  };
   const nav: [View, string, string][] = [
     ["agenda", "Agenda", "▦"],
     ["avaliacao", "Avaliação", "✓"],
     ["orcamento", "Orçamento", "$"],
     ["proposta", "Proposta", "▤"],
     ["torque", "Conferência", "◇"],
+    ["compras", "Pedido de compra", "☑"],
     ["relatorios", "Relatórios", "▥"],
     ["historico", "Histórico", "↺"],
     ["config", "Configurações", "⚙"],
@@ -594,8 +796,8 @@ export default function App({ initialState, user, onLogout }: any) {
       ...selectedServices.map((i: number) => ({
         name: SERVICES[i][0],
         qty: serviceQty[i] ?? 0,
-        total: SERVICES[i][1] * (serviceQty[i] ?? 0),
-        courtesy: SERVICES[i][1] === 0,
+        total: servicePrice(i, servicePrices) * (serviceQty[i] ?? 0),
+        courtesy: serviceIsCourtesy(i),
       })),
       ...manualServices
         .filter((x: any) => x.name)
@@ -627,7 +829,11 @@ export default function App({ initialState, user, onLogout }: any) {
             )
             .join("\n")
         : "Nenhum serviço"
-    }\n\nTOTAL: ${brl(total)}\n\nPagamento:\n• Pix com 5% de desconto: ${brl(total * 0.95)}\n• Cartão: até 5x sem juros de ${brl(total / 5)}`;
+    }\n\n${
+      tireParts.length
+        ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)`
+        : `TOTAL: ${brl(total)}\n\nPagamento:\n• Pix com 5% de desconto: ${brl(total * 0.95)}\n• Cartão: até 5x sem juros de ${brl(total / 5)}`
+    }`;
   return (
     <div className={darkMode ? "app dark" : "app"}>
       <aside>
@@ -686,7 +892,19 @@ export default function App({ initialState, user, onLogout }: any) {
               scrollTo(0, 0);
             }}
             start={(a: Appt) => {
-              const shouldStart =
+              if (
+                a.type !== "bloqueio" &&
+                a.type !== "revisao" &&
+                a.status === "agendado" &&
+                !a.serviceScheduled &&
+                a.budget?.processStatus !== "Finalizado"
+              ) {
+                setEvaluationEntry(a);
+                return;
+              }
+              const shouldStartScheduled =
+                  !!a.serviceScheduled && a.status === "agendado",
+                shouldStart =
                   !a.startedAt &&
                   a.status === "agendado" &&
                   a.type !== "revisao" &&
@@ -698,11 +916,15 @@ export default function App({ initialState, user, onLogout }: any) {
                         hour: "2-digit",
                         minute: "2-digit",
                       }),
+                      status: shouldStartScheduled ? "servico" : a.status,
+                      inProgress: shouldStartScheduled ? true : a.inProgress,
                       _updatedAt: Date.now(),
                     }
                   : a;
               DISPLAY_APPT = opened;
               setActiveAppointment(opened);
+              setServiceScheduleDate(a.serviceScheduledFor ?? "");
+              setServiceScheduleTime(a.serviceScheduledTime ?? "");
               setEvaluator(a.tech ?? availableTechs[0] ?? "");
               setStarted(opened.startedAt ?? "");
               if (shouldStart)
@@ -740,6 +962,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setParts(a.budget.parts ?? []);
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
+                setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
@@ -750,18 +973,19 @@ export default function App({ initialState, user, onLogout }: any) {
                 setParts([]);
                 setSelectedServices([]);
                 setServiceQty({});
+                setServicePrices({});
                 setManualServices([]);
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
               setView(
-                a.type === "revisao" && (!a.reviewWithService || !a.review)
+                a.type === "revisao" && !a.review
                   ? "revisao"
                   : a.budget?.processStatus === "Finalizado"
                     ? "atendimento"
-                    : a.status === "servico"
+                    : opened.status === "servico"
                       ? "torque"
-                      : a.status === "avaliou"
+                      : opened.status === "avaliou"
                         ? "orcamento"
                         : "avaliacao",
               );
@@ -774,8 +998,9 @@ export default function App({ initialState, user, onLogout }: any) {
                   `ATENÇÃO: deseja realmente excluir ${a.type === "bloqueio" ? "esta ausência" : `o agendamento de ${a.client}`}?`,
                 )
               ) {
+                syncBlockedUntil.current = Date.now() + 4000;
                 setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
-                setAppointments(appointments.filter((x) => x.id !== a.id));
+                setAppointments((list) => list.filter((x) => x.id !== a.id));
               }
             }}
             message={(text: string) => {
@@ -788,15 +1013,39 @@ export default function App({ initialState, user, onLogout }: any) {
           <section className="page">
             <Vehicle />
             <ReviewScreen
-            appointment={activeAppointment}
-            appointments={appointments}
-            techs={availableTechs}
-              onBack={() => go("agenda")}
+              appointment={activeAppointment}
+              appointments={appointments}
+              techs={availableTechs}
+              onBack={() => {
+                if (
+                  confirm(
+                    "Você já salvou a revisão?\n\nOK: sair para a agenda.\nCancelar: continuar nesta tela para salvar.",
+                  )
+                )
+                  go("agenda");
+              }}
               onSave={(review: ReviewState) => {
-                const withService = !!activeAppointment.reviewWithService;
+                syncBlockedUntil.current = Date.now() + 4000;
+                const withService = !!activeAppointment.reviewWithService,
+                  finishedAt = new Date().toISOString(),
+                  finishedBudget: BudgetState = {
+                    parts: activeAppointment.budget?.parts ?? [],
+                    selectedServices:
+                      activeAppointment.budget?.selectedServices ?? [],
+                    serviceQty: activeAppointment.budget?.serviceQty ?? {},
+                    servicePrices:
+                      activeAppointment.budget?.servicePrices ?? {},
+                    manualServices:
+                      activeAppointment.budget?.manualServices ?? [],
+                    patioNotes: activeAppointment.budget?.patioNotes ?? "",
+                    processStatus: "Finalizado",
+                  };
                 const updated: Appt = {
                   ...activeAppointment,
                   status: withService ? "agendado" : "servico",
+                  inProgress: withService
+                    ? activeAppointment.inProgress
+                    : false,
                   startedAt: withService
                     ? activeAppointment.startedAt ||
                       new Date().toLocaleTimeString("pt-BR", {
@@ -805,8 +1054,27 @@ export default function App({ initialState, user, onLogout }: any) {
                       })
                     : activeAppointment.startedAt,
                   review,
+                  budget: withService
+                    ? activeAppointment.budget
+                    : finishedBudget,
+                  conference: withService
+                    ? activeAppointment.conference
+                    : {
+                        checks: activeAppointment.conference?.checks ?? {},
+                        finalizedAt: finishedAt,
+                        finalizedBy: user.displayName,
+                        finalization: {
+                          serviceCompleted: true,
+                          vehicleReleased: true,
+                          clientOriented: true,
+                          note: review.notes,
+                          technician: review.reviewer,
+                          executor: review.reviewer,
+                          checker: user.displayName,
+                        },
+                      },
                   lastEditedBy: user.displayName,
-                  lastEditedAt: new Date().toISOString(),
+                  lastEditedAt: finishedAt,
                   _updatedAt: Date.now(),
                 };
                 DISPLAY_APPT = updated;
@@ -821,6 +1089,7 @@ export default function App({ initialState, user, onLogout }: any) {
                   }),
                 );
                 setStarted(updated.startedAt ?? "");
+                if (!withService) setProcessStatus("Finalizado");
                 setView(withService ? "avaliacao" : "agenda");
                 scrollTo(0, 0);
               }}
@@ -831,7 +1100,8 @@ export default function App({ initialState, user, onLogout }: any) {
           view !== "historico" &&
           view !== "config" &&
           view !== "atendimento" &&
-          view !== "revisao" && (
+          view !== "revisao" &&
+          view !== "compras" && (
             <section className="page">
               <Vehicle />
               <Steps view={view} />
@@ -841,7 +1111,17 @@ export default function App({ initialState, user, onLogout }: any) {
                 setStatus={setProcessStatus}
                 printNoValues={printNoValues}
                 printStage={printStage}
+                exit={() => {
+                  if (
+                    confirm(
+                      "Você já salvou as alterações?\n\nOK: sair para a agenda.\nCancelar: continuar nesta tela para salvar.",
+                    )
+                  ) {
+                    go("agenda");
+                  }
+                }}
                 save={() => {
+                  syncBlockedUntil.current = Date.now() + 4000;
                   setSavedAt(
                     new Date().toLocaleTimeString("pt-BR", {
                       hour: "2-digit",
@@ -865,6 +1145,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             parts,
                             selectedServices,
                             serviceQty,
+                            servicePrices,
                             manualServices,
                             patioNotes,
                             processStatus,
@@ -1002,6 +1283,19 @@ export default function App({ initialState, user, onLogout }: any) {
                     set={() => setCheckOpen(!checkOpen)}
                   >
                     <div className="inspection-tools">
+                      <label className="inspection-search">
+                        <b>Pesquisar peça na avaliação</b>
+                        <input
+                          type="search"
+                          value={evaluationSearch}
+                          onChange={(e) => setEvaluationSearch(e.target.value)}
+                          placeholder="Digite, por exemplo: amortecedor, pneu ou pivô"
+                        />
+                        <small>
+                          As peças encontradas sobem para o início. A lista
+                          completa permanece abaixo.
+                        </small>
+                      </label>
                       <button
                         className="additem"
                         onClick={() =>
@@ -1045,7 +1339,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       </span>
                     </div>
                     <div className="inspection">
-                      {[...ITEMS, ...custom].map((x, i) => (
+                      {evaluationRows.map(({ name: x, index: i }) => (
                         <div
                           className={
                             quoteItems[i + 1] ? "row quote-selected" : "row"
@@ -1057,6 +1351,19 @@ export default function App({ initialState, user, onLogout }: any) {
                           }
                         >
                           <small>{String(i + 1).padStart(2, "0")}</small>
+                          <label className="quote-check">
+                            <input
+                              type="checkbox"
+                              checked={!!quoteItems[i + 1]}
+                              onChange={(e) =>
+                                setQuoteItems({
+                                  ...quoteItems,
+                                  [i + 1]: e.target.checked,
+                                })
+                              }
+                            />{" "}
+                            Orçar
+                          </label>
                           {i >= ITEMS.length ? (
                             <input
                               className="manual-item-name"
@@ -1113,19 +1420,6 @@ export default function App({ initialState, user, onLogout }: any) {
                               })
                             }
                           />
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={!!quoteItems[i + 1]}
-                              onChange={(e) =>
-                                setQuoteItems({
-                                  ...quoteItems,
-                                  [i + 1]: e.target.checked,
-                                })
-                              }
-                            />{" "}
-                            Orçar
-                          </label>
                           {i >= ITEMS.length && (
                             <button
                               className="trash"
@@ -1188,6 +1482,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           parts: nextParts,
                           selectedServices,
                           serviceQty,
+                          servicePrices,
                           manualServices,
                           patioNotes,
                           processStatus,
@@ -1258,6 +1553,63 @@ export default function App({ initialState, user, onLogout }: any) {
                           + Inserir peça manual
                         </button>
                       </div>
+                      <div className="budget-field-legend">
+                        <span className="description-swatch">
+                          Descrição da peça
+                        </span>
+                        <span className="entry-swatch">
+                          Campos para preencher
+                        </span>
+                      </div>
+                      {tireParts.length > 0 && (
+                        <div className="tire-payment-panel">
+                          <span>
+                            <b>Forma de pagamento dos pneus</b>
+                            <small>
+                              No parcelado, o sistema acrescenta automaticamente
+                              10% somente ao valor dos pneus.
+                            </small>
+                          </span>
+                          <div>
+                            <button
+                              type="button"
+                              className={
+                                tirePaymentMode === "cash" ? "active" : ""
+                              }
+                              onClick={() =>
+                                setParts(
+                                  parts.map((part: any) =>
+                                    isTirePart(part)
+                                      ? { ...part, tirePayment: "cash" }
+                                      : part,
+                                  ),
+                                )
+                              }
+                            >
+                              À vista
+                            </button>
+                            <button
+                              type="button"
+                              className={
+                                tirePaymentMode === "installment"
+                                  ? "active"
+                                  : ""
+                              }
+                              onClick={() =>
+                                setParts(
+                                  parts.map((part: any) =>
+                                    isTirePart(part)
+                                      ? { ...part, tirePayment: "installment" }
+                                      : part,
+                                  ),
+                                )
+                              }
+                            >
+                              Parcelado (+10%)
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="parts">
                         <div className="phead">
                           <span>Item / Marca</span>
@@ -1292,8 +1644,12 @@ export default function App({ initialState, user, onLogout }: any) {
                             </label>
                             <input
                               type="number"
-                              min="1"
-                              value={p.qty}
+                              min="0"
+                              step="1"
+                              inputMode="numeric"
+                              placeholder="0"
+                              aria-label={`Quantidade de ${p.item || "peça"}`}
+                              value={p.qty || ""}
                               onChange={(e) => {
                                 const a = [...parts];
                                 a[i].qty = +e.target.value;
@@ -1323,7 +1679,12 @@ export default function App({ initialState, user, onLogout }: any) {
                             </label>
                             <input
                               type={costs ? "number" : "password"}
-                              value={p.cost}
+                              min="0"
+                              step="0.01"
+                              inputMode="decimal"
+                              placeholder={costs ? "0,00" : ""}
+                              aria-label={`Custo de ${p.item || "peça"} em reais`}
+                              value={p.cost || ""}
                               onChange={(e) => {
                                 const a = [...parts];
                                 a[i].cost = +e.target.value;
@@ -1333,10 +1694,18 @@ export default function App({ initialState, user, onLogout }: any) {
                             <label>
                               <input
                                 type={costs ? "number" : "password"}
-                                value={p.margin}
+                                min="0"
+                                step="1"
+                                inputMode="numeric"
+                                placeholder={costs ? "0" : ""}
+                                aria-label={`Margem de ${p.item || "peça"} em porcentagem`}
+                                value={p.margin || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
-                                  a[i].margin = +e.target.value;
+                                  a[i].margin = Math.max(
+                                    0,
+                                    Math.trunc(Number(e.target.value)),
+                                  );
                                   a[i].saleOverride = null;
                                   setParts(a);
                                 }}
@@ -1348,7 +1717,10 @@ export default function App({ initialState, user, onLogout }: any) {
                                 type="number"
                                 min="0"
                                 step="0.01"
-                                value={p.saleOverride ?? saleOf(p, roundStep)}
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                aria-label={`Venda unitária de ${p.item || "peça"} em reais`}
+                                value={cashSaleOf(p, roundStep) || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
                                   const value = +e.target.value;
@@ -1356,8 +1728,8 @@ export default function App({ initialState, user, onLogout }: any) {
                                   a[i].margin =
                                     a[i].cost > 0
                                       ? Math.round(
-                                          (value / a[i].cost - 1) * 10000,
-                                        ) / 100
+                                          (value / a[i].cost - 1) * 100,
+                                        )
                                       : 0;
                                   setParts(a);
                                 }}
@@ -1373,6 +1745,14 @@ export default function App({ initialState, user, onLogout }: any) {
                               >
                                 Auto
                               </button>
+                              {isTirePart(p) && (
+                                <small className="tire-price-preview">
+                                  À vista: {brl(cashSaleOf(p, roundStep))}
+                                  <br />
+                                  Parcelado:{" "}
+                                  {brl(tireInstallmentSaleOf(p, roundStep))}
+                                </small>
+                              )}
                             </label>
                             <b>{brl(p.qty * saleOf(p, roundStep))}</b>
                             <button
@@ -1405,7 +1785,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="sectiontitle">
                         <Title
                           a="Serviços e mão de obra"
-                          b="Selecione, informe a quantidade ou adicione manualmente."
+                          b="Selecione e informe a quantidade e o valor unitário."
                         />
                         <button
                           onClick={() =>
@@ -1418,40 +1798,149 @@ export default function App({ initialState, user, onLogout }: any) {
                           + Inserir serviço manual
                         </button>
                       </div>
+                      <div className="budget-field-legend">
+                        <span className="description-swatch">
+                          Descrição do serviço
+                        </span>
+                        <span className="entry-swatch">
+                          Campos para preencher
+                        </span>
+                      </div>
                       <div className="servicegrid">
-                        {SERVICES.map((x, i) => (
-                          <label
-                            className={
-                              selectedServices.includes(i) ? "selected" : ""
-                            }
-                            key={x[0]}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedServices.includes(i)}
-                              onChange={() =>
-                                setSelectedServices(
-                                  selectedServices.includes(i)
-                                    ? selectedServices.filter((v) => v !== i)
-                                    : [...selectedServices, i],
-                                )
-                              }
-                            />
-                            <span>{x[0]}</span>
-                            <input
-                              className="qty"
-                              type="number"
-                              min="1"
-                              value={serviceQty[i] ?? ""}
-                              onChange={(e) => {
-                                const next = { ...serviceQty };
-                                if (e.target.value === "") delete next[i];
-                                else next[i] = +e.target.value;
-                                setServiceQty(next);
-                              }}
-                            />
-                            <b>{x[1] ? brl(x[1]) + "/ un." : "Cortesia"}</b>
-                          </label>
+                        {SERVICE_GROUPS.map((group) => (
+                          <section className="service-group" key={group.title}>
+                            <h3>{group.title}</h3>
+                            {group.indexes.map((i) => {
+                              const x = SERVICES[i];
+                              return (
+                                <div
+                                  className={
+                                    "service-row " +
+                                    (selectedServices.includes(i)
+                                      ? "selected"
+                                      : "") +
+                                    (selectedServices.includes(i) &&
+                                    (activeAppointment?.status === "servico" ||
+                                      activeAppointment?.budget
+                                        ?.processStatus === "Finalizado")
+                                      ? " approved"
+                                      : "")
+                                  }
+                                  key={x[0]}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Selecionar ${x[0]}`}
+                                    checked={selectedServices.includes(i)}
+                                    onChange={() => {
+                                      const selecting =
+                                        !selectedServices.includes(i);
+                                      setSelectedServices(
+                                        selecting
+                                          ? [...selectedServices, i]
+                                          : selectedServices.filter(
+                                              (v) => v !== i,
+                                            ),
+                                      );
+                                      if (selecting && !serviceQty[i])
+                                        setServiceQty({
+                                          ...serviceQty,
+                                          [i]: 1,
+                                        });
+                                    }}
+                                  />
+                                  <span>
+                                    {x[0]}
+                                    {selectedServices.includes(i) &&
+                                      (activeAppointment?.status ===
+                                        "servico" ||
+                                        activeAppointment?.budget
+                                          ?.processStatus === "Finalizado") && (
+                                        <small className="approved-service-badge">
+                                          ✓ Aprovado
+                                        </small>
+                                      )}
+                                  </span>
+                                  <div className="service-entry-fields">
+                                    <label>
+                                      <small>Qtd.</small>
+                                      <input
+                                        className="qty"
+                                        type="number"
+                                        min="1"
+                                        inputMode="numeric"
+                                        value={serviceQty[i] ?? ""}
+                                        onChange={(e) => {
+                                          const next = { ...serviceQty };
+                                          if (e.target.value === "")
+                                            delete next[i];
+                                          else next[i] = +e.target.value;
+                                          setServiceQty(next);
+                                        }}
+                                      />
+                                    </label>
+                                    {!serviceIsCourtesy(i) && (
+                                      <label>
+                                        <small>Valor unitário R$</small>
+                                        <input
+                                          className="service-value"
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={
+                                            serviceValueDrafts[
+                                              `service-${i}`
+                                            ] ??
+                                            decimalValue(
+                                              servicePrice(i, servicePrices),
+                                            )
+                                          }
+                                          placeholder="0,00"
+                                          onFocus={(event) => {
+                                            setServiceValueDrafts(
+                                              (current) => ({
+                                                ...current,
+                                                [`service-${i}`]: decimalValue(
+                                                  servicePrice(
+                                                    i,
+                                                    servicePrices,
+                                                  ),
+                                                ),
+                                              }),
+                                            );
+                                            event.currentTarget.select();
+                                          }}
+                                          onChange={(e) => {
+                                            const typed = e.target.value;
+                                            setServiceValueDrafts(
+                                              (current) => ({
+                                                ...current,
+                                                [`service-${i}`]: typed,
+                                              }),
+                                            );
+                                            const next = { ...servicePrices };
+                                            next[i] = parseDecimalValue(typed);
+                                            setServicePrices(next);
+                                          }}
+                                          onBlur={() =>
+                                            setServiceValueDrafts((current) => {
+                                              const next = { ...current };
+                                              delete next[`service-${i}`];
+                                              return next;
+                                            })
+                                          }
+                                        />
+                                      </label>
+                                    )}
+                                  </div>
+                                  <b>
+                                    {serviceIsCourtesy(i)
+                                      ? "Cortesia"
+                                      : `${brl(servicePrice(i, servicePrices))}/ un.`}
+                                  </b>
+                                </div>
+                              );
+                            })}
+                          </section>
                         ))}
                       </div>
                       <div className="manualservices">
@@ -1482,13 +1971,36 @@ export default function App({ initialState, user, onLogout }: any) {
                             <label>
                               Valor unitário R$
                               <input
-                                type="number"
-                                value={x.value}
+                                type="text"
+                                inputMode="decimal"
+                                value={
+                                  serviceValueDrafts[`manual-${i}`] ??
+                                  decimalValue(x.value)
+                                }
+                                onFocus={(event) => {
+                                  setServiceValueDrafts((current) => ({
+                                    ...current,
+                                    [`manual-${i}`]: decimalValue(x.value),
+                                  }));
+                                  event.currentTarget.select();
+                                }}
                                 onChange={(e) => {
+                                  const typed = e.target.value;
+                                  setServiceValueDrafts((current) => ({
+                                    ...current,
+                                    [`manual-${i}`]: typed,
+                                  }));
                                   const a = [...manualServices];
-                                  a[i].value = +e.target.value;
+                                  a[i].value = parseDecimalValue(typed);
                                   setManualServices(a);
                                 }}
+                                onBlur={() =>
+                                  setServiceValueDrafts((current) => {
+                                    const next = { ...current };
+                                    delete next[`manual-${i}`];
+                                    return next;
+                                  })
+                                }
                               />
                             </label>
                             <b>{brl(x.qty * x.value)}</b>
@@ -1518,6 +2030,12 @@ export default function App({ initialState, user, onLogout }: any) {
                     <span>
                       Serviços <b>{brl(serviceTotal)}</b>
                     </span>
+                    {tireParts.length > 0 && (
+                      <span className="tire-total-comparison">
+                        Pneus: total à vista <b>{brl(totalCash)}</b> · total
+                        parcelado <b>{brl(totalInstallment)}</b>
+                      </span>
+                    )}
                     <strong>
                       Total <em>{brl(total)}</em>
                     </strong>
@@ -1582,7 +2100,15 @@ export default function App({ initialState, user, onLogout }: any) {
                           <b>
                             {p.item} {p.brand}
                           </b>
-                          <small>Unitário: {brl(saleOf(p, roundStep))}</small>
+                          <small>
+                            Unitário
+                            {isTirePart(p)
+                              ? p.tirePayment === "installment"
+                                ? " parcelado"
+                                : " à vista"
+                              : ""}
+                            : {brl(saleOf(p, roundStep))}
+                          </small>
                         </span>
                         <strong>{brl(p.qty * saleOf(p, roundStep))}</strong>
                       </div>
@@ -1595,13 +2121,18 @@ export default function App({ initialState, user, onLogout }: any) {
                           <b>{SERVICES[i][0]}</b>
                           <small>
                             Unitário:{" "}
-                            {SERVICES[i][1] ? brl(SERVICES[i][1]) : "Cortesia"}
+                            {serviceIsCourtesy(i)
+                              ? "Cortesia"
+                              : brl(servicePrice(i, servicePrices))}
                           </small>
                         </span>
                         <strong>
-                          {SERVICES[i][1]
-                            ? brl(SERVICES[i][1] * (serviceQty[i] ?? 0))
-                            : "Cortesia"}
+                          {serviceIsCourtesy(i)
+                            ? "Cortesia"
+                            : brl(
+                                servicePrice(i, servicePrices) *
+                                  (serviceQty[i] ?? 0),
+                              )}
                         </strong>
                       </div>
                     ))}
@@ -1631,6 +2162,111 @@ export default function App({ initialState, user, onLogout }: any) {
                       </label>
                     </div>
                   </div>
+                  <div className="schedule-service-box">
+                    <span>
+                      <b>Cliente trará o veículo em outro dia?</b>
+                      <small>
+                        Agende o serviço mantendo esta avaliação e o orçamento.
+                      </small>
+                    </span>
+                    <label>
+                      Data do serviço
+                      <input
+                        type="date"
+                        value={serviceScheduleDate}
+                        onChange={(e) => setServiceScheduleDate(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Horário
+                      <input
+                        type="time"
+                        value={serviceScheduleTime}
+                        onChange={(e) => setServiceScheduleTime(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      className="schedule-service-button"
+                      onClick={() => {
+                        if (!activeAppointment) return;
+                        if (!serviceScheduleDate || !serviceScheduleTime) {
+                          alert("Informe a data e o horário do serviço.");
+                          return;
+                        }
+                        const now = new Date().toISOString(),
+                          scheduledId =
+                            activeAppointment.serviceAppointmentId ??
+                            Date.now(),
+                          budget: BudgetState = {
+                            parts,
+                            selectedServices,
+                            serviceQty,
+                            servicePrices,
+                            manualServices,
+                            patioNotes,
+                            processStatus: "Em andamento",
+                          },
+                          source: Appt = {
+                            ...activeAppointment,
+                            status: "avaliou",
+                            budget,
+                            serviceScheduledFor: serviceScheduleDate,
+                            serviceScheduledTime: serviceScheduleTime,
+                            serviceAppointmentId: scheduledId,
+                            budgetEditedBy: user.displayName,
+                            budgetEditedAt: now,
+                            lastEditedBy: user.displayName,
+                            lastEditedAt: now,
+                            _updatedAt: Date.now(),
+                          },
+                          scheduled: Appt = {
+                            ...source,
+                            id: scheduledId,
+                            date: serviceScheduleDate,
+                            time: serviceScheduleTime,
+                            status: "agendado",
+                            serviceScheduled: true,
+                            sourceAppointmentId: activeAppointment.id,
+                            serviceAppointmentId: undefined,
+                            inProgress: false,
+                            startedAt: undefined,
+                            conference: undefined,
+                            scheduledBy: user.displayName,
+                            createdAt: now,
+                            lastEditedBy: user.displayName,
+                            lastEditedAt: now,
+                            _updatedAt: Date.now() + 1,
+                          };
+                        syncBlockedUntil.current = Date.now() + 4000;
+                        DISPLAY_APPT = source;
+                        setActiveAppointment(source);
+                        setAppointments((list) => {
+                          const exists = list.some((a) => a.id === scheduledId),
+                            updated = list.map((a) =>
+                              a.id === source.id
+                                ? source
+                                : a.id === scheduledId
+                                  ? scheduled
+                                  : a,
+                            );
+                          return exists ? updated : [...updated, scheduled];
+                        });
+                        setSavedAt(
+                          new Date().toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }),
+                        );
+                        alert(
+                          `Serviço agendado para ${new Date(`${serviceScheduleDate}T12:00:00`).toLocaleDateString("pt-BR")}, às ${serviceScheduleTime}.`,
+                        );
+                        setView("agenda");
+                        scrollTo(0, 0);
+                      }}
+                    >
+                      Agendar serviço
+                    </button>
+                  </div>
                   <div className="propactions">
                     <button onClick={() => go("orcamento")}>
                       ← Voltar e alterar
@@ -1649,6 +2285,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             parts,
                             selectedServices,
                             serviceQty,
+                            servicePrices,
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
@@ -1692,6 +2329,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             parts,
                             selectedServices,
                             serviceQty,
+                            servicePrices,
                             manualServices,
                             patioNotes,
                             processStatus: "Em andamento",
@@ -1788,6 +2426,69 @@ export default function App({ initialState, user, onLogout }: any) {
                       }
                     >
                       <div className="card bare">
+                        {activeAppointment && (
+                          <div className="conference-required-card">
+                            <div>
+                              <b>Dados obrigatórios para finalizar</b>
+                              <small>
+                                Preencha ou confira estes dados sem precisar
+                                voltar ao agendamento.
+                              </small>
+                            </div>
+                            <div className="conference-required-grid">
+                              <label>
+                                Veículo
+                                <input
+                                  value={activeAppointment.vehicle}
+                                  placeholder="Informe o veículo"
+                                  onChange={(e) =>
+                                    updateRequiredVehicleField(
+                                      "vehicle",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label>
+                                Placa
+                                <input
+                                  value={activeAppointment.plate}
+                                  placeholder="Informe a placa"
+                                  onChange={(e) =>
+                                    updateRequiredVehicleField(
+                                      "plate",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label>
+                                KM
+                                <input
+                                  value={activeAppointment.km}
+                                  inputMode="numeric"
+                                  placeholder="Informe o KM"
+                                  onChange={(e) =>
+                                    updateRequiredVehicleField(
+                                      "km",
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                              </label>
+                              <span className="conference-current-status">
+                                <b>Status atual</b>
+                                <strong>
+                                  {processStatus === "Finalizado"
+                                    ? completedAttendanceLabel(
+                                        activeAppointment,
+                                      )
+                                    : "Em conferência"}
+                                </strong>
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         <div className="final">
                           <label>
                             <input
@@ -1874,7 +2575,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="required-vehicle-warning" role="alert">
                         <b>Preenchimento obrigatório para finalizar</b>
                         <span>
-                          Complete no agendamento:{" "}
+                          Abra “Finalização” e complete:{" "}
                           {[
                             !activeAppointment.vehicle.trim() && "veículo",
                             !activeAppointment.plate.trim() && "placa",
@@ -1897,7 +2598,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       ].filter(Boolean);
                       if (missing.length) {
                         alert(
-                          `Não é possível finalizar. Preencha no agendamento: ${missing.join(", ")}.`,
+                          `Não é possível finalizar. Preencha nesta tela: ${missing.join(", ")}.`,
                         );
                         return;
                       }
@@ -1910,6 +2611,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           parts,
                           selectedServices,
                           serviceQty,
+                          servicePrices,
                           manualServices,
                           patioNotes,
                           processStatus: "Finalizado",
@@ -1999,6 +2701,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setParts(a.budget.parts ?? []);
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
+                setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
@@ -2006,12 +2709,13 @@ export default function App({ initialState, user, onLogout }: any) {
                 setParts([]);
                 setSelectedServices([]);
                 setServiceQty({});
+                setServicePrices({});
                 setManualServices([]);
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
               setView(
-                a.type === "revisao" && (!a.reviewWithService || !a.review)
+                a.type === "revisao" && !a.review
                   ? "revisao"
                   : a.budget?.processStatus === "Finalizado"
                     ? "atendimento"
@@ -2030,6 +2734,7 @@ export default function App({ initialState, user, onLogout }: any) {
                   `ATENÇÃO: deseja realmente excluir o registro de ${a.client}? Esta ação não poderá ser desfeita.`,
                 )
               ) {
+                syncBlockedUntil.current = Date.now() + 4000;
                 setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
                 setAppointments((list) => list.filter((x) => x.id !== a.id));
               }
@@ -2037,6 +2742,34 @@ export default function App({ initialState, user, onLogout }: any) {
             message={setMessage}
           />
         )}{" "}
+        {view === "compras" && (
+          <PurchaseOrders
+            appointments={appointments}
+            checks={purchaseChecks}
+            currentUser={user.displayName}
+            setChecks={(updater: any) => {
+              syncBlockedUntil.current = Date.now() + 4000;
+              setPurchaseChecks(updater);
+            }}
+            setWorkOrder={(ownerId: number, workOrder: string) => {
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((appointment) =>
+                  appointment.id === ownerId ||
+                  appointment.sourceAppointmentId === ownerId
+                    ? {
+                        ...appointment,
+                        workOrder,
+                        lastEditedBy: user.displayName,
+                        lastEditedAt: new Date().toISOString(),
+                        _updatedAt: Date.now(),
+                      }
+                    : appointment,
+                ),
+              );
+            }}
+          />
+        )}
         {view === "historico" && <History />}
         {view === "config" && (
           <Config
@@ -2045,8 +2778,7 @@ export default function App({ initialState, user, onLogout }: any) {
             setTechs={(names: string[]) =>
               setTechs(
                 names.filter(
-                  (name) =>
-                    name.trim().toLocaleLowerCase("pt-BR") !== "anna",
+                  (name) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
                 ),
               )
             }
@@ -2080,6 +2812,7 @@ export default function App({ initialState, user, onLogout }: any) {
             currentUser={user.displayName}
             close={() => setModal(false)}
             remove={(a: Appt) => {
+              syncBlockedUntil.current = Date.now() + 4000;
               setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
               setAppointments((list) => list.filter((x) => x.id !== a.id));
               setModal(false);
@@ -2102,6 +2835,80 @@ export default function App({ initialState, user, onLogout }: any) {
                   : [...appointments, updated],
               );
               setModal(false);
+            }}
+          />
+        )}
+        {evaluationEntry && (
+          <EvaluationStartModal
+            appointment={evaluationEntry}
+            techs={availableTechs}
+            currentUser={user.displayName}
+            close={() => setEvaluationEntry(null)}
+            proceed={({
+              evaluator: selectedEvaluator,
+              startedAt,
+              vehicle,
+              plate,
+            }: any) => {
+              syncBlockedUntil.current = Date.now() + 4000;
+              const opened: Appt = {
+                ...evaluationEntry,
+                vehicle: vehicle.trim(),
+                plate: plate.trim().toLocaleUpperCase("pt-BR"),
+                tech: selectedEvaluator,
+                startedAt,
+                inProgress: true,
+                lastEditedBy: user.displayName,
+                lastEditedAt: new Date().toISOString(),
+                _updatedAt: Date.now(),
+              };
+              DISPLAY_APPT = opened;
+              setActiveAppointment(opened);
+              setAppointments((list) =>
+                list.map((item) => (item.id === opened.id ? opened : item)),
+              );
+              setEvaluator(selectedEvaluator);
+              setStarted(startedAt);
+              setStatus(opened.evaluation?.status ?? {});
+              setQuoteItems(opened.evaluation?.quoteItems ?? {});
+              setCustom(opened.evaluation?.custom ?? []);
+              setEvaluationNotes(opened.evaluation?.notes ?? {});
+              setChecks(opened.conference?.checks ?? {});
+              setFinalization(
+                opened.conference?.finalization ?? {
+                  serviceCompleted: false,
+                  vehicleReleased: false,
+                  clientOriented: false,
+                  note: "",
+                  technician: selectedEvaluator,
+                  executor: "",
+                  checker: "",
+                },
+              );
+              if (opened.budget) {
+                setParts(opened.budget.parts ?? []);
+                setSelectedServices(opened.budget.selectedServices ?? []);
+                setServiceQty(opened.budget.serviceQty ?? {});
+                setServicePrices(opened.budget.servicePrices ?? {});
+                setManualServices(opened.budget.manualServices ?? []);
+                setPatioNotes(opened.budget.patioNotes ?? "");
+                setProcessStatus(opened.budget.processStatus ?? "Em andamento");
+              } else {
+                setParts([]);
+                setSelectedServices([]);
+                setServiceQty({});
+                setServicePrices({});
+                setManualServices([]);
+                setPatioNotes("");
+                setProcessStatus("Em andamento");
+              }
+              setGeometryOpen(false);
+              setCheckOpen(false);
+              setPartsOpen(false);
+              setServicesOpen(false);
+              setEvaluationEntry(null);
+              setView("avaliacao");
+              scrollTo(0, 0);
             }}
           />
         )}
@@ -2156,6 +2963,7 @@ export default function App({ initialState, user, onLogout }: any) {
           parts={parts}
           selectedServices={selectedServices}
           serviceQty={serviceQty}
+          servicePrices={servicePrices}
           manualServices={manualServices}
           patioNotes={patioNotes}
           checks={checks}
@@ -2236,9 +3044,26 @@ function StageActions({
   setStatus,
   printNoValues,
   printStage,
+  exit,
   save,
   savedAt,
 }: any) {
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
+      "idle",
+    ),
+    handleSave = () => {
+      if (saveState === "saving") return;
+      setSaveState("saving");
+      save();
+      window.setTimeout(() => setSaveState("saved"), 900);
+      window.setTimeout(() => setSaveState("idle"), 3000);
+    },
+    saveLabel =
+      saveState === "saving"
+        ? "Salvando…"
+        : saveState === "saved"
+          ? "Salvo ✓"
+          : "Salvar";
   if (!["avaliacao", "orcamento", "proposta", "torque"].includes(view))
     return null;
   const label = {
@@ -2257,7 +3082,29 @@ function StageActions({
           <option>Finalizado</option>
         </select>
       </label>
-      <button onClick={save}>Salvar</button>
+      <button
+        className={saveState === "saved" ? "save-confirmed" : ""}
+        onClick={handleSave}
+        disabled={saveState === "saving"}
+      >
+        {saveLabel}
+      </button>
+      <button className="stage-exit" onClick={exit}>
+        Sair para a agenda
+      </button>
+      <div className="stage-bottom-actions">
+        <button className="stage-exit-bottom" onClick={exit}>
+          Sair
+        </button>
+        <button
+          className="stage-save-bottom"
+          onClick={handleSave}
+          disabled={saveState === "saving"}
+          aria-label={`Salvar ${label}`}
+        >
+          {saveLabel}
+        </button>
+      </div>
       <button onClick={() => printStage(view)}>Imprimir relatório A4</button>
       {["orcamento", "proposta"].includes(view) && (
         <button onClick={() => printNoValues(view)}>
@@ -2385,7 +3232,30 @@ function Agenda({
       new Date(today.getFullYear(), today.getMonth(), 1),
     ),
     [mode, setMode] = useState<"dia" | "semana" | "mes">("mes"),
-    [openCal, setOpenCal] = useState(true);
+    [openCal, setOpenCal] = useState(true),
+    [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
+  const carryLimitIso = todayIso,
+    isBusinessDay = (targetDate: string) => {
+      const weekday = new Date(`${targetDate}T12:00:00`).getDay();
+      return (
+        weekday >= 1 &&
+        weekday <= 5 &&
+        !holidays.some((holiday: any) => holiday.date === targetDate)
+      );
+    },
+    isCarriedInto = (appointment: Appt, targetDate: string) =>
+      appointment.type !== "bloqueio" &&
+      !!appointment.inProgress &&
+      appointment.budget?.processStatus !== "Finalizado" &&
+      appointment.date < targetDate &&
+      targetDate <= carryLimitIso &&
+      isBusinessDay(targetDate),
+    appointmentsForDate = (targetDate: string) =>
+      (data as Appt[]).filter(
+        (appointment) =>
+          appointment.date === targetDate ||
+          isCarriedInto(appointment, targetDate),
+      );
   const selectedDate = new Date(date + "T12:00:00"),
     calendarDays = useMemo(() => {
       if (mode === "dia") return [new Date(date + "T12:00:00")];
@@ -2408,11 +3278,12 @@ function Agenda({
         return d;
       });
     }, [cursor, date, mode]);
-  const list = data.filter((a: Appt) => a.date === date),
+  const list = appointmentsForDate(date),
     openQuotesCount = (data as Appt[]).filter(
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     inProgressCount = (data as Appt[]).filter(
@@ -2453,10 +3324,14 @@ function Agenda({
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
         <span>
-          <i className="dot yellow" /> Avaliou <i className="dot green" /> Fez
-          serviço <i className="dot red" /> Faltou <i className="dot purple" />{" "}
-          Retorno <i className="dot orange" /> Garantia{" "}
-          <i className="dot blue" /> Revisão 30 dias
+          <i className="dot yellow" /> Aguardando orçamento{" "}
+          <i className="dot green" /> Serviço aprovado{" "}
+          <i className="dot conference-dot" /> Conferência{" "}
+          <i className="dot red" /> Faltou <i className="dot purple" /> Retorno{" "}
+          <i className="dot orange" /> Garantia <i className="dot blue" />{" "}
+          Revisão 30 dias
+          <i className="dot completed" /> Concluído
+          <i className="dot scheduled-service-dot" /> Serviço agendado
           <i className="shop-line" /> Na oficina
         </span>
       </div>
@@ -2547,7 +3422,7 @@ function Agenda({
             <div className="days">
               {calendarDays.map((d) => {
                 const ds = iso(d),
-                  apps = data.filter((a: Appt) => a.date === ds),
+                  apps = appointmentsForDate(ds),
                   holiday = holidays.find((h: any) => h.date === ds);
                 return (
                   <button
@@ -2565,10 +3440,11 @@ function Agenda({
                     {holiday && <em title={holiday.name}>● {holiday.name}</em>}
                     {apps.map((a: Appt) => (
                       <span
-                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}`}
+                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
                         key={a.id}
                       >
-                        {a.time} {a.client.split(" ")[0]}
+                        {isCarriedInto(a, ds) ? "↳ " : `${a.time} `}
+                        {a.client.split(" ")[0]}
                         {a.quoteSentAt ? " ✓" : ""}
                       </span>
                     ))}
@@ -2593,207 +3469,212 @@ function Agenda({
               Nenhum agendamento. Clique em “Novo agendamento” para incluir.
             </div>
           )}
-          {list.map((a: Appt) => (
-            <article
-              className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}`}
-              key={a.id}
-            >
-              <time>
-                <b>{a.time}</b>
-                <small>
-                  {a.type === "bloqueio"
-                    ? "AUSENTE"
-                    : a.type === "retorno"
-                      ? "RETORNO"
-                      : a.type === "garantia"
-                        ? "GARANTIA"
-                        : a.type === "revisao"
-                          ? a.reviewWithService
-                            ? "REVISÃO + SERVIÇO"
-                            : "REVISÃO 30 DIAS"
-                          : a.budget?.processStatus === "Finalizado"
-                            ? "CONCLUÍDO"
-                            : a.inProgress
-                              ? "EM ANDAMENTO"
-                              : a.status === "avaliou"
-                                ? "AGUARDANDO ORÇAMENTO"
-                                : a.status}
-                </small>
-                {a.type !== "bloqueio" && a.tech && (
-                  <small className="card-tech">
-                    {a.status === "avaliou" ? "Avaliado por" : "Téc."} {a.tech}
+          {list.map((a: Appt) => {
+            const expanded = expandedAppointments.includes(a.id);
+            return (
+              <article
+                className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
+                key={a.id}
+              >
+                <time>
+                  <b>{a.time}</b>
+                  <small>
+                    {isCarriedInto(a, date)
+                      ? "NA OFICINA"
+                      : a.budget?.processStatus === "Finalizado"
+                        ? "FINALIZADO"
+                        : agendaStatusLabel(a)}
                   </small>
-                )}
-                {a.type !== "bloqueio" && a.startedAt && (
-                  <small className="card-start">Início: {a.startedAt}</small>
-                )}
-              </time>
-              <span>
-                <h3>{a.client}</h3>
-                <p>
-                  {a.type === "bloqueio"
-                    ? "Ausência de funcionário"
-                    : a.vehicle}
-                  {a.plate && (
-                    <>
-                      {" "}
-                      · <b>{a.plate}</b>
-                    </>
+                  {expanded && a.type !== "bloqueio" && a.tech && (
+                    <small className="card-tech">
+                      {a.status === "avaliou" ? "Avaliado por" : "Téc."}{" "}
+                      {a.tech}
+                    </small>
                   )}
-                </p>
-                {a.budget?.processStatus === "Finalizado" ? (
-                  <div className="agenda-finalization">
-                    <b>✓ Atendimento finalizado</b>
-                    {a.conference?.finalization && (
-                      <span>
-                        {[
-                          a.conference.finalization.serviceCompleted &&
-                            "Serviço concluído",
-                          a.conference.finalization.vehicleReleased &&
-                            "Veículo liberado",
-                          a.conference.finalization.clientOriented &&
-                            "Cliente orientado",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || "Finalização registrada"}
-                      </span>
+                  {expanded && a.type !== "bloqueio" && a.startedAt && (
+                    <small className="card-start">Início: {a.startedAt}</small>
+                  )}
+                </time>
+                <span>
+                  <div className="appointment-heading">
+                    <h3>{a.client}</h3>
+                    <button
+                      className="appointment-toggle"
+                      onClick={() =>
+                        setExpandedAppointments((current) =>
+                          current.includes(a.id)
+                            ? current.filter((id) => id !== a.id)
+                            : [...current, a.id],
+                        )
+                      }
+                      aria-expanded={expanded}
+                      aria-label={
+                        expanded
+                          ? `Recolher atendimento de ${a.client}`
+                          : `Ver atendimento completo de ${a.client}`
+                      }
+                      title={expanded ? "Recolher" : "Ver atendimento completo"}
+                    >
+                      {expanded ? "⌃" : "⌄"}
+                    </button>
+                  </div>
+                  <p>
+                    {a.type === "bloqueio"
+                      ? "Ausência de funcionário"
+                      : a.vehicle}
+                    {a.plate && (
+                      <>
+                        {" "}
+                        · <b>{a.plate}</b>
+                      </>
                     )}
-                    {a.conference?.finalization?.note && (
-                      <span>{a.conference.finalization.note}</span>
+                  </p>
+                  {isCarriedInto(a, date) && (
+                    <small className="carry-over-notice">
+                      ↳ Na oficina desde{" "}
+                      {new Date(`${a.date}T12:00:00`).toLocaleDateString(
+                        "pt-BR",
+                      )}
+                    </small>
+                  )}
+                  {a.budget?.processStatus === "Finalizado" ? (
+                    <div className="agenda-finalization compact">
+                      <b>✓ {completedAttendanceLabel(a)}</b>
+                    </div>
+                  ) : null}
+                  {a.type === "cliente" &&
+                    a.status === "avaliou" &&
+                    !a.quoteSentAt &&
+                    !a.serviceAppointmentId &&
+                    a.budget?.processStatus !== "Finalizado" && (
+                      <small className="quote-waiting">
+                        {quoteWaitingLabel(a)}
+                      </small>
                     )}
-                    <small>
-                      Finalizado por{" "}
-                      {a.conference?.finalizedBy || "não informado"}
-                      {a.conference?.finalizedAt
-                        ? ` em ${new Date(
-                            a.conference.finalizedAt,
-                          ).toLocaleString("pt-BR", {
+                  {a.quoteSentAt &&
+                    a.budget?.processStatus !== "Finalizado" && (
+                      <small className="quote-sent">
+                        {a.status === "servico"
+                          ? "✓ Orçamento aprovado"
+                          : "✓ Orçamento enviado – EM ABERTO"}
+                      </small>
+                    )}
+                  {a.budget?.processStatus !== "Finalizado" &&
+                    !a.quoteSentAt &&
+                    !(a.type === "cliente" && a.status === "avaliou") && (
+                      <small className="appointment-stage">
+                        {agendaStatusLabel(a)}
+                      </small>
+                    )}
+                  {expanded && (
+                    <div className="appointment-details">
+                      {a.note && <small>{a.note}</small>}
+                      {a.scheduledBy && a.createdAt && (
+                        <small className="schedule-meta">
+                          Agendado por {a.scheduledBy} em{" "}
+                          {new Date(a.createdAt).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </small>
+                      )}
+                      {a.evaluationRecordedBy && (
+                        <small className="schedule-meta">
+                          Avaliação registrada no sistema por{" "}
+                          {a.evaluationRecordedBy}
+                          {a.evaluationRecordedAt
+                            ? ` em ${new Date(
+                                a.evaluationRecordedAt,
+                              ).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}`
+                            : ""}
+                        </small>
+                      )}
+                      {a.budgetEditedBy && (
+                        <small className="schedule-meta">
+                          Orçamento preenchido por {a.budgetEditedBy}
+                          {a.budgetEditedAt
+                            ? ` em ${new Date(a.budgetEditedAt).toLocaleString(
+                                "pt-BR",
+                                {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}`
+                            : ""}
+                        </small>
+                      )}
+                      {a.lastEditedBy && (
+                        <small className="schedule-meta">
+                          Última edição por {a.lastEditedBy}
+                        </small>
+                      )}
+                      {a.quoteSentAt && (
+                        <small className="schedule-meta">
+                          Enviado em{" "}
+                          {new Date(a.quoteSentAt).toLocaleString("pt-BR", {
                             day: "2-digit",
                             month: "2-digit",
                             hour: "2-digit",
                             minute: "2-digit",
-                          })}`
-                        : ""}
-                    </small>
-                    {a.conference?.finalization &&
-                      [
-                        ["Técnico", a.conference.finalization.technician],
-                        ["Executado por", a.conference.finalization.executor],
-                        ["Conferido por", a.conference.finalization.checker],
-                      ].some(([, name]) => name) && (
-                        <small>
-                          {[
-                            ["Técnico", a.conference.finalization.technician],
-                            [
-                              "Executado por",
-                              a.conference.finalization.executor,
-                            ],
-                            [
-                              "Conferido por",
-                              a.conference.finalization.checker,
-                            ],
-                          ]
-                            .filter(([, name]) => name)
-                            .map(([label, name]) => `${label}: ${name}`)
-                            .join(" · ")}
+                          })}
+                          {a.quoteSentBy ? ` por ${a.quoteSentBy}` : ""}
                         </small>
                       )}
+                    </div>
+                  )}
+                </span>
+                {expanded && (
+                  <div className="appointment-actions">
+                    {a.type !== "bloqueio" && (
+                      <button
+                        onClick={() =>
+                          message(
+                            `Olá, ${a.client}! Passando para lembrar do seu agendamento na Monocenter em ${fmt(a.date)}, às ${a.time}. Aguardamos você!`,
+                          )
+                        }
+                      >
+                        Mensagem
+                      </button>
+                    )}
+                    <button onClick={() => edit(a)}>Editar</button>
+                    <button className="danger" onClick={() => remove(a)}>
+                      Excluir
+                    </button>
+                    {a.type !== "bloqueio" && (
+                      <button onClick={() => start(a)}>
+                        {a.type === "revisao" && !a.review
+                          ? "Abrir revisão →"
+                          : a.type === "retorno" && a.status === "agendado"
+                            ? "Abrir retorno →"
+                            : a.type === "garantia" && a.status === "agendado"
+                              ? "Abrir garantia →"
+                              : a.budget?.processStatus === "Finalizado"
+                                ? "Visualizar atendimento →"
+                                : a.status === "servico"
+                                  ? "Abrir conferência →"
+                                  : a.serviceScheduled &&
+                                      a.status === "agendado"
+                                    ? "Iniciar serviço →"
+                                    : a.status === "avaliou"
+                                      ? "Abrir orçamento →"
+                                      : "Abrir avaliação →"}
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  a.note && <small>{a.note}</small>
                 )}
-                {a.scheduledBy && a.createdAt && (
-                  <small className="schedule-meta">
-                    Agendado por {a.scheduledBy} em{" "}
-                    {new Date(a.createdAt).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </small>
-                )}
-                {a.evaluationRecordedBy && (
-                  <small className="schedule-meta">
-                    Avaliação registrada no sistema por {a.evaluationRecordedBy}
-                    {a.evaluationRecordedAt
-                      ? ` em ${new Date(a.evaluationRecordedAt).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}`
-                      : ""}
-                  </small>
-                )}
-                {a.budgetEditedBy && (
-                  <small className="schedule-meta">
-                    Orçamento preenchido por {a.budgetEditedBy}
-                    {a.budgetEditedAt
-                      ? ` em ${new Date(a.budgetEditedAt).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}`
-                      : ""}
-                  </small>
-                )}
-                {a.lastEditedBy && (
-                  <small className="schedule-meta">
-                    Última edição por {a.lastEditedBy}
-                  </small>
-                )}
-                {a.quoteSentAt && (
-                  <small className="quote-sent">
-                    ✓ Orçamento enviado em{" "}
-                    {new Date(a.quoteSentAt).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    {a.quoteSentBy ? ` · por ${a.quoteSentBy}` : ""}
-                  </small>
-                )}
-              </span>
-              <div>
-                {a.type !== "bloqueio" && (
-                  <button
-                    onClick={() =>
-                      message(
-                        `Olá, ${a.client}! Passando para lembrar do seu agendamento na Monocenter em ${fmt(a.date)}, às ${a.time}. Aguardamos você!`,
-                      )
-                    }
-                  >
-                    Mensagem
-                  </button>
-                )}
-                <button onClick={() => edit(a)}>Editar</button>
-                <button className="danger" onClick={() => remove(a)}>
-                  Excluir
-                </button>
-                {a.type !== "bloqueio" && (
-                  <button onClick={() => start(a)}>
-                    {a.type === "revisao" && (!a.reviewWithService || !a.review)
-                      ? "Abrir revisão →"
-                      : a.type === "retorno" && a.status === "agendado"
-                        ? "Abrir retorno →"
-                        : a.type === "garantia" && a.status === "agendado"
-                          ? "Abrir garantia →"
-                          : a.budget?.processStatus === "Finalizado"
-                            ? "Visualizar atendimento →"
-                            : a.status === "servico"
-                              ? "Abrir conferência →"
-                              : a.status === "avaliou"
-                                ? "Abrir orçamento →"
-                                : "Abrir avaliação →"}
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </div>
       <div className="agenda-followups">
@@ -3049,6 +3930,118 @@ function ReviewScreen({
     </>
   );
 }
+function EvaluationStartModal({
+  appointment,
+  techs,
+  currentUser,
+  close,
+  proceed,
+}: any) {
+  const now = new Date().toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    [form, setForm] = useState({
+      evaluator: appointment.tech || techs[0] || "",
+      startedAt: appointment.startedAt || now,
+      vehicle: appointment.vehicle || "",
+      plate: appointment.plate || "",
+    });
+  return (
+    <div className="backdrop">
+      <form
+        className="modal evaluation-start-modal"
+        onSubmit={(event) => {
+          event.preventDefault();
+          proceed(form);
+        }}
+      >
+        <div>
+          <span>
+            <h2>Iniciar avaliação</h2>
+            <p>Confirme os dados antes de abrir a ficha de avaliação.</p>
+          </span>
+          <button type="button" onClick={close} aria-label="Fechar">
+            ×
+          </button>
+        </div>
+        <div className="evaluation-start-client">
+          <b>{appointment.client}</b>
+          <small>
+            Agendado para {appointment.time} · Preenchendo agora: {currentUser}
+          </small>
+        </div>
+        <section>
+          <label>
+            Quem está avaliando
+            <select
+              required
+              value={form.evaluator}
+              onChange={(event) =>
+                setForm({ ...form, evaluator: event.target.value })
+              }
+            >
+              <option value="">Selecione o avaliador</option>
+              {techs.map((name: string) => (
+                <option key={name}>{name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Horário de início
+            <input
+              required
+              type="time"
+              value={form.startedAt}
+              onChange={(event) =>
+                setForm({ ...form, startedAt: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Veículo
+            <input
+              required
+              value={form.vehicle}
+              placeholder="Informe o veículo"
+              onChange={(event) =>
+                setForm({ ...form, vehicle: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Placa
+            <input
+              required
+              value={form.plate}
+              placeholder="Informe a placa"
+              maxLength={8}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  plate: event.target.value.toLocaleUpperCase("pt-BR"),
+                })
+              }
+            />
+          </label>
+        </section>
+        <p className="evaluation-start-help">
+          O avaliador ficará registrado separadamente do usuário que está
+          preenchendo o sistema.
+        </p>
+        <footer>
+          <button type="button" onClick={close}>
+            Cancelar
+          </button>
+          <button type="submit" className="primary">
+            Confirmar e abrir avaliação →
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 function Modal({ initial, currentUser, close, save, remove }: any) {
   const schedulers = [
     ...new Set(["Anna", "Clissia", "Tiago", "Saulo", "Vitor", currentUser]),
@@ -3307,6 +4300,7 @@ function PrintDocuments({
   parts,
   selectedServices,
   serviceQty,
+  servicePrices,
   manualServices,
   patioNotes,
   checks,
@@ -3319,6 +4313,8 @@ function PrintDocuments({
   roundStep,
 }: any) {
   const a = DISPLAY_APPT,
+    budgetApproved =
+      a.status === "servico" || a.budget?.processStatus === "Finalizado",
     state = (i: number) =>
       status[i + 1] === "g"
         ? "Bom estado"
@@ -3426,6 +4422,9 @@ function PrintDocuments({
             {a.km || "Não informado"}
           </span>
         </div>
+        {budgetApproved && (
+          <div className="print-approval-banner">✓ ORÇAMENTO APROVADO</div>
+        )}
         <h3>Peças</h3>
         {parts.map((p: any, i: number) => (
           <div className="a4-line" key={i}>
@@ -3440,8 +4439,15 @@ function PrintDocuments({
         {selectedServices.map((i: number) => (
           <div className="a4-line" key={i}>
             <b>{serviceQty[i] ?? 0}x</b>
-            <span>{SERVICES[i][0]}</span>
-            <em>{brl(SERVICES[i][1] * (serviceQty[i] ?? 0))}</em>
+            <span>
+              {SERVICES[i][0]}
+              {budgetApproved && (
+                <small className="print-approved">✓ APROVADO</small>
+              )}
+            </span>
+            <em>
+              {brl(servicePrice(i, servicePrices) * (serviceQty[i] ?? 0))}
+            </em>
           </div>
         ))}
         {manualServices
@@ -3449,7 +4455,12 @@ function PrintDocuments({
           .map((service: any, i: number) => (
             <div className="a4-line" key={`manual-budget-${i}`}>
               <b>{service.qty || 0}x</b>
-              <span>{service.name}</span>
+              <span>
+                {service.name}
+                {budgetApproved && (
+                  <small className="print-approved">✓ APROVADO</small>
+                )}
+              </span>
               <em>{brl((service.qty || 0) * (service.value || 0))}</em>
             </div>
           ))}
@@ -3492,6 +4503,9 @@ function PrintDocuments({
             {a.plate || "Não informada"}
           </span>
         </div>
+        {budgetApproved && (
+          <div className="print-approval-banner">✓ ORÇAMENTO APROVADO</div>
+        )}
         <h3>Peças e materiais</h3>
         {parts.map((p: any, i: number) => (
           <div className="a4-line no-price" key={i}>
@@ -3505,7 +4519,12 @@ function PrintDocuments({
         {selectedServices.map((i: number) => (
           <div className="a4-line no-price" key={i}>
             <b>{serviceQty[i] ?? 0}x</b>
-            <span>{SERVICES[i][0]}</span>
+            <span>
+              {SERVICES[i][0]}
+              {budgetApproved && (
+                <small className="print-approved">✓ APROVADO</small>
+              )}
+            </span>
           </div>
         ))}
         {manualServices
@@ -3513,7 +4532,12 @@ function PrintDocuments({
           .map((service: any, i: number) => (
             <div className="a4-line no-price" key={`manual-proposal-${i}`}>
               <b>{service.qty || 0}x</b>
-              <span>{service.name}</span>
+              <span>
+                {service.name}
+                {budgetApproved && (
+                  <small className="print-approved">✓ APROVADO</small>
+                )}
+              </span>
             </div>
           ))}
         <div
@@ -3988,6 +5012,270 @@ function UserRow({ account, current, act }: any) {
   );
 }
 
+function PurchaseOrders({
+  appointments,
+  checks,
+  setChecks,
+  setWorkOrder,
+  currentUser,
+}: any) {
+  const [filter, setFilter] = useState<
+    "all" | "pending" | "ordered" | "received"
+  >("all");
+  const rows = useMemo(() => {
+    const unique = new Map<string, any>();
+    for (const appointment of appointments as Appt[]) {
+      if (
+        !appointment.budget ||
+        appointment.budget.processStatus === "Finalizado" ||
+        appointment.status === "faltou" ||
+        (appointment.status !== "servico" && !appointment.serviceScheduled)
+      )
+        continue;
+      const ownerId = appointment.sourceAppointmentId ?? appointment.id;
+      appointment.budget.parts.forEach((part: any, index: number) => {
+        if (!part.item?.trim() || Number(part.qty) <= 0) return;
+        const key = `${ownerId}:${index}`;
+        if (!unique.has(key))
+          unique.set(key, {
+            key,
+            ownerId,
+            appointment,
+            part,
+            serviceDate:
+              appointment.serviceScheduledFor || appointment.date || "",
+          });
+      });
+    }
+    return [...unique.values()].sort((a, b) => {
+      const aState = checks[a.key]?.received
+          ? 2
+          : checks[a.key]?.ordered
+            ? 1
+            : 0,
+        bState = checks[b.key]?.received ? 2 : checks[b.key]?.ordered ? 1 : 0;
+      return (
+        aState - bState ||
+        a.serviceDate.localeCompare(b.serviceDate) ||
+        a.part.item.localeCompare(b.part.item, "pt-BR")
+      );
+    });
+  }, [appointments, checks]);
+  const counts = {
+      pending: rows.filter((row) => !checks[row.key]?.ordered).length,
+      ordered: rows.filter(
+        (row) => checks[row.key]?.ordered && !checks[row.key]?.received,
+      ).length,
+      received: rows.filter((row) => checks[row.key]?.received).length,
+    },
+    visibleRows = rows.filter((row) => {
+      const state = checks[row.key];
+      if (filter === "pending") return !state?.ordered;
+      if (filter === "ordered") return state?.ordered && !state?.received;
+      if (filter === "received") return state?.received;
+      return true;
+    }),
+    groups = visibleRows.reduce((result: any[], row: any) => {
+      let group = result.find((item) => item.ownerId === row.ownerId);
+      if (!group) {
+        group = {
+          ownerId: row.ownerId,
+          appointment: row.appointment,
+          serviceDate: row.serviceDate,
+          rows: [],
+        };
+        result.push(group);
+      }
+      group.rows.push(row);
+      return result;
+    }, []),
+    update = (key: string, patch: Partial<PurchaseCheck>) =>
+      setChecks((current: Record<string, PurchaseCheck>) => ({
+        ...current,
+        [key]: {
+          ordered: false,
+          received: false,
+          note: "",
+          ...current[key],
+          ...patch,
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+  return (
+    <section className="page purchase-page">
+      <div className="purchase-summary">
+        <button
+          className={filter === "all" ? "active" : ""}
+          onClick={() => setFilter("all")}
+        >
+          Todos <b>{rows.length}</b>
+        </button>
+        <button
+          className={filter === "pending" ? "active pending" : ""}
+          onClick={() => setFilter("pending")}
+        >
+          A comprar <b>{counts.pending}</b>
+        </button>
+        <button
+          className={filter === "ordered" ? "active ordered" : ""}
+          onClick={() => setFilter("ordered")}
+        >
+          Comprados <b>{counts.ordered}</b>
+        </button>
+        <button
+          className={filter === "received" ? "active received" : ""}
+          onClick={() => setFilter("received")}
+        >
+          Conferidos <b>{counts.received}</b>
+        </button>
+      </div>
+      <div className="purchase-guidance">
+        <b>Conferência do pedido</b>
+        <span>
+          Primeiro marque “Comprado”. Quando a peça chegar, marque “Recebido e
+          conferido”. As alterações são salvas automaticamente.
+        </span>
+      </div>
+      {visibleRows.length === 0 ? (
+        <div className="emptyday">
+          Nenhuma peça encontrada nesta situação. Os itens aparecerão após o
+          orçamento ser aprovado ou o serviço ser agendado.
+        </div>
+      ) : (
+        <div className="purchase-os-list">
+          {groups.map((group: any) => (
+            <section className="purchase-os-card" key={group.ownerId}>
+              <header className="purchase-os-head">
+                <label>
+                  <span>Número da OS</span>
+                  <input
+                    value={group.appointment.workOrder ?? ""}
+                    placeholder="Digite a OS"
+                    onChange={(event) =>
+                      setWorkOrder(group.ownerId, event.target.value)
+                    }
+                  />
+                </label>
+                <span>
+                  <small>Cliente / veículo</small>
+                  <b>
+                    {group.appointment.client} ·{" "}
+                    {group.appointment.vehicle || "Veículo não informado"} ·{" "}
+                    {group.appointment.plate || "Sem placa"}
+                  </b>
+                </span>
+                <span>
+                  <small>Data do serviço</small>
+                  <b>
+                    {group.serviceDate
+                      ? new Date(
+                          `${group.serviceDate}T12:00:00`,
+                        ).toLocaleDateString("pt-BR")
+                      : "Não informada"}
+                  </b>
+                </span>
+              </header>
+              <div className="purchase-os-columns" aria-hidden="true">
+                <b>Peça / fornecedor</b>
+                <b>Qtd.</b>
+                <b>Comprado</b>
+                <b>Conferido</b>
+              </div>
+              <div className="purchase-os-items">
+                {group.rows.map(({ key, part }: any) => {
+                  const state: PurchaseCheck = checks[key] ?? {
+                    ordered: false,
+                    received: false,
+                    note: "",
+                  };
+                  return (
+                    <div
+                      className={`purchase-os-row ${
+                        state.received
+                          ? "received"
+                          : state.ordered
+                            ? "ordered"
+                            : "pending"
+                      }`}
+                      key={key}
+                    >
+                      <span className="purchase-os-part">
+                        <b>{part.item}</b>
+                        <small>
+                          {part.brand || "Marca não informada"} ·{" "}
+                          {part.supplier || "Fornecedor não informado"} · Cód.{" "}
+                          {part.code || "não informado"}
+                        </small>
+                      </span>
+                      <strong className="purchase-os-qty">{part.qty}</strong>
+                      <label
+                        className="purchase-os-tick"
+                        title={
+                          state.orderedBy
+                            ? `Comprado por ${state.orderedBy}`
+                            : "Marcar como comprado"
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={state.ordered}
+                          onChange={(event) =>
+                            update(key, {
+                              ordered: event.target.checked,
+                              received: event.target.checked
+                                ? state.received
+                                : false,
+                              orderedBy: event.target.checked
+                                ? currentUser
+                                : undefined,
+                              receivedBy: event.target.checked
+                                ? state.receivedBy
+                                : undefined,
+                            })
+                          }
+                        />
+                        <span>Comprado</span>
+                      </label>
+                      <label
+                        className="purchase-os-tick"
+                        title={
+                          state.receivedBy
+                            ? `Conferido por ${state.receivedBy}`
+                            : "Marcar como recebido e conferido"
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={state.received}
+                          onChange={(event) =>
+                            update(key, {
+                              ordered: event.target.checked
+                                ? true
+                                : state.ordered,
+                              received: event.target.checked,
+                              orderedBy: event.target.checked
+                                ? state.orderedBy || currentUser
+                                : state.orderedBy,
+                              receivedBy: event.target.checked
+                                ? currentUser
+                                : undefined,
+                            })
+                          }
+                        />
+                        <span>Conferido</span>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function History() {
   const [events, setEvents] = useState<any[]>([]),
     [query, setQuery] = useState("");
@@ -4069,7 +5357,9 @@ function AttendanceSummary({
     servicesTotal =
       budget.selectedServices.reduce(
         (sum: number, index: number) =>
-          sum + SERVICES[index][1] * (budget.serviceQty[index] ?? 0),
+          sum +
+          servicePrice(index, budget.servicePrices) *
+            (budget.serviceQty[index] ?? 0),
         0,
       ) +
       budget.manualServices.reduce(
@@ -4105,7 +5395,7 @@ function AttendanceSummary({
       <Vehicle />
       <div className="completion-banner">
         <span>
-          <b>✓ Atendimento concluído</b>
+          <b>✓ {completedAttendanceLabel(appointment)}</b>
           <small>
             Finalizado em{" "}
             {appointment.conference?.finalizedAt
@@ -4115,11 +5405,13 @@ function AttendanceSummary({
               : "data não registrada"}
           </small>
         </span>
-        <strong>Atendimento concluído</strong>
+        <strong>{completedAttendanceLabel(appointment)}</strong>
       </div>
       <div className="summary-card">
         <h2>Responsáveis pelo atendimento</h2>
-        <p><b>Técnico avaliador:</b> {appointment.tech || "Não informado"}</p>
+        <p>
+          <b>Técnico avaliador:</b> {appointment.tech || "Não informado"}
+        </p>
         <p>
           <b>Avaliação registrada por:</b>{" "}
           {appointment.evaluationRecordedBy || "Não informado"}
@@ -4169,9 +5461,12 @@ function AttendanceSummary({
             <b>{budget.serviceQty[index] ?? 0}x</b>
             <span>{SERVICES[index][0]}</span>
             <strong>
-              {SERVICES[index][1]
-                ? brl(SERVICES[index][1] * (budget.serviceQty[index] ?? 0))
-                : "Cortesia"}
+              {serviceIsCourtesy(index)
+                ? "Cortesia"
+                : brl(
+                    servicePrice(index, budget.servicePrices) *
+                      (budget.serviceQty[index] ?? 0),
+                  )}
             </strong>
           </div>
         ))}
@@ -4319,6 +5614,7 @@ function Reports({
         (a) =>
           a.status === "avaliou" &&
           a.type === "cliente" &&
+          !a.serviceAppointmentId &&
           a.budget?.processStatus !== "Finalizado",
       ).length,
     ],
@@ -4336,6 +5632,7 @@ function Reports({
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
@@ -4782,6 +6079,10 @@ const TITLES: Record<View, [string, string]> = {
   revisao: [
     "Revisão de 30 dias",
     "Conferência cortesia do serviço executado anteriormente.",
+  ],
+  compras: [
+    "Pedido de compra",
+    "Acompanhe as peças compradas, recebidas e conferidas.",
   ],
   relatorios: [
     "Relatórios de avaliações",
