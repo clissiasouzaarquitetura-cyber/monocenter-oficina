@@ -4335,6 +4335,19 @@ function Agenda({
         : mode === "semana"
           ? `${calendarDays[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${calendarDays[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
           : fmt(date);
+  const weekStartHour = 7,
+    weekEndHour = 20,
+    weekHourHeight = 58,
+    weekHours = Array.from(
+      { length: weekEndHour - weekStartHour + 1 },
+      (_, index) => weekStartHour + index,
+    ),
+    appointmentMinute = (time?: string) => {
+      const [hour, minute] = String(time || "").split(":").map(Number);
+      return Number.isFinite(hour) && Number.isFinite(minute)
+        ? hour * 60 + minute
+        : weekStartHour * 60;
+    };
   const move = (n: number) => {
       if (mode === "mes") {
         const next = new Date(cursor.getFullYear(), cursor.getMonth() + n, 1);
@@ -4444,47 +4457,132 @@ function Agenda({
           </button>
         </div>
       </div>
-      <div className={openCal ? "aggrid" : "aggrid calendar-closed"}>
+      <div
+        className={`${openCal ? "aggrid" : "aggrid calendar-closed"} agenda-grid-${mode}`}
+      >
         {openCal && (
           <div className={"calendar calendar-" + mode}>
-            <div className="week">
-              {weekLabels.map((x) => (
-                <b key={x}>{x}</b>
-              ))}
-            </div>
-            <div className="days">
-              {calendarDays.map((d) => {
-                const ds = iso(d),
-                  apps = appointmentsForDate(ds),
-                  holiday = holidays.find((h: any) => h.date === ds);
-                return (
-                  <button
-                    onClick={() => setDate(ds)}
-                    className={
-                      (ds === date ? "selected " : "") +
-                      (mode === "mes" && d.getMonth() !== cursor.getMonth()
-                        ? "muted"
-                        : "") +
-                      (holiday ? " holiday" : "")
-                    }
-                    key={ds}
-                  >
-                    <b>{mode === "dia" ? fmt(ds) : d.getDate()}</b>
-                    {holiday && <em title={holiday.name}>● {holiday.name}</em>}
-                    {apps.map((a: Appt) => (
-                      <span
-                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
-                        key={a.id}
+            {mode === "semana" ? (
+              <div className="week-timeline">
+                <div className="week-timeline-head">
+                  <span className="week-time-zone">Horário</span>
+                  {calendarDays.map((d) => {
+                    const ds = iso(d),
+                      holiday = holidays.find((h: any) => h.date === ds);
+                    return (
+                      <button
+                        type="button"
+                        key={ds}
+                        className={`${ds === date ? "selected" : ""}${ds === todayIso ? " today" : ""}`}
+                        onClick={() => setDate(ds)}
                       >
-                        {isCarriedInto(a, ds) ? "↳ " : `${a.time} `}
-                        {a.client.split(" ")[0]}
-                        {a.quoteSentAt ? " ✓" : ""}
+                        <small>
+                          {d
+                            .toLocaleDateString("pt-BR", { weekday: "short" })
+                            .replace(".", "")}
+                        </small>
+                        <b>{d.getDate()}</b>
+                        {holiday && <em title={holiday.name}>{holiday.name}</em>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  className="week-timeline-body"
+                  style={{
+                    height: `${(weekEndHour - weekStartHour) * weekHourHeight}px`,
+                  }}
+                >
+                  <div className="week-time-column">
+                    {weekHours.map((hour) => (
+                      <span
+                        key={hour}
+                        style={{ top: `${(hour - weekStartHour) * weekHourHeight}px` }}
+                      >
+                        {String(hour).padStart(2, "0")}:00
                       </span>
                     ))}
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                  <div className="week-day-columns">
+                    {calendarDays.map((d) => {
+                      const ds = iso(d),
+                        apps = appointmentsForDate(ds);
+                      return (
+                        <div
+                          className={`week-day-column${ds === date ? " selected" : ""}`}
+                          key={ds}
+                          onClick={() => setDate(ds)}
+                        >
+                          {apps.map((a: Appt) => {
+                            const minutes = appointmentMinute(a.time),
+                              top = Math.max(
+                                0,
+                                ((minutes - weekStartHour * 60) / 60) *
+                                  weekHourHeight,
+                              );
+                            return (
+                              <span
+                                className={`week-appointment ${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
+                                key={a.id}
+                                style={{
+                                  top: `${Math.min(top, (weekEndHour - weekStartHour) * weekHourHeight - 42)}px`,
+                                }}
+                                title={`${a.time} · ${a.client}${a.vehicle ? ` · ${a.vehicle}` : ""}`}
+                              >
+                                <b>{isCarriedInto(a, ds) ? "↳" : a.time}</b>
+                                <small>{a.client}</small>
+                                {a.quoteSentAt && <i>✓</i>}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="week">
+                  {weekLabels.map((x) => (
+                    <b key={x}>{x}</b>
+                  ))}
+                </div>
+                <div className="days">
+                  {calendarDays.map((d) => {
+                    const ds = iso(d),
+                      apps = appointmentsForDate(ds),
+                      holiday = holidays.find((h: any) => h.date === ds);
+                    return (
+                      <button
+                        onClick={() => setDate(ds)}
+                        className={
+                          (ds === date ? "selected " : "") +
+                          (mode === "mes" && d.getMonth() !== cursor.getMonth()
+                            ? "muted"
+                            : "") +
+                          (holiday ? " holiday" : "")
+                        }
+                        key={ds}
+                      >
+                        <b>{mode === "dia" ? fmt(ds) : d.getDate()}</b>
+                        {holiday && <em title={holiday.name}>● {holiday.name}</em>}
+                        {apps.map((a: Appt) => (
+                          <span
+                            className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
+                            key={a.id}
+                          >
+                            {isCarriedInto(a, ds) ? "↳ " : `${a.time} `}
+                            {a.client.split(" ")[0]}
+                            {a.quoteSentAt ? " ✓" : ""}
+                          </span>
+                        ))}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
         <div className="day">
