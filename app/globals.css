@@ -1692,6 +1692,15 @@ header > button {
 .manualservices {
   margin-top: 12px;
 }
+.gabaritagem-manual-services {
+  margin-top: 4px;
+  padding: 0 8px 6px;
+  border-radius: 7px;
+  background: rgba(227, 27, 35, 0.035);
+}
+.gabaritagem-manual-services > div:first-child {
+  border-top: 0;
+}
 .manualservices > div {
   display: grid;
   grid-template-columns: 1fr 90px 150px 100px 44px;
