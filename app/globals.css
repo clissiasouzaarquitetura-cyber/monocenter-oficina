@@ -4445,6 +4445,210 @@ header > button {
   padding: 7px 6px;
 }
 
+/* Semana em formato de agenda por horários. */
+.agenda-grid-semana {
+  grid-template-columns: minmax(0, 1fr);
+}
+.calendar-semana {
+  overflow-x: auto;
+  padding: 0;
+}
+.week-timeline {
+  min-width: 940px;
+  overflow: hidden;
+  border-radius: 11px;
+}
+.week-timeline-head {
+  display: grid;
+  grid-template-columns: 58px repeat(7, minmax(115px, 1fr));
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-height: 66px;
+  border-bottom: 1px solid #cfd8e3;
+  background: #fff;
+}
+.week-time-zone {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 4px 9px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 800;
+}
+.week-timeline-head button {
+  display: flex;
+  min-width: 0;
+  border: 0;
+  border-left: 1px solid #e1e7ee;
+  border-radius: 0;
+  background: #fff;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #172033;
+}
+.week-timeline-head button small {
+  text-transform: uppercase;
+  font-size: 9px;
+  font-weight: 800;
+}
+.week-timeline-head button b {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 20px;
+}
+.week-timeline-head button.today b {
+  background: #2563eb;
+  color: #fff;
+}
+.week-timeline-head button.selected:not(.today) {
+  background: #fff6f6;
+}
+.week-timeline-head button em {
+  max-width: 100%;
+  overflow: hidden;
+  color: #c51d25;
+  font-size: 8px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.week-timeline-body {
+  position: relative;
+  min-width: 940px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 57px,
+    #dbe3ec 57px,
+    #dbe3ec 58px
+  );
+}
+.week-time-column {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 58px;
+  background: #fff;
+}
+.week-time-column span {
+  position: absolute;
+  right: 8px;
+  z-index: 2;
+  padding: 0 2px;
+  transform: translateY(-50%);
+  background: #fff;
+  color: #475569;
+  font-size: 10px;
+  line-height: 1;
+}
+.week-day-columns {
+  display: grid;
+  height: 100%;
+  margin-left: 58px;
+  grid-template-columns: repeat(7, minmax(115px, 1fr));
+}
+.week-day-column {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid #dbe3ec;
+  cursor: pointer;
+}
+.week-day-column.selected {
+  background: rgba(227, 27, 35, 0.025);
+  box-shadow: inset 0 0 0 2px rgba(227, 27, 35, 0.45);
+}
+.week-appointment {
+  display: grid;
+  position: absolute;
+  right: 4px;
+  left: 4px;
+  z-index: 3;
+  min-height: 44px;
+  max-height: 52px;
+  overflow: hidden;
+  border-left: 4px solid var(--r);
+  border-radius: 5px;
+  padding: 5px 6px;
+  background: #fff0f0;
+  align-content: start;
+  grid-template-columns: auto 1fr auto;
+  gap: 2px 5px;
+  color: #172033;
+  font-size: 10px;
+  line-height: 1.15;
+  text-align: left;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.week-appointment > b {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.week-appointment > small {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.week-appointment > i {
+  color: #087d47;
+  font-style: normal;
+  font-weight: 900;
+}
+.week-appointment.avaliou { border-left-color: var(--y); background: #fff9e8; }
+.week-appointment.servico { border-left-color: var(--g); background: #ecf8f1; }
+.week-appointment.inprogress { border-left-color: #2f74c0; background: #edf5ff; }
+.week-appointment.conference { border-left-color: #7c3aed; background: #f5f0ff; }
+.week-appointment.faltou { border-left-color: var(--r); background: #fff0f0; }
+.week-appointment.block { border-left-color: #64748b; background: #edf1f5; }
+.week-appointment.retorno { border-left-color: #7c3aed; background: #f4efff; }
+.week-appointment.revisao { border-left-color: #2563eb; background: #edf4ff; }
+.week-appointment.garantia { border-left-color: #e77718; background: #fff1e5; }
+.week-appointment.completed { border-left-color: #0891b2; background: #cffafe; color: #164e63; }
+.week-appointment.scheduled-service { border-left-color: #4f46e5; background: #eef2ff; color: #312e81; }
+.week-appointment.vehicle-in-shop { border-right: 4px solid #009c9c; }
+.week-appointment.carried-over { border-top: 1px dashed #008b8b; border-bottom: 1px dashed #008b8b; }
+.app.dark .week-timeline-head,
+.app.dark .week-timeline-head button,
+.app.dark .week-time-column,
+.app.dark .week-time-column span {
+  background: #151e2a;
+  color: #eef2f7;
+}
+.app.dark .week-timeline-body {
+  background-color: #151e2a;
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 57px, #344254 57px, #344254 58px);
+}
+.app.dark .week-day-column {
+  border-color: #344254;
+}
+@media (max-width: 700px) {
+  .week-timeline,
+  .week-timeline-body {
+    min-width: 820px;
+  }
+  .week-timeline-head {
+    grid-template-columns: 50px repeat(7, 110px);
+  }
+  .week-day-columns {
+    margin-left: 50px;
+    grid-template-columns: repeat(7, 110px);
+  }
+  .week-time-column {
+    width: 50px;
+  }
+  .week-appointment > small {
+    font-size: 9px;
+  }
+}
+
 /* Contraste completo no modo escuro */
 .app.dark header {
   border-color: var(--line);
