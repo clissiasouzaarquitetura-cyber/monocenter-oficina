@@ -4250,11 +4250,22 @@ function Agenda({
     [cursor, setCursor] = useState(
       new Date(today.getFullYear(), today.getMonth(), 1),
     ),
-    [mode, setMode] = useState<"dia" | "semana" | "mes">("mes"),
+    [mode, setMode] = useState<"dia" | "semana" | "mes">(() => {
+      if (typeof window === "undefined") return "mes";
+      const savedMode = localStorage.getItem("monocenter-calendar-mode");
+      return savedMode === "dia" ||
+        savedMode === "semana" ||
+        savedMode === "mes"
+        ? savedMode
+        : "mes";
+    }),
     [openCal, setOpenCal] = useState(true),
     [showSaturday, setShowSaturday] = useState(false),
     [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
+  useEffect(() => {
+    localStorage.setItem("monocenter-calendar-mode", mode);
+  }, [mode]);
   const carryLimitIso = todayIso,
     isBusinessDay = (targetDate: string) => {
       const weekday = new Date(`${targetDate}T12:00:00`).getDay();
@@ -4303,7 +4314,11 @@ function Agenda({
       appointment.type !== "bloqueio" &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado",
-    list = [...appointmentsForDate(date)].sort((first, second) => {
+    dayAppointments =
+      mode === "semana"
+        ? (data as Appt[]).filter((appointment) => appointment.date === date)
+        : appointmentsForDate(date),
+    list = [...dayAppointments].sort((first, second) => {
       const groupDifference =
         Number(isOngoingVehicle(first)) - Number(isOngoingVehicle(second));
       if (groupDifference !== 0) return groupDifference;
@@ -4338,7 +4353,7 @@ function Agenda({
           : fmt(date);
   const weekStartHour = 7,
     weekEndHour = 20,
-    weekHourHeight = 82,
+    weekHourHeight = 116,
     weekHours = Array.from(
       { length: weekEndHour - weekStartHour + 1 },
       (_, index) => weekStartHour + index,
@@ -4383,7 +4398,8 @@ function Agenda({
     <section className="agenda">
       <style>{`
         .agenda-grid-semana{grid-template-columns:minmax(0,1fr) 430px!important;align-items:start}
-        .agenda-grid-semana>.day{position:sticky;top:12px;max-height:calc(100vh - 220px);overflow-y:auto}
+        .agenda-grid-semana>.calendar,.agenda-grid-semana>.day{align-self:start;margin-top:0}
+        .agenda-grid-semana>.day{position:sticky;top:0;max-height:calc(100vh - 208px);overflow-y:auto}
         .calendar-semana{overflow-x:auto!important;padding:0!important}
         .week-timeline{min-width:760px;overflow:hidden;border-radius:11px}
         .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
@@ -4394,14 +4410,14 @@ function Agenda({
         .week-timeline-head button.today b{background:#2563eb;color:#fff}
         .week-timeline-head button.selected:not(.today){background:#fff6f6!important}
         .week-timeline-head button em{max-width:100%;overflow:hidden;color:#c51d25;font-size:8px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
-        .week-timeline-body{position:relative!important;min-width:760px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 81px,#dbe3ec 81px,#dbe3ec 82px)}
+        .week-timeline-body{position:relative!important;min-width:760px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 115px,#dbe3ec 115px,#dbe3ec 116px)}
         .week-time-column{position:absolute!important;inset:0 auto 0 0;width:54px;background:#fff}
         .week-time-column span{position:absolute!important;right:8px;z-index:2;padding:0 2px;transform:translateY(-50%);background:#fff;color:#475569;font-size:10px;line-height:1}
         .week-day-columns{display:grid!important;height:100%;margin-left:54px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}
         .week-day-column{position:relative!important;min-width:0;border-left:1px solid #dbe3ec;cursor:pointer}
         .week-day-column.selected{background:rgba(227,27,35,.025);box-shadow:inset 0 0 0 2px rgba(227,27,35,.45)}
-        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:38px;max-height:40px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:3px 5px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:1px 4px;color:#172033;font-size:9px;line-height:1.1;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
-        .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:8px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
+        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:50px;max-height:52px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:3px 5px;color:#172033;font-size:9px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+        .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:9px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
         .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
         @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
       `}</style>
@@ -4555,7 +4571,9 @@ function Agenda({
                   <div className="week-day-columns">
                     {visibleWeekDays.map((d) => {
                       const ds = iso(d),
-                        apps = appointmentsForDate(ds);
+                        apps = (data as Appt[]).filter(
+                          (appointment) => appointment.date === ds,
+                        );
                       return (
                         <div
                           className={`week-day-column${ds === date ? " selected" : ""}`}
@@ -4580,14 +4598,14 @@ function Agenda({
                                 0,
                                 ((minutes - weekStartHour * 60) / 60) *
                                   weekHourHeight +
-                                  sameTimeIndex * 40,
+                                  sameTimeIndex * 56,
                               );
                             return (
                               <span
                                 className={`week-appointment ${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
                                 key={a.id}
                                 style={{
-                                  top: `${Math.min(top, (weekEndHour - weekStartHour) * weekHourHeight - 42)}px`,
+                                  top: `${Math.min(top, (weekEndHour - weekStartHour) * weekHourHeight - 52)}px`,
                                 }}
                                 title={`${a.time} · ${a.client}${a.vehicle ? ` · ${a.vehicle}` : ""}`}
                               >
