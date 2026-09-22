@@ -176,9 +176,9 @@ const findVehicle = (value: string) => {
 const vehicleColorHex = (value?: string) =>
   VEHICLE_COLORS[(value || "").trim().toLocaleLowerCase("pt-BR")] ?? "#d8dde4";
 const SERVICES = [
-  ["Alinhamento de direção - Passeio", 100],
-  ["Alinhamento de direção - SUV", 120],
-  ["Alinhamento de direção - Caminhonete/Van", 150],
+  ["Alinhamento de direção 3D - Passeio", 100],
+  ["Alinhamento de direção 3D - SUV", 120],
+  ["Alinhamento de direção 3D - Caminhonete/Van", 150],
   ["Balanceamento - roda aro 13, 14 ou 15", 20],
   ["Balanceamento - roda aro 16, 17 ou 18", 25],
   ["Balanceamento - roda de caminhonete", 50],
@@ -197,9 +197,9 @@ const SERVICE_GROUPS = [
   { title: "1. Montagem de pneus", indexes: [6, 7, 8] },
   { title: "2. Balanceamento", indexes: [3, 4, 5] },
   { title: "3. Rodízio", indexes: [9] },
-  { title: "4. Alinhamento de direção", indexes: [0, 1, 2] },
+  { title: "4. Alinhamento de direção 3D", indexes: [0, 1, 2] },
   {
-    title: "5. Mãos de obra e alinhamentos técnicos",
+    title: "5. Gabaritagem",
     indexes: [10, 11, 12, 13, 14, 15],
   },
 ];
@@ -269,6 +269,7 @@ type BudgetState = {
   serviceQty: Record<number, number>;
   servicePrices?: Record<number, number>;
   manualServices: any[];
+  proposalPaymentOptions?: { pix: boolean; card: boolean };
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
   internalReview?: InternalBudgetReview;
@@ -675,6 +676,10 @@ export default function App({ initialState, user, onLogout }: any) {
       shared.servicePrices ?? {},
     ),
     [manualServices, setManualServices] = useState(shared.manualServices ?? []),
+    [proposalPaymentOptions, setProposalPaymentOptions] = useState<{
+      pix: boolean;
+      card: boolean;
+    }>(shared.proposalPaymentOptions ?? { pix: true, card: true }),
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
       shared.processStatus ?? "Em andamento",
@@ -724,6 +729,7 @@ export default function App({ initialState, user, onLogout }: any) {
         serviceQty,
         servicePrices,
         manualServices,
+        proposalPaymentOptions,
         patioNotes,
         processStatus,
         purchaseChecks,
@@ -768,6 +774,7 @@ export default function App({ initialState, user, onLogout }: any) {
     serviceQty,
     servicePrices,
     manualServices,
+    proposalPaymentOptions,
     patioNotes,
     processStatus,
     purchaseChecks,
@@ -1037,6 +1044,7 @@ export default function App({ initialState, user, onLogout }: any) {
     setServiceQty({});
     setServicePrices({});
     setManualServices([]);
+    setProposalPaymentOptions({ pix: true, card: true });
     setPatioNotes("");
     setChecks({});
     setGeometry({});
@@ -1187,7 +1195,20 @@ export default function App({ initialState, user, onLogout }: any) {
     }\n\n${
       tireParts.length
         ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)`
-        : `TOTAL: ${brl(total)}\n\nPagamento:\n• Pix com 5% de desconto: ${brl(total * 0.95)}\n• Cartão: até 5x sem juros de ${brl(total / 5)}`
+        : `TOTAL: ${brl(total)}${
+            proposalPaymentOptions.pix || proposalPaymentOptions.card
+              ? `\n\nPagamento:\n${[
+                  proposalPaymentOptions.pix
+                    ? `• Pix com 5% de desconto: ${brl(total * 0.95)}`
+                    : "",
+                  proposalPaymentOptions.card
+                    ? `• Cartão: até 5x sem juros de ${brl(total / 5)}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join("\n")}`
+              : ""
+          }`
     }`;
   return (
     <div className={darkMode ? "app dark" : "app"}>
@@ -1319,6 +1340,9 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  a.budget.proposalPaymentOptions ?? { pix: true, card: true },
+                );
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else if (
@@ -1330,6 +1354,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
@@ -1392,6 +1417,11 @@ export default function App({ initialState, user, onLogout }: any) {
                       activeAppointment.budget?.servicePrices ?? {},
                     manualServices:
                       activeAppointment.budget?.manualServices ?? [],
+                    proposalPaymentOptions:
+                      activeAppointment.budget?.proposalPaymentOptions ?? {
+                        pix: true,
+                        card: true,
+                      },
                     patioNotes: activeAppointment.budget?.patioNotes ?? "",
                     processStatus: "Finalizado",
                     internalReview:
@@ -1505,6 +1535,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus,
                             internalReview:
@@ -1837,6 +1868,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           serviceQty,
                           servicePrices,
                           manualServices,
+                          proposalPaymentOptions,
                           patioNotes,
                           processStatus,
                         };
@@ -2195,7 +2227,22 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="servicegrid">
                         {SERVICE_GROUPS.map((group) => (
                           <section className="service-group" key={group.title}>
-                            <h3>{group.title}</h3>
+                            <div className="service-group-heading">
+                              <h3>{group.title}</h3>
+                              {group.title === "5. Gabaritagem" && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setManualServices([
+                                      ...manualServices,
+                                      { name: "", qty: 1, value: 0 },
+                                    ])
+                                  }
+                                >
+                                  + Adicionar serviço
+                                </button>
+                              )}
+                            </div>
                             {group.indexes.map((i) => {
                               const x = SERVICES[i];
                               return (
@@ -2634,6 +2681,7 @@ export default function App({ initialState, user, onLogout }: any) {
                                   serviceQty,
                                   servicePrices,
                                   manualServices,
+                                  proposalPaymentOptions,
                                   patioNotes,
                                   processStatus,
                                   internalReview,
@@ -2763,16 +2811,55 @@ export default function App({ initialState, user, onLogout }: any) {
                     <div className="grand">
                       Total do orçamento <b>{brl(total)}</b>
                     </div>
-                    <div className="payments">
+                    <div className="payment-options no-print">
+                      <strong>Formas de pagamento exibidas na proposta</strong>
                       <label>
-                        <input type="radio" name="pay" defaultChecked /> Pix -
-                        5% de desconto <b>{brl(total * 0.95)}</b>
+                        <input
+                          type="checkbox"
+                          checked={proposalPaymentOptions.pix}
+                          onChange={(e) =>
+                            setProposalPaymentOptions({
+                              ...proposalPaymentOptions,
+                              pix: e.target.checked,
+                            })
+                          }
+                        />
+                        Pix com 5% de desconto
                       </label>
                       <label>
-                        <input type="radio" name="pay" /> Cartão - até 5x sem
-                        juros <b>5x de {brl(total / 5)}</b>
+                        <input
+                          type="checkbox"
+                          checked={proposalPaymentOptions.card}
+                          onChange={(e) =>
+                            setProposalPaymentOptions({
+                              ...proposalPaymentOptions,
+                              card: e.target.checked,
+                            })
+                          }
+                        />
+                        Cartão em até 5x sem juros
                       </label>
+                      {!proposalPaymentOptions.pix &&
+                        !proposalPaymentOptions.card && (
+                          <small>Nenhuma forma de pagamento será enviada.</small>
+                        )}
                     </div>
+                    {(proposalPaymentOptions.pix ||
+                      proposalPaymentOptions.card) && (
+                      <div className="payments">
+                        {proposalPaymentOptions.pix && (
+                          <label>
+                            Pix - 5% de desconto <b>{brl(total * 0.95)}</b>
+                          </label>
+                        )}
+                        {proposalPaymentOptions.card && (
+                          <label>
+                            Cartão - até 5x sem juros
+                            <b>5x de {brl(total / 5)}</b>
+                          </label>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="schedule-service-box">
                     <span>
@@ -2815,6 +2902,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
                             internalReview:
@@ -2901,6 +2989,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
                             internalReview:
@@ -3014,6 +3103,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
                             internalReview:
@@ -3390,6 +3480,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           serviceQty,
                           servicePrices,
                           manualServices,
+                          proposalPaymentOptions,
                           patioNotes,
                           processStatus: "Finalizado",
                           internalReview:
@@ -3485,6 +3576,9 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  a.budget.proposalPaymentOptions ?? { pix: true, card: true },
+                );
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else {
@@ -3493,6 +3587,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
@@ -3679,6 +3774,12 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(opened.budget.serviceQty ?? {});
                 setServicePrices(opened.budget.servicePrices ?? {});
                 setManualServices(opened.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  opened.budget.proposalPaymentOptions ?? {
+                    pix: true,
+                    card: true,
+                  },
+                );
                 setPatioNotes(opened.budget.patioNotes ?? "");
                 setProcessStatus(opened.budget.processStatus ?? "Em andamento");
               } else {
@@ -3687,6 +3788,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
