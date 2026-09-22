@@ -4338,7 +4338,7 @@ function Agenda({
           : fmt(date);
   const weekStartHour = 7,
     weekEndHour = 20,
-    weekHourHeight = 58,
+    weekHourHeight = 82,
     weekHours = Array.from(
       { length: weekEndHour - weekStartHour + 1 },
       (_, index) => weekStartHour + index,
@@ -4351,7 +4351,17 @@ function Agenda({
     },
     visibleWeekDays = calendarDays.filter(
       (day) => day.getDay() !== 0 && (showSaturday || day.getDay() !== 6),
-    );
+    ),
+    appointmentKindLabel = (appointment: Appt) => {
+      if (appointment.type === "revisao") return "Revisão 30 dias";
+      if (appointment.type === "retorno") return "Retorno";
+      if (appointment.type === "garantia") return "Garantia";
+      if (appointment.type === "bloqueio") return "Ausente";
+      if (appointment.serviceScheduled) return "Serviço agendado";
+      if (appointment.status === "avaliou") return "Orçamento";
+      if (appointment.status === "servico") return "Serviço aprovado";
+      return "Agendamento";
+    };
   const move = (n: number) => {
       if (mode === "mes") {
         const next = new Date(cursor.getFullYear(), cursor.getMonth() + n, 1);
@@ -4372,11 +4382,11 @@ function Agenda({
   return (
     <section className="agenda">
       <style>{`
-        .agenda-grid-semana{grid-template-columns:minmax(0,1fr) 360px!important;align-items:start}
+        .agenda-grid-semana{grid-template-columns:minmax(0,1fr) 430px!important;align-items:start}
         .agenda-grid-semana>.day{position:sticky;top:12px;max-height:calc(100vh - 220px);overflow-y:auto}
         .calendar-semana{overflow-x:auto!important;padding:0!important}
-        .week-timeline{min-width:940px;overflow:hidden;border-radius:11px}
-        .week-timeline-head{display:grid!important;grid-template-columns:58px repeat(var(--week-days),minmax(120px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
+        .week-timeline{min-width:760px;overflow:hidden;border-radius:11px}
+        .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
         .week-time-zone{display:flex;align-items:flex-end;justify-content:center;padding:0 4px 9px;color:#64748b;font-size:9px;font-weight:800}
         .week-timeline-head button{display:flex!important;min-width:0;border:0!important;border-left:1px solid #e1e7ee!important;border-radius:0!important;background:#fff!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#172033!important}
         .week-timeline-head button small{text-transform:uppercase;font-size:9px;font-weight:800}
@@ -4384,16 +4394,16 @@ function Agenda({
         .week-timeline-head button.today b{background:#2563eb;color:#fff}
         .week-timeline-head button.selected:not(.today){background:#fff6f6!important}
         .week-timeline-head button em{max-width:100%;overflow:hidden;color:#c51d25;font-size:8px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
-        .week-timeline-body{position:relative!important;min-width:940px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 57px,#dbe3ec 57px,#dbe3ec 58px)}
-        .week-time-column{position:absolute!important;inset:0 auto 0 0;width:58px;background:#fff}
+        .week-timeline-body{position:relative!important;min-width:760px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 81px,#dbe3ec 81px,#dbe3ec 82px)}
+        .week-time-column{position:absolute!important;inset:0 auto 0 0;width:54px;background:#fff}
         .week-time-column span{position:absolute!important;right:8px;z-index:2;padding:0 2px;transform:translateY(-50%);background:#fff;color:#475569;font-size:10px;line-height:1}
-        .week-day-columns{display:grid!important;height:100%;margin-left:58px;grid-template-columns:repeat(var(--week-days),minmax(120px,1fr))}
+        .week-day-columns{display:grid!important;height:100%;margin-left:54px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}
         .week-day-column{position:relative!important;min-width:0;border-left:1px solid #dbe3ec;cursor:pointer}
         .week-day-column.selected{background:rgba(227,27,35,.025);box-shadow:inset 0 0 0 2px rgba(227,27,35,.45)}
-        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:44px;max-height:52px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 5px;color:#172033;font-size:10px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
-        .week-appointment>b{font-size:10px;white-space:nowrap}.week-appointment>small{min-width:0;overflow:hidden;font-size:10px;font-weight:800;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
+        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:38px;max-height:40px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:3px 5px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:1px 4px;color:#172033;font-size:9px;line-height:1.1;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+        .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:8px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
         .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
-        @media(max-width:1000px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:720px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(110px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(110px,1fr))}.week-time-column{width:50px}}
+        @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
       `}</style>
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
@@ -4552,12 +4562,25 @@ function Agenda({
                           key={ds}
                           onClick={() => setDate(ds)}
                         >
-                          {apps.map((a: Appt) => {
+                          {[...apps]
+                            .sort(
+                              (first, second) =>
+                                first.time.localeCompare(second.time) ||
+                                first.client.localeCompare(second.client),
+                            )
+                            .map((a: Appt, appointmentIndex, sortedApps) => {
                             const minutes = appointmentMinute(a.time),
+                              sameTimeIndex = sortedApps
+                                .slice(0, appointmentIndex)
+                                .filter(
+                                  (appointment) =>
+                                    appointment.time === a.time,
+                                ).length,
                               top = Math.max(
                                 0,
                                 ((minutes - weekStartHour * 60) / 60) *
-                                  weekHourHeight,
+                                  weekHourHeight +
+                                  sameTimeIndex * 40,
                               );
                             return (
                               <span
@@ -4569,8 +4592,12 @@ function Agenda({
                                 title={`${a.time} · ${a.client}${a.vehicle ? ` · ${a.vehicle}` : ""}`}
                               >
                                 <b>{isCarriedInto(a, ds) ? "↳" : a.time}</b>
-                                <small>{a.client}</small>
+                                <strong>{a.client}</strong>
                                 {a.quoteSentAt && <i>✓</i>}
+                                <small>
+                                  {a.vehicle || "Veículo não informado"} ·{" "}
+                                  {appointmentKindLabel(a)}
+                                </small>
                               </span>
                             );
                           })}
