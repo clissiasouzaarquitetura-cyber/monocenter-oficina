@@ -1693,13 +1693,33 @@ header > button {
   margin-top: 12px;
 }
 .gabaritagem-manual-services {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
   margin-top: 4px;
   padding: 0 8px 6px;
   border-radius: 7px;
   background: rgba(227, 27, 35, 0.035);
 }
+.gabaritagem-manual-services > div {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) 90px 150px 110px 44px;
+}
+.gabaritagem-manual-services > div > input:first-child {
+  min-width: 0;
+  white-space: normal;
+  text-overflow: clip;
+}
 .gabaritagem-manual-services > div:first-child {
   border-top: 0;
+}
+@media (max-width: 700px) {
+  .gabaritagem-manual-services > div {
+    grid-template-columns: minmax(0, 1fr) 70px;
+  }
+  .gabaritagem-manual-services > div label:nth-of-type(2) {
+    grid-column: 1 / 3;
+  }
 }
 .manualservices > div {
   display: grid;
