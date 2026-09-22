@@ -4377,6 +4377,73 @@ function Agenda({
       if (appointment.status === "servico") return "Serviço aprovado";
       return "Agendamento";
     };
+  const weeklyProgressLabel = (appointment: Appt) => {
+      if (appointment.budget?.processStatus === "Finalizado")
+        return "Finalizado";
+      if (appointment.status === "faltou") return "Faltou";
+      if (appointment.inProgress || appointment.status === "servico")
+        return "Em andamento";
+      return "";
+    },
+    teamAgendaDate = (() => {
+      const next = new Date(today);
+      if (next.getDay() === 5) {
+        const saturday = new Date(next);
+        saturday.setDate(next.getDate() + 1);
+        const hasSaturdayAppointments = (data as Appt[]).some(
+          (appointment) =>
+            appointment.type !== "bloqueio" &&
+            appointment.date === iso(saturday),
+        );
+        next.setDate(next.getDate() + (hasSaturdayAppointments ? 1 : 3));
+      } else if (next.getDay() === 6) {
+        next.setDate(next.getDate() + 2);
+      } else if (next.getDay() === 0) {
+        next.setDate(next.getDate() + 1);
+      } else {
+        next.setDate(next.getDate() + 1);
+      }
+      return next;
+    })(),
+    teamAgendaRows = (data as Appt[])
+      .filter(
+        (appointment) =>
+          appointment.type !== "bloqueio" &&
+          appointment.date === iso(teamAgendaDate),
+      )
+      .sort(
+        (first, second) =>
+          first.time.localeCompare(second.time) ||
+          first.client.localeCompare(second.client, "pt-BR"),
+      ),
+    teamAgendaLabel = teamAgendaDate.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+    }),
+    teamAgendaMessage = [
+      `*AGENDA MONOCENTER - ${teamAgendaDate
+        .toLocaleDateString("pt-BR", {
+          weekday: "long",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+        .toLocaleUpperCase("pt-BR")}*`,
+      "",
+      ...(teamAgendaRows.length
+        ? teamAgendaRows.map((appointment) =>
+            [
+              `*${appointment.time} - ${appointment.client}*`,
+              `${appointment.vehicle || "Veículo não informado"}${appointment.plate ? ` - ${appointment.plate}` : ""}`,
+              `Situação: ${weeklyProgressLabel(appointment) || appointmentKindLabel(appointment)}`,
+              appointment.note ? `Observação: ${appointment.note}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          )
+        : ["Nenhum agendamento para este dia."]),
+    ].join("\n\n");
   const move = (n: number) => {
       if (mode === "mes") {
         const next = new Date(cursor.getFullYear(), cursor.getMonth() + n, 1);
@@ -4416,9 +4483,11 @@ function Agenda({
         .week-day-columns{display:grid!important;height:100%;margin-left:54px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}
         .week-day-column{position:relative!important;min-width:0;border-left:1px solid #dbe3ec;cursor:pointer}
         .week-day-column.selected{background:rgba(227,27,35,.025);box-shadow:inset 0 0 0 2px rgba(227,27,35,.45)}
-        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:50px;max-height:52px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:3px 5px;color:#172033;font-size:9px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:64px;max-height:66px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 5px;color:#172033;font-size:9px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
         .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:9px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
+        .week-appointment>.week-appointment-status{color:#334155;font-size:8px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}.week-appointment>.status-finalizado{color:#087d47}.week-appointment>.status-faltou{color:#c51d25}.week-appointment>.status-em-andamento{color:#1d4ed8}
         .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
         @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
       `}</style>
       <div className="agenda-brand">
@@ -4602,7 +4671,7 @@ function Agenda({
                                   tops.push(
                                     index === 0
                                       ? naturalTop
-                                      : Math.max(naturalTop, previousTop + 56),
+                                      : Math.max(naturalTop, previousTop + 70),
                                   );
                                   return tops;
                                 }, []),
@@ -4623,6 +4692,13 @@ function Agenda({
                                   {a.vehicle || "Veículo não informado"} ·{" "}
                                   {appointmentKindLabel(a)}
                                 </small>
+                                {weeklyProgressLabel(a) && (
+                                  <small
+                                    className={`week-appointment-status status-${weeklyProgressLabel(a).toLocaleLowerCase("pt-BR").replaceAll(" ", "-")}`}
+                                  >
+                                    {weeklyProgressLabel(a)}
+                                  </small>
+                                )}
                               </span>
                             );
                           })}
@@ -4686,6 +4762,23 @@ function Agenda({
               {list.length} {list.length === 1 ? "registro" : "registros"}
             </b>
           </div>
+          {date === todayIso && (
+            <div className="team-agenda-reminder">
+              <span>
+                <small>Lembrete para a equipe</small>
+                <b>{teamAgendaLabel}</b>
+                <em>
+                  {teamAgendaRows.length}{" "}
+                  {teamAgendaRows.length === 1
+                    ? "agendamento"
+                    : "agendamentos"}
+                </em>
+              </span>
+              <button type="button" onClick={() => message(teamAgendaMessage)}>
+                Preparar WhatsApp
+              </button>
+            </div>
+          )}
           {list.length === 0 && (
             <div className="emptyday">
               Nenhum agendamento. Clique em “Novo agendamento” para incluir.
