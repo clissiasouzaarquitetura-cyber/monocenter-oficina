@@ -4587,25 +4587,32 @@ function Agenda({
                                 first.client.localeCompare(second.client),
                             )
                             .map((a: Appt, appointmentIndex, sortedApps) => {
-                            const minutes = appointmentMinute(a.time),
-                              sameTimeIndex = sortedApps
-                                .slice(0, appointmentIndex)
-                                .filter(
-                                  (appointment) =>
-                                    appointment.time === a.time,
-                                ).length,
-                              top = Math.max(
-                                0,
-                                ((minutes - weekStartHour * 60) / 60) *
-                                  weekHourHeight +
-                                  sameTimeIndex * 56,
-                              );
+                            const stackedTops = sortedApps
+                                .slice(0, appointmentIndex + 1)
+                                .reduce<number[]>((tops, appointment, index) => {
+                                  const minutes = appointmentMinute(
+                                      appointment.time,
+                                    ),
+                                    naturalTop = Math.max(
+                                      0,
+                                      ((minutes - weekStartHour * 60) / 60) *
+                                        weekHourHeight,
+                                    ),
+                                    previousTop = tops[index - 1];
+                                  tops.push(
+                                    index === 0
+                                      ? naturalTop
+                                      : Math.max(naturalTop, previousTop + 56),
+                                  );
+                                  return tops;
+                                }, []),
+                              top = stackedTops[stackedTops.length - 1] ?? 0;
                             return (
                               <span
                                 className={`week-appointment ${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
                                 key={a.id}
                                 style={{
-                                  top: `${Math.min(top, (weekEndHour - weekStartHour) * weekHourHeight - 52)}px`,
+                                  top: `${top}px`,
                                 }}
                                 title={`${a.time} · ${a.client}${a.vehicle ? ` · ${a.vehicle}` : ""}`}
                               >
