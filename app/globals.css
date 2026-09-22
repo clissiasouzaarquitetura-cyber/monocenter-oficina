@@ -1703,12 +1703,53 @@ header > button {
 }
 .gabaritagem-manual-services > div {
   width: 100%;
-  grid-template-columns: minmax(0, 1fr) 90px 150px 110px 44px;
+  min-height: 58px;
+  grid-template-columns: minmax(0, 1fr) 86px 145px 104px 44px;
+  align-items: end;
 }
 .gabaritagem-manual-services > div > input:first-child {
   min-width: 0;
+  height: 38px;
+  box-sizing: border-box;
   white-space: normal;
   text-overflow: clip;
+  font-size: 12px;
+}
+.gabaritagem-manual-services > div > label {
+  display: flex;
+  min-width: 0;
+  padding: 0;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 3px;
+  background: transparent !important;
+  font-size: 8px !important;
+  line-height: 1.05;
+}
+.gabaritagem-manual-services > div > label input {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 38px !important;
+  box-sizing: border-box;
+  padding: 6px 7px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+.gabaritagem-manual-services input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.gabaritagem-manual-services input[type="number"]::-webkit-inner-spin-button,
+.gabaritagem-manual-services input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+.gabaritagem-manual-services > div > b {
+  align-self: center;
+  white-space: nowrap;
+  font-size: 12px;
 }
 .gabaritagem-manual-services > div:first-child {
   border-top: 0;
