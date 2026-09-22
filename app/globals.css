@@ -6308,7 +6308,13 @@ header > button {
   padding: 9px;
   background: #f8fafc;
 }
-.service-group > h3 {
+.service-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.service-group-heading > h3 {
+  flex: 1;
   margin: 0 0 2px;
   border-left: 5px solid #e31b23;
   border-radius: 4px;
@@ -6316,6 +6322,56 @@ header > button {
   background: #eef1f4;
   color: #263442;
   font-size: 13px;
+}
+.service-group-heading > button {
+  white-space: nowrap;
+  padding: 7px 12px;
+}
+.payment-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 14px 0 10px;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+.payment-options strong {
+  flex-basis: 100%;
+}
+.payment-options label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.payment-options small {
+  flex-basis: 100%;
+  color: #b42318;
+}
+.app.dark .payment-options {
+  background: #182433;
+  border-color: #334155;
+}
+.app.dark .service-group-heading > h3 {
+  background: #293645;
+  color: #f1f5f9;
+}
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+@media (max-width: 720px) {
+  .service-group-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .service-group-heading > button {
+    width: 100%;
+  }
 }
 .servicegrid .service-group .service-row {
   grid-template-columns: 28px minmax(260px, 1fr) 250px 115px;
