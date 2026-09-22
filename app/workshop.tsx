@@ -207,6 +207,11 @@ const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
 const servicePrice = (index: number, prices?: Record<number, number>) =>
   prices?.[index] ?? SERVICES[index]?.[1] ?? 0;
+const isGabaritagemManualService = (service: any) =>
+  service?.category === "gabaritagem" ||
+  /gabarit|alinhamento técnico|longarina|eixo traseiro|solda/i.test(
+    String(service?.name ?? ""),
+  );
 const encodeBudgetTransfer = (value: unknown) => {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
   let binary = "";
@@ -2209,7 +2214,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           onClick={() =>
                             setManualServices([
                               ...manualServices,
-                              { name: "", qty: 0, value: 0 },
+                              { name: "", qty: 0, value: 0, category: "labor" },
                             ])
                           }
                         >
@@ -2235,7 +2240,12 @@ export default function App({ initialState, user, onLogout }: any) {
                                   onClick={() =>
                                     setManualServices([
                                       ...manualServices,
-                                      { name: "", qty: 1, value: 0 },
+                                      {
+                                        name: "",
+                                        qty: 1,
+                                        value: 0,
+                                        category: "gabaritagem",
+                                      },
                                     ])
                                   }
                                 >
@@ -2373,11 +2383,125 @@ export default function App({ initialState, user, onLogout }: any) {
                                 </div>
                               );
                             })}
+                            {group.title === "5. Gabaritagem" && (
+                              <div className="manualservices gabaritagem-manual-services">
+                                {manualServices
+                                .map((x, i) => ({ x, i }))
+                                .filter(({ x }) =>
+                                  isGabaritagemManualService(x),
+                                )
+                                .map(({ x, i }) => (
+                                  <div
+                                    className="manual-service-in-category"
+                                    key={`gabaritagem-${i}`}
+                                  >
+                                    <input
+                                      placeholder="Nome do serviço de gabaritagem"
+                                      value={x.name}
+                                      onChange={(e) => {
+                                        const a = [...manualServices];
+                                        a[i] = {
+                                          ...a[i],
+                                          name: e.target.value,
+                                          category: "gabaritagem",
+                                        };
+                                        setManualServices(a);
+                                      }}
+                                    />
+                                    <label>
+                                      Qtd.
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={x.qty || ""}
+                                        onChange={(e) => {
+                                          const a = [...manualServices];
+                                          a[i] = {
+                                            ...a[i],
+                                            qty: +e.target.value,
+                                            category: "gabaritagem",
+                                          };
+                                          setManualServices(a);
+                                        }}
+                                      />
+                                    </label>
+                                    <label>
+                                      Valor unitário R$
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={
+                                          serviceValueDrafts[`manual-${i}`] ??
+                                          decimalValue(x.value)
+                                        }
+                                        onFocus={(event) => {
+                                          setServiceValueDrafts((current) => ({
+                                            ...current,
+                                            [`manual-${i}`]: decimalValue(
+                                              x.value,
+                                            ),
+                                          }));
+                                          event.currentTarget.select();
+                                        }}
+                                        onChange={(e) => {
+                                          const typed = e.target.value;
+                                          setServiceValueDrafts((current) => ({
+                                            ...current,
+                                            [`manual-${i}`]: typed,
+                                          }));
+                                          const a = [...manualServices];
+                                          a[i] = {
+                                            ...a[i],
+                                            value: parseDecimalValue(typed),
+                                            category: "gabaritagem",
+                                          };
+                                          setManualServices(a);
+                                        }}
+                                        onBlur={() =>
+                                          setServiceValueDrafts((current) => {
+                                            const next = { ...current };
+                                            delete next[`manual-${i}`];
+                                            return next;
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                    <b>{brl(x.qty * x.value)}</b>
+                                    <button
+                                      type="button"
+                                      className="manual-service-delete"
+                                      aria-label={`Excluir serviço ${x.name || "sem nome"}`}
+                                      title="Excluir este serviço"
+                                      onClick={() => {
+                                        if (
+                                          confirm(
+                                            `Excluir o serviço “${x.name || "sem nome"}”?`,
+                                          )
+                                        ) {
+                                          setManualServices((current) =>
+                                            current.filter(
+                                              (_: any, index: number) =>
+                                                index !== i,
+                                            ),
+                                          );
+                                          setServiceValueDrafts({});
+                                        }
+                                      }}
+                                    >
+                                      🗑
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </section>
                         ))}
                       </div>
                       <div className="manualservices">
-                        {manualServices.map((x, i) => (
+                        {manualServices
+                          .map((x, i) => ({ x, i }))
+                          .filter(({ x }) => !isGabaritagemManualService(x))
+                          .map(({ x, i }) => (
                           <div key={i}>
                             <input
                               placeholder="Nome do serviço"
@@ -2460,7 +2584,7 @@ export default function App({ initialState, user, onLogout }: any) {
                               🗑
                             </button>
                           </div>
-                        ))}
+                          ))}
                       </div>
                     </div>
                   </Collapse>
@@ -3058,8 +3182,8 @@ export default function App({ initialState, user, onLogout }: any) {
                                 supplierName: String(part.supplier ?? ""),
                               })),
                             ...selectedServices.map((index: number) => ({
-                              category: /alinhamento técnico/i.test(
-                                SERVICES[index]?.[0] ?? "",
+                              category: SERVICE_GROUPS[4].indexes.includes(
+                                index,
                               )
                                 ? "gabaritagem"
                                 : "labor",
@@ -3071,7 +3195,9 @@ export default function App({ initialState, user, onLogout }: any) {
                             ...manualServices
                               .filter((service: any) => service.name?.trim())
                               .map((service: any) => ({
-                                category: "labor",
+                                category: isGabaritagemManualService(service)
+                                  ? "gabaritagem"
+                                  : "labor",
                                 description: service.name.trim(),
                                 quantity: Number(service.qty) || 1,
                                 unitPrice: Number(service.value) || 0,
