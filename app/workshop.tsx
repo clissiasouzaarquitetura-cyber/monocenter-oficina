@@ -4367,6 +4367,29 @@ function Agenda({
     };
   return (
     <section className="agenda">
+      <style>{`
+        .agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}
+        .calendar-semana{overflow-x:auto!important;padding:0!important}
+        .week-timeline{min-width:940px;overflow:hidden;border-radius:11px}
+        .week-timeline-head{display:grid!important;grid-template-columns:58px repeat(7,minmax(115px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
+        .week-time-zone{display:flex;align-items:flex-end;justify-content:center;padding:0 4px 9px;color:#64748b;font-size:9px;font-weight:800}
+        .week-timeline-head button{display:flex!important;min-width:0;border:0!important;border-left:1px solid #e1e7ee!important;border-radius:0!important;background:#fff!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#172033!important}
+        .week-timeline-head button small{text-transform:uppercase;font-size:9px;font-weight:800}
+        .week-timeline-head button b{display:grid;width:34px;height:34px;place-items:center;border-radius:50%;font-size:20px}
+        .week-timeline-head button.today b{background:#2563eb;color:#fff}
+        .week-timeline-head button.selected:not(.today){background:#fff6f6!important}
+        .week-timeline-head button em{max-width:100%;overflow:hidden;color:#c51d25;font-size:8px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
+        .week-timeline-body{position:relative!important;min-width:940px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 57px,#dbe3ec 57px,#dbe3ec 58px)}
+        .week-time-column{position:absolute!important;inset:0 auto 0 0;width:58px;background:#fff}
+        .week-time-column span{position:absolute!important;right:8px;z-index:2;padding:0 2px;transform:translateY(-50%);background:#fff;color:#475569;font-size:10px;line-height:1}
+        .week-day-columns{display:grid!important;height:100%;margin-left:58px;grid-template-columns:repeat(7,minmax(115px,1fr))}
+        .week-day-column{position:relative!important;min-width:0;border-left:1px solid #dbe3ec;cursor:pointer}
+        .week-day-column.selected{background:rgba(227,27,35,.025);box-shadow:inset 0 0 0 2px rgba(227,27,35,.45)}
+        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:44px;max-height:52px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 5px;color:#172033;font-size:10px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+        .week-appointment>b{font-size:10px;white-space:nowrap}.week-appointment>small{min-width:0;overflow:hidden;font-size:10px;font-weight:800;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
+        .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        @media(max-width:700px){.week-timeline,.week-timeline-body{min-width:820px}.week-timeline-head{grid-template-columns:50px repeat(7,110px)}.week-day-columns{margin-left:50px;grid-template-columns:repeat(7,110px)}.week-time-column{width:50px}}
+      `}</style>
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
         <span>
