@@ -4367,6 +4367,10 @@ function Agenda({
       const groupDifference =
         Number(isOngoingVehicle(first)) - Number(isOngoingVehicle(second));
       if (groupDifference !== 0) return groupDifference;
+      if (isOngoingVehicle(first) && isOngoingVehicle(second)) {
+        const dateDifference = second.date.localeCompare(first.date);
+        if (dateDifference !== 0) return dateDifference;
+      }
       return (
         first.time.localeCompare(second.time, "pt-BR", { numeric: true }) ||
         first.client.localeCompare(second.client, "pt-BR")
