@@ -320,6 +320,11 @@ type Appt = {
   km: string;
   note: string;
   type: "cliente" | "retorno" | "garantia" | "revisao" | "bloqueio";
+  appointmentServiceType?:
+    | "gabaritagem"
+    | "pecas"
+    | "alinhamento_balanceamento"
+    | "servicos";
   reviewWithService?: boolean;
   status: "agendado" | "avaliou" | "servico" | "faltou";
   tech?: string;
@@ -4421,6 +4426,14 @@ function Agenda({
         appointment.type === "garantia"
       )
         return "";
+      const scheduledTypeLabels: Record<string, string> = {
+        gabaritagem: "Orçamento: gabaritagem",
+        pecas: "Orçamento: peças",
+        alinhamento_balanceamento: "Alinhamento e balanceamento",
+        servicos: "Orçamento: serviços",
+      };
+      if (appointment.appointmentServiceType)
+        return scheduledTypeLabels[appointment.appointmentServiceType] ?? "";
       const budget = appointment.budget;
       if (!budget) return "";
       const selectedNames = (budget.selectedServices ?? [])
@@ -4502,6 +4515,9 @@ function Agenda({
               `*${appointment.time} - ${appointment.client}*`,
               `${appointment.vehicle || "Veículo não informado"}${appointment.plate ? ` - ${appointment.plate}` : ""}`,
               `Situação: ${weeklyProgressLabel(appointment) || appointmentKindLabel(appointment)}`,
+              weeklyBudgetTypeLabel(appointment)
+                ? `Tipo: ${weeklyBudgetTypeLabel(appointment)}`
+                : "",
               appointment.note ? `Observação: ${appointment.note}` : "",
             ]
               .filter(Boolean)
@@ -4552,6 +4568,7 @@ function Agenda({
         .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:9px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
         .week-appointment>.week-appointment-status{color:#334155;font-size:8px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}.week-appointment>.status-finalizado{color:#087d47}.week-appointment>.status-faltou{color:#c51d25}.week-appointment>.status-em-andamento{color:#1d4ed8}
         .week-appointment>.week-budget-type{color:#7c2d12;font-size:8px;font-weight:900;text-transform:uppercase}
+        .day article .appointment-service-type{display:block;margin-top:3px;color:#7c2d12;font-size:10px;font-weight:900;text-transform:uppercase}
         .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
         @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
@@ -4940,6 +4957,11 @@ function Agenda({
                       </>
                     )}
                   </p>
+                  {weeklyBudgetTypeLabel(a) && (
+                    <small className="appointment-service-type">
+                      {weeklyBudgetTypeLabel(a)}
+                    </small>
+                  )}
                   {isCarriedInto(a, date) && (
                     <small className="carry-over-notice">
                       ↳ Na oficina desde{" "}
@@ -5508,6 +5530,10 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
                 setF({
                   ...f,
                   type: e.target.value as any,
+                  appointmentServiceType:
+                    e.target.value === "cliente"
+                      ? f.appointmentServiceType
+                      : undefined,
                   reviewWithService:
                     e.target.value === "revisao" ? f.reviewWithService : false,
                 })
@@ -5520,6 +5546,39 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               <option value="bloqueio">Ausência de funcionário</option>
             </select>
           </label>
+          {f.type === "cliente" && (
+            <label className="wide">
+              Tipo do serviço previsto
+              <select
+                required
+                value={f.appointmentServiceType || ""}
+                onChange={(e) =>
+                  setF({
+                    ...f,
+                    appointmentServiceType: e.target.value as
+                      | "gabaritagem"
+                      | "pecas"
+                      | "alinhamento_balanceamento"
+                      | "servicos",
+                  })
+                }
+              >
+                <option value="">Selecione o motivo do agendamento</option>
+                <option value="gabaritagem">Orçamento: gabaritagem</option>
+                <option value="pecas">Orçamento: peças</option>
+                <option value="alinhamento_balanceamento">
+                  Alinhamento e balanceamento
+                </option>
+                <option value="servicos">
+                  Orçamento: serviços — outro tipo
+                </option>
+              </select>
+              <small>
+                Esta informação aparecerá imediatamente na agenda dos
+                técnicos.
+              </small>
+            </label>
+          )}
           {f.type === "revisao" && (
             <label className="wide appointment-progress-toggle">
               <input
