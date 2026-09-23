@@ -4973,7 +4973,17 @@ function Agenda({
                   )}
                   {a.budget?.processStatus === "Finalizado" ? (
                     <div className="agenda-finalization compact">
-                      <b>✓ {completedAttendanceLabel(a)}</b>
+                      <b
+                        style={{
+                          display: "block",
+                          fontSize: "clamp(8.5px, 0.72vw, 14px)",
+                          letterSpacing: "-0.035em",
+                          lineHeight: 1.2,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        ✓ {completedAttendanceLabel(a)}
+                      </b>
                     </div>
                   ) : null}
                   {a.type === "cliente" &&
