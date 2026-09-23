@@ -4348,10 +4348,21 @@ function Agenda({
       appointment.type !== "bloqueio" &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado",
-    dayAppointments =
+    selectedDayAppointments =
       mode === "semana"
         ? (data as Appt[]).filter((appointment) => appointment.date === date)
         : appointmentsForDate(date),
+    ongoingVehicles = (data as Appt[]).filter(isOngoingVehicle),
+    dayAppointments = Array.from(
+      new Map(
+        [
+          ...selectedDayAppointments.filter(
+            (appointment) => !isOngoingVehicle(appointment),
+          ),
+          ...ongoingVehicles,
+        ].map((appointment) => [appointment.id, appointment]),
+      ).values(),
+    ),
     list = [...dayAppointments].sort((first, second) => {
       const groupDifference =
         Number(isOngoingVehicle(first)) - Number(isOngoingVehicle(second));
@@ -4361,7 +4372,7 @@ function Agenda({
         first.client.localeCompare(second.client, "pt-BR")
       );
     }),
-    ongoingVehicleCount = list.filter(isOngoingVehicle).length,
+    ongoingVehicleCount = ongoingVehicles.length,
     openQuotesCount = (data as Appt[]).filter(
       (a) =>
         a.type === "cliente" &&
@@ -4725,7 +4736,9 @@ function Agenda({
                     {visibleWeekDays.map((d) => {
                       const ds = iso(d),
                         apps = (data as Appt[]).filter(
-                          (appointment) => appointment.date === ds,
+                          (appointment) =>
+                            appointment.date === ds &&
+                            !isOngoingVehicle(appointment),
                         );
                       return (
                         <div
