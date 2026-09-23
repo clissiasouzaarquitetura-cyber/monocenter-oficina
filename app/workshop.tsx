@@ -323,6 +323,7 @@ type Appt = {
   appointmentServiceType?:
     | "gabaritagem"
     | "pecas"
+    | "alinhamento_3d"
     | "alinhamento_balanceamento"
     | "servicos";
   reviewWithService?: boolean;
@@ -4444,6 +4445,7 @@ function Agenda({
       const scheduledTypeLabels: Record<string, string> = {
         gabaritagem: "Orçamento: gabaritagem",
         pecas: "Orçamento: peças",
+        alinhamento_3d: "Alinhamento 3D",
         alinhamento_balanceamento: "Alinhamento e balanceamento",
         servicos: "Orçamento: serviços",
       };
@@ -5586,6 +5588,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
                     appointmentServiceType: e.target.value as
                       | "gabaritagem"
                       | "pecas"
+                      | "alinhamento_3d"
                       | "alinhamento_balanceamento"
                       | "servicos",
                   })
@@ -5594,6 +5597,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
                 <option value="">Selecione o motivo do agendamento</option>
                 <option value="gabaritagem">Orçamento: gabaritagem</option>
                 <option value="pecas">Orçamento: peças</option>
+                <option value="alinhamento_3d">Alinhamento 3D</option>
                 <option value="alinhamento_balanceamento">
                   Alinhamento e balanceamento
                 </option>
