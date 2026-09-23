@@ -4464,9 +4464,9 @@ function Agenda({
   return (
     <section className="agenda">
       <style>{`
-        .agenda-grid-semana{grid-template-columns:minmax(0,1fr) 430px!important;align-items:start}
-        .agenda-grid-semana>.calendar,.agenda-grid-semana>.day{align-self:start;margin-top:0}
-        .agenda-grid-semana>.day{position:sticky;top:0;max-height:calc(100vh - 208px);overflow-y:auto}
+        .agenda-grid-semana{grid-template-columns:minmax(0,1fr) 430px!important;align-items:stretch}
+        .agenda-grid-semana>.calendar,.agenda-grid-semana>.day{align-self:stretch;margin-top:0}
+        .agenda-grid-semana>.day{position:relative;top:auto;height:auto;max-height:none;overflow-y:visible}
         .calendar-semana{overflow-x:auto!important;padding:0!important}
         .week-timeline{min-width:760px;overflow:hidden;border-radius:11px}
         .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
