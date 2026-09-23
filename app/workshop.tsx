@@ -4740,9 +4740,7 @@ function Agenda({
                     {visibleWeekDays.map((d) => {
                       const ds = iso(d),
                         apps = (data as Appt[]).filter(
-                          (appointment) =>
-                            appointment.date === ds &&
-                            !isOngoingVehicle(appointment),
+                          (appointment) => appointment.date === ds,
                         );
                       return (
                         <div
