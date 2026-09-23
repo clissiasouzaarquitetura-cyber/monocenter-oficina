@@ -2232,7 +2232,10 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="servicegrid">
                         {SERVICE_GROUPS.map((group) => (
                           <section className="service-group" key={group.title}>
-                            <div className="service-group-heading">
+                            <div
+                              className="service-group-heading"
+                              style={{ gridColumn: "1 / -1" }}
+                            >
                               <h3>{group.title}</h3>
                               {group.title === "5. Gabaritagem" && (
                                 <button
@@ -4190,8 +4193,33 @@ function Check({ title, items, vals, set, tri }: any) {
           )}
         </span>
       </div>
-      {items.map((x: string) => (
-        <div key={x}>
+      {items.map((x: string) => {
+        const checked = tri ? !!vals[x + "-ok"] : !!vals[x],
+          notApplicable = tri ? !!vals[x + "-na"] : false;
+        return (
+        <div
+          key={x}
+          className={
+            checked
+              ? "conference-row-selected conference-row-checked"
+              : notApplicable
+                ? "conference-row-selected conference-row-na"
+                : ""
+          }
+          style={
+            checked
+              ? {
+                  background: "#e7f7ee",
+                  boxShadow: "inset 5px 0 #159957",
+                }
+              : notApplicable
+                ? {
+                    background: "#fff6dd",
+                    boxShadow: "inset 5px 0 #e0a11a",
+                  }
+                : undefined
+          }
+        >
           <span>{x}</span>
           {tri ? (
             <>
@@ -4229,7 +4257,8 @@ function Check({ title, items, vals, set, tri }: any) {
             </button>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -4385,6 +4414,42 @@ function Agenda({
         return "Em andamento";
       return "";
     },
+    weeklyBudgetTypeLabel = (appointment: Appt) => {
+      if (
+        appointment.type === "revisao" ||
+        appointment.type === "retorno" ||
+        appointment.type === "garantia"
+      )
+        return "";
+      const budget = appointment.budget;
+      if (!budget) return "";
+      const selectedNames = (budget.selectedServices ?? [])
+          .map((index) => SERVICES[index]?.[0] ?? "")
+          .filter(Boolean),
+        manualServices = budget.manualServices ?? [],
+        manualNames = manualServices
+          .map((service: any) => String(service?.name ?? "").trim())
+          .filter(Boolean),
+        serviceNames = [...selectedNames, ...manualNames],
+        hasGabaritagem =
+          (budget.selectedServices ?? []).some((index) => index >= 10) ||
+          manualServices.some(isGabaritagemManualService),
+        hasParts = (budget.parts ?? []).some(
+          (part: any) =>
+            String(part?.item ?? part?.name ?? "").trim() &&
+            Number(part?.qty ?? 1) > 0,
+        ),
+        onlyAlignmentAndBalance =
+          serviceNames.length > 0 &&
+          serviceNames.every((name) =>
+            /alinhamento de direção|balanceamento/i.test(name),
+          );
+      if (hasGabaritagem) return "Orçamento: gabaritagem";
+      if (hasParts) return "Orçamento: peças";
+      if (onlyAlignmentAndBalance) return "Alinhamento e balanceamento";
+      if (serviceNames.length) return "Orçamento: serviços";
+      return "";
+    },
     teamAgendaDate = (() => {
       const next = new Date(today);
       if (next.getDay() === 5) {
@@ -4486,6 +4551,7 @@ function Agenda({
         .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:64px;max-height:66px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 5px;color:#172033;font-size:9px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
         .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:9px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
         .week-appointment>.week-appointment-status{color:#334155;font-size:8px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}.week-appointment>.status-finalizado{color:#087d47}.week-appointment>.status-faltou{color:#c51d25}.week-appointment>.status-em-andamento{color:#1d4ed8}
+        .week-appointment>.week-budget-type{color:#7c2d12;font-size:8px;font-weight:900;text-transform:uppercase}
         .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
         @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
@@ -4697,6 +4763,11 @@ function Agenda({
                                     className={`week-appointment-status status-${weeklyProgressLabel(a).toLocaleLowerCase("pt-BR").replaceAll(" ", "-")}`}
                                   >
                                     {weeklyProgressLabel(a)}
+                                  </small>
+                                )}
+                                {weeklyBudgetTypeLabel(a) && (
+                                  <small className="week-budget-type">
+                                    {weeklyBudgetTypeLabel(a)}
                                   </small>
                                 )}
                               </span>
