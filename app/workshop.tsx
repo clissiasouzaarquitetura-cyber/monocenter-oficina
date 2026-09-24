@@ -583,6 +583,7 @@ export default function App({ initialState, user, onLogout }: any) {
     ),
     [modal, setModal] = useState<Appt | boolean>(false),
     [evaluationEntry, setEvaluationEntry] = useState<Appt | null>(null),
+    [attendancePreview, setAttendancePreview] = useState<Appt | null>(null),
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
@@ -1384,6 +1385,7 @@ export default function App({ initialState, user, onLogout }: any) {
               scrollTo(0, 0);
             }}
             edit={(a: Appt) => setModal(a)}
+            preview={(a: Appt) => setAttendancePreview(a)}
             remove={(a: Appt) => {
               if (
                 confirm(
@@ -3856,6 +3858,16 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
+        {attendancePreview && (
+          <AttendancePreviewModal
+            appointment={
+              appointments.find((item) => item.id === attendancePreview.id) ??
+              attendancePreview
+            }
+            roundStep={roundStep}
+            close={() => setAttendancePreview(null)}
+          />
+        )}
         {evaluationEntry && (
           <EvaluationStartModal
             appointment={evaluationEntry}
@@ -4283,6 +4295,7 @@ function Agenda({
   showInProgress,
   start,
   edit,
+  preview,
   remove,
   message,
 }: any) {
@@ -5116,6 +5129,14 @@ function Agenda({
                         Mensagem
                       </button>
                     )}
+                    {a.type !== "bloqueio" && (
+                      <button
+                        className="summary-button"
+                        onClick={() => preview(a)}
+                      >
+                        Visualizar resumo
+                      </button>
+                    )}
                     <button onClick={() => edit(a)}>Editar</button>
                     <button className="danger" onClick={() => remove(a)}>
                       Excluir
@@ -5400,6 +5421,253 @@ function ReviewScreen({
         </div>
       </div>
     </>
+  );
+}
+function AttendancePreviewModal({ appointment, roundStep, close }: any) {
+  const budget = appointment.budget as BudgetState | undefined,
+    evaluationStates = Object.values(
+      appointment.evaluation?.status ?? {},
+    ) as string[],
+    evaluatedCount = evaluationStates.filter(
+      (state) => state && state !== "na",
+    ).length,
+    attentionCount = evaluationStates.filter(
+      (state) => state === "y" || state === "r",
+    ).length,
+    partRows = (budget?.parts ?? []).filter(
+      (part: any) => String(part?.item ?? part?.name ?? "").trim(),
+    ),
+    selectedServiceRows = (budget?.selectedServices ?? [])
+      .map((index: number) => ({
+        name: SERVICES[index]?.[0] ?? "Serviço",
+        quantity: Number(budget?.serviceQty?.[index] ?? 1),
+        value: servicePrice(index, budget?.servicePrices),
+        courtesy: serviceIsCourtesy(index),
+      }))
+      .filter((service: any) => service.quantity > 0),
+    manualServiceRows = (budget?.manualServices ?? [])
+      .filter((service: any) => String(service?.name ?? "").trim())
+      .map((service: any) => ({
+        name: service.name,
+        quantity: Number(service.qty ?? 1),
+        value: Number(service.value ?? 0),
+        courtesy: false,
+      })),
+    serviceRows = [...selectedServiceRows, ...manualServiceRows],
+    partsTotal = partRows.reduce(
+      (total: number, part: any) =>
+        total + Number(part.qty ?? 1) * saleOf(part, roundStep),
+      0,
+    ),
+    servicesTotal = serviceRows.reduce(
+      (total: number, service: any) =>
+        total +
+        (service.courtesy ? 0 : service.quantity * Number(service.value ?? 0)),
+      0,
+    ),
+    conferenceChecks = Object.values(
+      appointment.conference?.checks ?? {},
+    ).filter(Boolean).length,
+    serviceTypeLabels: Record<string, string> = {
+      gabaritagem: "Orçamento: gabaritagem",
+      pecas: "Orçamento: peças",
+      alinhamento_3d: "Alinhamento 3D",
+      alinhamento_balanceamento: "Alinhamento e balanceamento",
+      servicos: "Orçamento: serviços",
+    },
+    attendanceType =
+      appointment.type === "revisao"
+        ? "Revisão de 30 dias"
+        : appointment.type === "retorno"
+          ? "Retorno"
+          : appointment.type === "garantia"
+            ? "Garantia"
+            : (appointment.appointmentServiceType
+                ? serviceTypeLabels[appointment.appointmentServiceType]
+                : "") ||
+              "Atendimento comum",
+    statusLabel =
+      appointment.budget?.processStatus === "Finalizado"
+        ? completedAttendanceLabel(appointment)
+        : agendaStatusLabel(appointment),
+    dateTime = (value?: string) =>
+      value
+        ? new Date(value).toLocaleString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "Não registrado";
+
+  return (
+    <div className="backdrop attendance-preview-backdrop" role="presentation">
+      <section
+        className="modal attendance-preview-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="attendance-preview-title"
+      >
+        <header className="attendance-preview-header">
+          <span>
+            <small>VISUALIZAÇÃO RÁPIDA</small>
+            <h2 id="attendance-preview-title">Resumo do atendimento</h2>
+            <p>
+              {appointment.client} · {appointment.vehicle || "Veículo não informado"}
+              {appointment.plate ? ` · ${appointment.plate}` : ""}
+            </p>
+          </span>
+          <button className="attendance-preview-close" onClick={close} aria-label="Fechar">
+            ×
+          </button>
+        </header>
+
+        <div className="attendance-preview-badges">
+          <b>{statusLabel}</b>
+          <span>{attendanceType}</span>
+          {appointment.workOrder && <span>OS {appointment.workOrder}</span>}
+        </div>
+
+        <div className="attendance-preview-grid">
+          <section>
+            <h3>Agendamento</h3>
+            <p><b>Data e horário</b>{fmt(appointment.date)}, às {appointment.time}</p>
+            <p><b>Contato</b>{appointment.phone || "Não informado"}</p>
+            <p><b>Quilometragem</b>{appointment.km ? `${appointment.km} km` : "Não informada"}</p>
+            <p><b>Agendado por</b>{appointment.scheduledBy || "Não informado"}</p>
+            <p><b>Registro</b>{dateTime(appointment.createdAt)}</p>
+          </section>
+          <section>
+            <h3>Abertura e avaliação</h3>
+            <p><b>Início</b>{appointment.startedAt || "Não iniciado"}</p>
+            <p><b>Técnico</b>{appointment.tech || "Não informado"}</p>
+            <p>
+              <b>Avaliação de peças</b>
+              {appointment.partsEvaluationSkipped
+                ? "Não realizada por opção do atendimento"
+                : evaluatedCount
+                  ? `${evaluatedCount} itens avaliados${attentionCount ? ` · ${attentionCount} com atenção` : ""}`
+                  : "Ainda sem itens registrados"}
+            </p>
+            <p><b>Registrada por</b>{appointment.evaluationRecordedBy || "Não informado"}</p>
+            <p><b>Data do registro</b>{dateTime(appointment.evaluationRecordedAt)}</p>
+          </section>
+        </div>
+
+        <section className="attendance-preview-section">
+          <div className="attendance-preview-section-title">
+            <h3>Orçamento e serviços</h3>
+            <strong>{brl(partsTotal + servicesTotal)}</strong>
+          </div>
+          {!partRows.length && !serviceRows.length ? (
+            <p className="attendance-preview-empty">Nenhum item de orçamento foi preenchido.</p>
+          ) : (
+            <div className="attendance-preview-items">
+              {partRows.map((part: any, index: number) => (
+                <div key={`part-${index}`}>
+                  <span><b>{Number(part.qty ?? 1)}x</b> {part.item ?? part.name}</span>
+                  <strong>{brl(Number(part.qty ?? 1) * saleOf(part, roundStep))}</strong>
+                </div>
+              ))}
+              {serviceRows.map((service: any, index: number) => (
+                <div key={`service-${index}`}>
+                  <span><b>{service.quantity}x</b> {service.name}</span>
+                  <strong>
+                    {service.courtesy
+                      ? "Cortesia"
+                      : brl(service.quantity * service.value)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="attendance-preview-meta">
+            <span>
+              <b>Orçamento preenchido por</b>
+              {appointment.budgetEditedBy || "Não informado"}
+              {appointment.budgetEditedAt ? ` · ${dateTime(appointment.budgetEditedAt)}` : ""}
+            </span>
+            <span>
+              <b>Envio ao cliente</b>
+              {appointment.quoteSentAt
+                ? `${dateTime(appointment.quoteSentAt)}${appointment.quoteSentBy ? ` por ${appointment.quoteSentBy}` : ""}`
+                : "Ainda não registrado"}
+            </span>
+          </div>
+        </section>
+
+        <div className="attendance-preview-grid">
+          <section>
+            <h3>Conferência</h3>
+            <p><b>Marcações registradas</b>{conferenceChecks}</p>
+            <p><b>Situação</b>{appointment.conference?.finalizedAt ? "Finalizada" : "Em aberto"}</p>
+            <p><b>Finalizada por</b>{appointment.conference?.finalizedBy || "Não informado"}</p>
+            <p><b>Data</b>{dateTime(appointment.conference?.finalizedAt)}</p>
+          </section>
+          <section>
+            <h3>Observações</h3>
+            <p className="attendance-preview-note">
+              {appointment.note || budget?.patioNotes || "Nenhuma observação registrada."}
+            </p>
+            {appointment.note && budget?.patioNotes && (
+              <p className="attendance-preview-note"><b>Pátio</b>{budget.patioNotes}</p>
+            )}
+            <p><b>Última edição</b>{appointment.lastEditedBy || "Não informado"}</p>
+            <p><b>Data</b>{dateTime(appointment.lastEditedAt)}</p>
+          </section>
+        </div>
+
+        <footer className="attendance-preview-footer">
+          <small>Consulta rápida — nenhuma informação é alterada nesta janela.</small>
+          <button className="primary" onClick={close}>Fechar resumo</button>
+        </footer>
+      </section>
+      <style>{`
+        .attendance-preview-backdrop{z-index:1200;padding:20px;overflow:auto}
+        .attendance-preview-modal{width:min(900px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:0;border-radius:18px;background:var(--card,#fff)}
+        .attendance-preview-header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:20px;padding:22px 24px 16px;background:var(--card,#fff);border-bottom:1px solid var(--line,#dce2ea)}
+        .attendance-preview-header small{color:#df1823;font-weight:900;letter-spacing:.08em}
+        .attendance-preview-header h2{margin:3px 0;font-size:24px}
+        .attendance-preview-header p{margin:0;color:var(--muted,#5d6878)}
+        .attendance-preview-close{flex:0 0 42px;height:42px;font-size:27px;line-height:1}
+        .attendance-preview-badges{display:flex;flex-wrap:wrap;gap:8px;padding:16px 24px 0}
+        .attendance-preview-badges>*{padding:7px 11px;border-radius:999px;background:#edf2f7;font-size:12px;text-transform:uppercase}
+        .attendance-preview-badges b{background:#dff7e9;color:#08723c}
+        .attendance-preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 24px 0}
+        .attendance-preview-grid>section,.attendance-preview-section{border:1px solid var(--line,#dce2ea);border-radius:13px;padding:16px;background:var(--card,#fff)}
+        .attendance-preview-grid h3,.attendance-preview-section h3{margin:0 0 12px;font-size:16px}
+        .attendance-preview-grid p{display:grid;grid-template-columns:145px 1fr;gap:8px;margin:7px 0;font-size:13px;line-height:1.4}
+        .attendance-preview-grid p b{color:var(--muted,#5d6878)}
+        .attendance-preview-section{margin:14px 24px 0}
+        .attendance-preview-section-title{display:flex;align-items:center;justify-content:space-between;gap:15px}
+        .attendance-preview-section-title strong{font-size:19px;color:#df1823}
+        .attendance-preview-items{display:grid;gap:6px;margin-top:8px}
+        .attendance-preview-items>div{display:flex;justify-content:space-between;gap:20px;padding:8px 10px;border-radius:8px;background:#f4f7fa;font-size:13px}
+        .attendance-preview-items span{min-width:0;overflow-wrap:anywhere}
+        .attendance-preview-items span b{margin-right:5px}
+        .attendance-preview-items strong{white-space:nowrap}
+        .attendance-preview-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line,#dce2ea)}
+        .attendance-preview-meta span{font-size:12px;line-height:1.4}
+        .attendance-preview-meta b{display:block;color:var(--muted,#5d6878)}
+        .attendance-preview-empty{margin:6px 0;color:var(--muted,#5d6878)}
+        .attendance-preview-note{display:block!important;padding:10px;border-radius:8px;background:#f4f7fa;white-space:pre-wrap}
+        .attendance-preview-note b{display:block;margin-bottom:4px}
+        .attendance-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 24px 24px}
+        .attendance-preview-footer small{color:var(--muted,#5d6878)}
+        .attendance-preview-footer button{white-space:nowrap}
+        .dark .attendance-preview-items>div,.dark .attendance-preview-note,.dark .attendance-preview-badges>*{background:#1c2938}
+        @media(max-width:720px){
+          .attendance-preview-backdrop{padding:8px}
+          .attendance-preview-modal{max-height:calc(100vh - 16px)}
+          .attendance-preview-header,.attendance-preview-badges,.attendance-preview-grid,.attendance-preview-footer{padding-left:14px;padding-right:14px}
+          .attendance-preview-grid,.attendance-preview-meta{grid-template-columns:1fr}
+          .attendance-preview-section{margin-left:14px;margin-right:14px}
+          .attendance-preview-grid p{grid-template-columns:125px 1fr}
+          .attendance-preview-footer{align-items:stretch;flex-direction:column}
+        }
+      `}</style>
+    </div>
   );
 }
 function EvaluationStartModal({
