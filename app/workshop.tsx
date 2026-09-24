@@ -326,6 +326,7 @@ type Appt = {
     | "alinhamento_3d"
     | "alinhamento_balanceamento"
     | "servicos";
+  partsEvaluationSkipped?: boolean;
   reviewWithService?: boolean;
   status: "agendado" | "avaliou" | "servico" | "faltou";
   tech?: string;
@@ -3866,14 +3867,20 @@ export default function App({ initialState, user, onLogout }: any) {
               startedAt,
               vehicle,
               plate,
+              evaluateParts,
             }: any) => {
               syncBlockedUntil.current = Date.now() + 4000;
+              const skipPartsEvaluation = evaluateParts === "nao";
               const opened: Appt = {
                 ...evaluationEntry,
                 vehicle: vehicle.trim(),
                 plate: plate.trim().toLocaleUpperCase("pt-BR"),
                 tech: selectedEvaluator,
                 startedAt,
+                status: skipPartsEvaluation
+                  ? "avaliou"
+                  : evaluationEntry.status,
+                partsEvaluationSkipped: skipPartsEvaluation,
                 inProgress: true,
                 lastEditedBy: user.displayName,
                 lastEditedAt: new Date().toISOString(),
@@ -3929,9 +3936,9 @@ export default function App({ initialState, user, onLogout }: any) {
               }
               setCheckOpen(false);
               setPartsOpen(false);
-              setServicesOpen(false);
+              setServicesOpen(skipPartsEvaluation);
               setEvaluationEntry(null);
-              setView("avaliacao");
+              setView(skipPartsEvaluation ? "orcamento" : "avaliacao");
               scrollTo(0, 0);
             }}
           />
@@ -5130,7 +5137,7 @@ function Agenda({
                                     ? "Iniciar serviço →"
                                     : a.status === "avaliou"
                                       ? "Abrir orçamento →"
-                                      : "Abrir avaliação →"}
+                                      : "Abrir atendimento →"}
                       </button>
                     )}
                   </div>
@@ -5407,6 +5414,7 @@ function EvaluationStartModal({
       minute: "2-digit",
     }),
     [form, setForm] = useState({
+      evaluateParts: "",
       evaluator: appointment.tech || techs[0] || "",
       startedAt: appointment.startedAt || now,
       vehicle: appointment.vehicle || "",
@@ -5423,8 +5431,8 @@ function EvaluationStartModal({
       >
         <div>
           <span>
-            <h2>Iniciar avaliação</h2>
-            <p>Confirme os dados antes de abrir a ficha de avaliação.</p>
+            <h2>Iniciar atendimento</h2>
+            <p>Confirme os dados e escolha se haverá avaliação de peças.</p>
           </span>
           <button type="button" onClick={close} aria-label="Fechar">
             ×
@@ -5437,8 +5445,26 @@ function EvaluationStartModal({
           </small>
         </div>
         <section>
+          <label className="wide">
+            Será feita avaliação de peças?
+            <select
+              required
+              value={form.evaluateParts}
+              onChange={(event) =>
+                setForm({ ...form, evaluateParts: event.target.value })
+              }
+            >
+              <option value="">Selecione uma opção</option>
+              <option value="sim">Sim — abrir avaliação de peças</option>
+              <option value="nao">
+                Não — ir direto para orçamento de serviços
+              </option>
+            </select>
+          </label>
           <label>
-            Quem está avaliando
+            {form.evaluateParts === "nao"
+              ? "Responsável pelo atendimento"
+              : "Quem está avaliando"}
             <select
               required
               value={form.evaluator}
@@ -5491,15 +5517,18 @@ function EvaluationStartModal({
           </label>
         </section>
         <p className="evaluation-start-help">
-          O avaliador ficará registrado separadamente do usuário que está
-          preenchendo o sistema.
+          {form.evaluateParts === "nao"
+            ? "A dispensa da avaliação ficará registrada e o orçamento abrirá diretamente na parte de serviços."
+            : "O avaliador ficará registrado separadamente do usuário que está preenchendo o sistema."}
         </p>
         <footer>
           <button type="button" onClick={close}>
             Cancelar
           </button>
           <button type="submit" className="primary">
-            Confirmar e abrir avaliação →
+            {form.evaluateParts === "nao"
+              ? "Confirmar e abrir orçamento →"
+              : "Confirmar e abrir avaliação →"}
           </button>
         </footer>
       </form>
