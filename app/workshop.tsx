@@ -1234,7 +1234,7 @@ export default function App({ initialState, user, onLogout }: any) {
                     ? `• Pix com 5% de desconto em peças e serviços (pneus sem desconto): ${brl(pixTotal)}`
                     : "",
                   proposalPaymentOptions.card
-                    ? `• Cartão: até 5x sem juros de ${brl(total / 5)}`
+                    ? `• Cartão: total parcelado ${brl(totalInstallment)} em até 5x sem juros de ${brl(totalInstallment / 5)}`
                     : "",
                 ]
                   .filter(Boolean)
@@ -3068,7 +3068,19 @@ export default function App({ initialState, user, onLogout }: any) {
                         {proposalPaymentOptions.card && (
                           <label>
                             Cartão - até 5x sem juros
-                            <b>5x de {brl(total / 5)}</b>
+                            {tireParts.length > 0 && (
+                              <small>
+                                Total parcelado: {brl(totalInstallment)}
+                              </small>
+                            )}
+                            <b>
+                              5x de{" "}
+                              {brl(
+                                (tireParts.length > 0
+                                  ? totalInstallment
+                                  : total) / 5,
+                              )}
+                            </b>
                           </label>
                         )}
                       </div>
