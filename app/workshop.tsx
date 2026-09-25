@@ -350,6 +350,13 @@ type Appt = {
   };
   quoteSentAt?: string;
   quoteSentBy?: string;
+  quoteFollowUpDays?: number;
+  quoteFollowUpDueDate?: string;
+  quoteFollowUpDecision?: "message" | "declined";
+  quoteFollowUpUpdatedBy?: string;
+  quoteFollowUpUpdatedAt?: string;
+  quoteFollowUpPreparedBy?: string;
+  quoteFollowUpPreparedAt?: string;
   serviceScheduled?: boolean;
   serviceScheduledFor?: string;
   serviceScheduledTime?: string;
@@ -3799,6 +3806,25 @@ export default function App({ initialState, user, onLogout }: any) {
                 setAppointments((list) => list.filter((x) => x.id !== a.id));
               }
             }}
+            updateQuoteFollowUp={(id: number, changes: Partial<Appt>) => {
+              const now = new Date().toISOString();
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((appointment) =>
+                  appointment.id === id
+                    ? {
+                        ...appointment,
+                        ...changes,
+                        quoteFollowUpUpdatedBy: user.displayName,
+                        quoteFollowUpUpdatedAt: now,
+                        lastEditedBy: user.displayName,
+                        lastEditedAt: now,
+                        _updatedAt: Date.now(),
+                      }
+                    : appointment,
+                ),
+              );
+            }}
             message={setMessage}
           />
         )}{" "}
@@ -4448,6 +4474,7 @@ function Agenda({
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        a.quoteFollowUpDecision !== "declined" &&
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
@@ -5075,6 +5102,7 @@ function Agenda({
                   ) : null}
                   {a.type === "cliente" &&
                     a.status === "avaliou" &&
+                    a.quoteFollowUpDecision !== "declined" &&
                     !a.quoteSentAt &&
                     !a.serviceAppointmentId &&
                     a.budget?.processStatus !== "Finalizado" && (
@@ -5082,6 +5110,11 @@ function Agenda({
                         {quoteWaitingLabel(a)}
                       </small>
                     )}
+                  {a.quoteFollowUpDecision === "declined" && (
+                    <small className="quote-waiting">
+                      Cliente desistiu do serviço
+                    </small>
+                  )}
                   {a.quoteSentAt &&
                     a.budget?.processStatus !== "Finalizado" && (
                       <small className="quote-sent">
@@ -7624,6 +7657,7 @@ function Reports({
   open,
   edit,
   remove,
+  updateQuoteFollowUp,
   message,
 }: any) {
   const [query, setQuery] = useState(""),
@@ -7636,12 +7670,17 @@ function Reports({
         ? initialMode
         : "registros",
     ),
-    [weekDate, setWeekDate] = useState(iso(new Date()));
+    [weekDate, setWeekDate] = useState(iso(new Date())),
+    [reminderDayDrafts, setReminderDayDrafts] = useState<
+      Record<number, number>
+    >({});
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
   const category = (a: Appt) =>
-    a.budget?.processStatus === "Finalizado"
+    a.quoteFollowUpDecision === "declined"
+      ? "Cliente desistiu"
+      : a.budget?.processStatus === "Finalizado"
       ? "Atendimento concluído"
       : a.type === "retorno"
         ? "Retorno"
@@ -7706,6 +7745,7 @@ function Reports({
         (a) =>
           a.status === "avaliou" &&
           a.type === "cliente" &&
+          a.quoteFollowUpDecision !== "declined" &&
           !a.serviceAppointmentId &&
           a.budget?.processStatus !== "Finalizado",
       ).length,
@@ -7749,10 +7789,74 @@ function Reports({
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        a.quoteFollowUpDecision !== "declined" &&
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     )
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    .sort((a, b) => {
+      const aReminder = a.quoteFollowUpDueDate || "9999-12-31",
+        bReminder = b.quoteFollowUpDueDate || "9999-12-31";
+      return (
+        aReminder.localeCompare(bReminder) ||
+        `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)
+      );
+    });
+  const declinedQuotes = (data as Appt[])
+    .filter(
+      (a) =>
+        a.type === "cliente" &&
+        a.status === "avaliou" &&
+        a.quoteFollowUpDecision === "declined" &&
+        !a.serviceAppointmentId &&
+        a.budget?.processStatus !== "Finalizado",
+    )
+    .sort((a, b) =>
+      String(b.quoteFollowUpUpdatedAt || b.date).localeCompare(
+        String(a.quoteFollowUpUpdatedAt || a.date),
+      ),
+    );
+  const dueQuoteReminders = openQuotes.filter(
+    (appointment) =>
+      !!appointment.quoteFollowUpDueDate &&
+      appointment.quoteFollowUpDueDate <= iso(new Date()),
+  ).length;
+  const reminderDaysFor = (appointment: Appt) =>
+      reminderDayDrafts[appointment.id] ??
+      appointment.quoteFollowUpDays ??
+      3,
+    reminderDateFromToday = (days: number) => {
+      const date = new Date();
+      date.setHours(12, 0, 0, 0);
+      date.setDate(date.getDate() + Math.max(1, Math.min(90, days)));
+      return iso(date);
+    },
+    scheduleQuoteReminder = (appointment: Appt) => {
+      const days = Math.max(
+        1,
+        Math.min(90, Number(reminderDaysFor(appointment)) || 3),
+      );
+      updateQuoteFollowUp(appointment.id, {
+        quoteFollowUpDays: days,
+        quoteFollowUpDueDate: reminderDateFromToday(days),
+        quoteFollowUpDecision: "message",
+      });
+    },
+    prepareQuoteFollowUp = (appointment: Appt) => {
+      const days = Math.max(
+        1,
+        Math.min(90, Number(reminderDaysFor(appointment)) || 3),
+      );
+      updateQuoteFollowUp(appointment.id, {
+        quoteFollowUpDays: days,
+        quoteFollowUpDueDate: reminderDateFromToday(days),
+        quoteFollowUpDecision: "message",
+        quoteFollowUpPreparedBy: user.displayName,
+        quoteFollowUpPreparedAt: new Date().toISOString(),
+      });
+      message(
+        `Olá, ${appointment.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${appointment.vehicle || ""}${appointment.plate ? `, placa ${appointment.plate}` : ""}. Podemos ajudar com o agendamento?`,
+      );
+    };
   const inProgress = (data as Appt[])
     .filter(
       (a) =>
@@ -7814,6 +7918,9 @@ function Reports({
             onClick={() => setReportMode("abertos")}
           >
             Orçamentos em aberto
+            {dueQuoteReminders > 0
+              ? ` · ${dueQuoteReminders} ${dueQuoteReminders === 1 ? "lembrete" : "lembretes"}`
+              : ""}
           </button>
           <button
             className={reportMode === "andamento" ? "active" : ""}
@@ -7927,54 +8034,169 @@ function Reports({
         )}
         {reportMode === "abertos" && (
           <div className="management-report-panel open-quotes-panel">
+            <style>{`
+              .compact-quotes-wrap{overflow-x:auto;border:1px solid #d9e1ea;border-radius:10px;background:#fff}
+              .compact-quotes-table{min-width:980px}
+              .compact-quotes-head,.compact-quote-row{display:grid;grid-template-columns:minmax(210px,1.55fr) 130px minmax(210px,1.25fr) minmax(225px,1.3fr) 210px;gap:10px;align-items:center}
+              .compact-quotes-head{padding:8px 12px;background:#eef2f6;color:#526274;font-size:10px;font-weight:900;text-transform:uppercase}
+              .compact-quote-row{min-height:72px;padding:8px 12px;border-top:1px solid #e4e9ef}
+              .compact-quote-row:first-child{border-top:0}
+              .compact-quote-client{display:grid;gap:2px;min-width:0}
+              .compact-quote-client b{overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+              .compact-quote-client small,.compact-quote-age small,.compact-reminder small{color:#64748b;font-size:10px;line-height:1.25}
+              .compact-quote-age,.compact-reminder{display:grid;gap:3px}
+              .compact-reminder-control{display:flex;align-items:center;gap:5px}
+              .compact-reminder-control input{width:56px!important;min-width:56px;padding:5px 6px;text-align:center}
+              .compact-reminder-control button{padding:6px 8px;font-size:10px}
+              .compact-reminder-date{font-weight:800}
+              .compact-reminder-date.due{color:#c51d25}
+              .compact-quote-decision{display:grid;gap:5px}
+              .compact-quote-decision label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;cursor:pointer}
+              .compact-quote-decision input{width:15px;height:15px;margin:0}
+              .compact-quote-actions{display:flex;justify-content:flex-end;gap:6px}
+              .compact-quote-actions button{padding:7px 9px;font-size:10px;white-space:nowrap}
+              .compact-quote-actions .wa{background:#16864b;color:#fff}
+              .declined-quotes{margin-top:12px;border:1px solid #f1c0c3;border-radius:9px;background:#fff7f7}
+              .declined-quotes summary{padding:10px 12px;color:#a3131c;font-size:12px;font-weight:900;cursor:pointer}
+              .declined-quote-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:8px 12px;border-top:1px solid #f1d4d6;font-size:11px}
+              .declined-quote-row span{display:grid;gap:2px}.declined-quote-row small{color:#64748b}
+              .declined-quote-row button{padding:6px 9px;font-size:10px}
+              .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
+            `}</style>
             <div className="management-report-head">
               <span>
                 <h2>Orçamentos em aberto</h2>
-                <p>{openQuotes.length} aguardando retorno do cliente</p>
+                <p>
+                  {openQuotes.length} aguardando retorno do cliente
+                  {dueQuoteReminders > 0
+                    ? ` · ${dueQuoteReminders} ${dueQuoteReminders === 1 ? "lembrete vencido" : "lembretes vencidos"}`
+                    : ""}
+                </p>
               </span>
             </div>
-            <div className="open-quotes-list">
+            <div className="compact-quotes-wrap">
+              <div className="compact-quotes-table">
+                <div className="compact-quotes-head">
+                  <span>Cliente e veículo</span>
+                  <span>Tempo em aberto</span>
+                  <span>Próximo lembrete</span>
+                  <span>Decisão</span>
+                  <span>Ações</span>
+                </div>
               {openQuotes.length ? (
                 openQuotes.map((a) => {
                   const daysOpen = Math.max(
                     0,
                     Math.floor(
                       (Date.now() - new Date(a.date + "T12:00:00").getTime()) /
-                        86400000,
+                      86400000,
                     ),
-                  );
+                  ),
+                    reminderDays = reminderDaysFor(a),
+                    reminderDue =
+                      !!a.quoteFollowUpDueDate &&
+                      a.quoteFollowUpDueDate <= iso(new Date());
                   return (
-                    <article key={a.id}>
-                      <span>
+                    <article className="compact-quote-row" key={a.id}>
+                      <span className="compact-quote-client">
                         <b>{a.client}</b>
                         <small>
                           {a.vehicle || "Veículo não informado"} ·{" "}
                           {a.plate || "Sem placa"}
                         </small>
+                      </span>
+                      <span className="compact-quote-age">
+                        <b>{daysOpen} {daysOpen === 1 ? "dia" : "dias"}</b>
                         <small>
-                          Avaliado em{" "}
                           {new Date(a.date + "T12:00:00").toLocaleDateString(
                             "pt-BR",
-                          )}{" "}
-                          · {daysOpen} {daysOpen === 1 ? "dia" : "dias"} em
-                          aberto
+                          )}
                         </small>
                         {a.quoteSentAt && (
                           <small>
-                            Enviado em{" "}
-                            {new Date(a.quoteSentAt).toLocaleString("pt-BR")}{" "}
-                            por {a.quoteSentBy || "não informado"}
+                            Enviado por {a.quoteSentBy || "não informado"}
                           </small>
                         )}
                       </span>
-                      <div>
+                      <span className="compact-reminder">
+                        <span className="compact-reminder-control">
+                          <input
+                            type="number"
+                            min="1"
+                            max="90"
+                            value={reminderDays}
+                            onChange={(event) =>
+                              setReminderDayDrafts((current) => ({
+                                ...current,
+                                [a.id]: Math.max(
+                                  1,
+                                  Math.min(90, Number(event.target.value) || 1),
+                                ),
+                              }))
+                            }
+                            aria-label={`Dias para lembrar ${a.client}`}
+                          />
+                          <small>dias</small>
+                          <button onClick={() => scheduleQuoteReminder(a)}>
+                            Programar
+                          </button>
+                        </span>
+                        <small
+                          className={`compact-reminder-date${reminderDue ? " due" : ""}`}
+                        >
+                          {a.quoteFollowUpDueDate
+                            ? `${reminderDue ? "Lembrete vencido: " : "Lembrar em: "}${new Date(`${a.quoteFollowUpDueDate}T12:00:00`).toLocaleDateString("pt-BR")}`
+                            : "Lembrete ainda não programado"}
+                        </small>
+                        {a.quoteFollowUpPreparedAt && (
+                          <small>
+                            Última mensagem preparada em{" "}
+                            {new Date(a.quoteFollowUpPreparedAt).toLocaleDateString(
+                              "pt-BR",
+                            )}
+                          </small>
+                        )}
+                      </span>
+                      <span className="compact-quote-decision">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={a.quoteFollowUpDecision === "message"}
+                            onChange={(event) =>
+                              updateQuoteFollowUp(a.id, {
+                                quoteFollowUpDecision: event.target.checked
+                                  ? "message"
+                                  : undefined,
+                              })
+                            }
+                          />
+                          Mandar nova mensagem
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            onChange={(event) => {
+                              if (
+                                event.target.checked &&
+                                confirm(
+                                  `Confirmar que ${a.client} desistiu de fazer o serviço?`,
+                                )
+                              )
+                                updateQuoteFollowUp(a.id, {
+                                  quoteFollowUpDecision: "declined",
+                                  quoteFollowUpDueDate: undefined,
+                                });
+                            }}
+                          />
+                          Cliente desistiu
+                        </label>
+                      </span>
+                      <div className="compact-quote-actions">
                         <button onClick={() => open(a)}>Abrir orçamento</button>
                         <button
-                          onClick={() =>
-                            message(
-                              `Olá, ${a.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${a.vehicle || ""}${a.plate ? `, placa ${a.plate}` : ""}. Podemos ajudar com o agendamento?`,
-                            )
-                          }
+                          className="wa"
+                          onClick={() => prepareQuoteFollowUp(a)}
                         >
                           Preparar mensagem
                         </button>
@@ -7983,9 +8205,43 @@ function Reports({
                   );
                 })
               ) : (
-                <p>Nenhum orçamento em aberto.</p>
+                <p style={{ padding: 16 }}>Nenhum orçamento em aberto.</p>
               )}
+              </div>
             </div>
+            {declinedQuotes.length > 0 && (
+              <details className="declined-quotes">
+                <summary>
+                  Clientes que desistiram ({declinedQuotes.length})
+                </summary>
+                {declinedQuotes.map((a) => (
+                  <div className="declined-quote-row" key={a.id}>
+                    <span>
+                      <b>{a.client}</b>
+                      <small>
+                        {a.vehicle || "Veículo não informado"} ·{" "}
+                        {a.plate || "Sem placa"}
+                        {a.quoteFollowUpUpdatedBy
+                          ? ` · registrado por ${a.quoteFollowUpUpdatedBy}`
+                          : ""}
+                      </small>
+                    </span>
+                    <button
+                      onClick={() =>
+                        updateQuoteFollowUp(a.id, {
+                          quoteFollowUpDecision: "message",
+                          quoteFollowUpDueDate: reminderDateFromToday(
+                            reminderDaysFor(a),
+                          ),
+                        })
+                      }
+                    >
+                      Reabrir acompanhamento
+                    </button>
+                  </div>
+                ))}
+              </details>
+            )}
           </div>
         )}
         {reportMode === "andamento" && (
