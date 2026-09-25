@@ -904,7 +904,13 @@ export default function App({ initialState, user, onLogout }: any) {
       ) + manualServices.reduce((s: number, x: any) => s + x.qty * x.value, 0),
     total = pieces + serviceTotal,
     totalCash = piecesCash + serviceTotal,
-    totalInstallment = piecesInstallment + serviceTotal;
+    totalInstallment = piecesInstallment + serviceTotal,
+    tireTotal = tireParts.reduce(
+      (sum: number, part: any) => sum + part.qty * saleOf(part, roundStep),
+      0,
+    ),
+    pixDiscountBase = Math.max(0, total - tireTotal),
+    pixTotal = pixDiscountBase * 0.95 + tireTotal;
   const reviewParts = parts
       .map((part: any, index: number) => ({ part, index }))
       .filter(
@@ -1221,12 +1227,25 @@ export default function App({ initialState, user, onLogout }: any) {
         : "Nenhum serviço"
     }\n\n${
       tireParts.length
-        ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)`
+        ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)${
+            proposalPaymentOptions.pix || proposalPaymentOptions.card
+              ? `\n\nPagamento:\n${[
+                  proposalPaymentOptions.pix
+                    ? `• Pix com 5% de desconto em peças e serviços (pneus sem desconto): ${brl(pixTotal)}`
+                    : "",
+                  proposalPaymentOptions.card
+                    ? `• Cartão: até 5x sem juros de ${brl(total / 5)}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join("\n")}`
+              : ""
+          }`
         : `TOTAL: ${brl(total)}${
             proposalPaymentOptions.pix || proposalPaymentOptions.card
               ? `\n\nPagamento:\n${[
                   proposalPaymentOptions.pix
-                    ? `• Pix com 5% de desconto: ${brl(total * 0.95)}`
+                    ? `• Pix com 5% de desconto: ${brl(pixTotal)}`
                     : "",
                   proposalPaymentOptions.card
                     ? `• Cartão: até 5x sem juros de ${brl(total / 5)}`
@@ -3037,7 +3056,13 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="payments">
                         {proposalPaymentOptions.pix && (
                           <label>
-                            Pix - 5% de desconto <b>{brl(total * 0.95)}</b>
+                            Pix - 5% de desconto <b>{brl(pixTotal)}</b>
+                            {tireParts.length > 0 && (
+                              <small>
+                                Desconto aplicado somente em peças e serviços.
+                                Pneus permanecem sem desconto.
+                              </small>
+                            )}
                           </label>
                         )}
                         {proposalPaymentOptions.card && (
