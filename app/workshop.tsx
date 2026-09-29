@@ -311,6 +311,7 @@ type Appt = {
   workOrder?: string;
   date: string;
   time: string;
+  absenceEndTime?: string;
   client: string;
   phone: string;
   vehicle: string;
@@ -527,6 +528,17 @@ function VehiclePicture({ appointment }: { appointment: Appt }) {
 }
 const isEmployeeAbsence = (a: Appt) =>
   a.type === "bloqueio" || normalizeSearch(a.client).includes("ausente");
+const employeeAbsenceName = (a: Appt) => {
+  const name = a.client.split(/\s+ausente\b/i)[0]?.trim();
+  return name || a.client;
+};
+const employeeAbsenceReason = (a: Appt) => {
+  if (a.note?.trim()) return a.note.trim();
+  const legacyReason = a.client.match(/\bausente\b\s*(.*)$/i)?.[1]?.trim();
+  return legacyReason || "";
+};
+const employeeAbsencePeriod = (a: Appt) =>
+  a.absenceEndTime ? `${a.time}–${a.absenceEndTime}` : `${a.time} em diante`;
 const apptClass = (a: Appt) =>
   isEmployeeAbsence(a)
     ? "block"
@@ -4445,7 +4457,7 @@ function Agenda({
       );
     },
     isCarriedInto = (appointment: Appt, targetDate: string) =>
-      appointment.type !== "bloqueio" &&
+      !isEmployeeAbsence(appointment) &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado" &&
       appointment.date < targetDate &&
@@ -4480,18 +4492,21 @@ function Agenda({
       });
     }, [cursor, date, mode]);
   const isOngoingVehicle = (appointment: Appt) =>
-      appointment.type !== "bloqueio" &&
+      !isEmployeeAbsence(appointment) &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado",
     selectedDayAppointments =
       mode === "semana"
         ? (data as Appt[]).filter((appointment) => appointment.date === date)
         : appointmentsForDate(date),
+    visibleSelectedDayAppointments = selectedDayAppointments.filter(
+      (appointment) => !isEmployeeAbsence(appointment),
+    ),
     ongoingVehicles = (data as Appt[]).filter(isOngoingVehicle),
     dayAppointments = Array.from(
       new Map(
         [
-          ...selectedDayAppointments.filter(
+          ...visibleSelectedDayAppointments.filter(
             (appointment) => !isOngoingVehicle(appointment),
           ),
           ...ongoingVehicles,
@@ -4523,7 +4538,7 @@ function Agenda({
     inProgressCount = (data as Appt[]).filter(
       (a) =>
         (a.inProgress || a.status === "servico") &&
-        a.type !== "bloqueio" &&
+        !isEmployeeAbsence(a) &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     weekLabels =
@@ -4553,10 +4568,10 @@ function Agenda({
       (day) => day.getDay() !== 0 && (showSaturday || day.getDay() !== 6),
     ),
     appointmentKindLabel = (appointment: Appt) => {
+      if (isEmployeeAbsence(appointment)) return "Ausente";
       if (appointment.type === "revisao") return "Revisão 30 dias";
       if (appointment.type === "retorno") return "Retorno";
       if (appointment.type === "garantia") return "Garantia";
-      if (appointment.type === "bloqueio") return "Ausente";
       if (appointment.serviceScheduled) return "Serviço agendado";
       if (appointment.status === "avaliou") return "Orçamento";
       if (appointment.status === "servico") return "Serviço aprovado";
@@ -4622,7 +4637,7 @@ function Agenda({
         saturday.setDate(next.getDate() + 1);
         const hasSaturdayAppointments = (data as Appt[]).some(
           (appointment) =>
-            appointment.type !== "bloqueio" &&
+            !isEmployeeAbsence(appointment) &&
             appointment.date === iso(saturday),
         );
         next.setDate(next.getDate() + (hasSaturdayAppointments ? 1 : 3));
@@ -4638,7 +4653,7 @@ function Agenda({
     teamAgendaRows = (data as Appt[])
       .filter(
         (appointment) =>
-          appointment.type !== "bloqueio" &&
+          !isEmployeeAbsence(appointment) &&
           appointment.date === iso(teamAgendaDate),
       )
       .sort(
@@ -4937,34 +4952,52 @@ function Agenda({
                                 style={{
                                   top: `${top}px`,
                                 }}
-                                title={`${a.time} · ${a.client}${a.vehicle ? ` · ${a.vehicle}` : ""}`}
+                                title={
+                                  isEmployeeAbsence(a)
+                                    ? `${employeeAbsenceName(a)} · ${employeeAbsencePeriod(a)}${employeeAbsenceReason(a) ? ` · ${employeeAbsenceReason(a)}` : ""}`
+                                    : `${a.time} · ${a.client}${a.vehicle ? ` · ${a.vehicle}` : ""}`
+                                }
                               >
-                                <b>{isCarriedInto(a, ds) ? "↳" : a.time}</b>
-                                <strong>{a.client}</strong>
-                                {a.quoteSentAt && <i>✓</i>}
-                                <small>
-                                  {a.vehicle || "Veículo não informado"} ·{" "}
-                                  {appointmentKindLabel(a)}
-                                </small>
-                                {weeklyProgressLabel(a) && (
-                                  <small
-                                    className={`week-appointment-status status-${weeklyProgressLabel(a).toLocaleLowerCase("pt-BR").replaceAll(" ", "-")}`}
-                                  >
-                                    {weeklyProgressLabel(a)}
-                                  </small>
-                                )}
-                                {weeklyBudgetTypeLabel(a) && (
-                                  <small className="week-budget-type">
-                                    {weeklyBudgetTypeLabel(a)}
-                                  </small>
-                                )}
-                                {a.internalNote?.trim() && (
-                                  <small
-                                    className="week-internal-note-indicator"
-                                    title="Há uma observação interna registrada"
-                                  >
-                                    * Observação interna
-                                  </small>
+                                {isEmployeeAbsence(a) ? (
+                                  <>
+                                    <b>{employeeAbsencePeriod(a)}</b>
+                                    <strong>{employeeAbsenceName(a)}</strong>
+                                    {employeeAbsenceReason(a) && (
+                                      <small className="absence-reason">
+                                        Motivo: {employeeAbsenceReason(a)}
+                                      </small>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    <b>{isCarriedInto(a, ds) ? "↳" : a.time}</b>
+                                    <strong>{a.client}</strong>
+                                    {a.quoteSentAt && <i>✓</i>}
+                                    <small>
+                                      {a.vehicle || "Veículo não informado"} ·{" "}
+                                      {appointmentKindLabel(a)}
+                                    </small>
+                                    {weeklyProgressLabel(a) && (
+                                      <small
+                                        className={`week-appointment-status status-${weeklyProgressLabel(a).toLocaleLowerCase("pt-BR").replaceAll(" ", "-")}`}
+                                      >
+                                        {weeklyProgressLabel(a)}
+                                      </small>
+                                    )}
+                                    {weeklyBudgetTypeLabel(a) && (
+                                      <small className="week-budget-type">
+                                        {weeklyBudgetTypeLabel(a)}
+                                      </small>
+                                    )}
+                                    {a.internalNote?.trim() && (
+                                      <small
+                                        className="week-internal-note-indicator"
+                                        title="Há uma observação interna registrada"
+                                      >
+                                        * Observação interna
+                                      </small>
+                                    )}
+                                  </>
                                 )}
                               </span>
                             );
@@ -5006,9 +5039,9 @@ function Agenda({
                             className={`${apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
                             key={a.id}
                           >
-                            {isCarriedInto(a, ds) ? "↳ " : `${a.time} `}
-                            {a.client.split(" ")[0]}
-                            {a.quoteSentAt ? " ✓" : ""}
+                            {isEmployeeAbsence(a)
+                              ? `${employeeAbsencePeriod(a)} ${employeeAbsenceName(a)}${employeeAbsenceReason(a) ? ` — ${employeeAbsenceReason(a)}` : ""}`
+                              : `${isCarriedInto(a, ds) ? "↳ " : `${a.time} `}${a.client.split(" ")[0]}${a.quoteSentAt ? " ✓" : ""}`}
                           </span>
                         ))}
                       </button>
@@ -5383,7 +5416,7 @@ function ReviewScreen({
   const previous = appointments.filter(
     (a: Appt) =>
       a.id !== appointment.id &&
-      a.type !== "bloqueio" &&
+      !isEmployeeAbsence(a) &&
       a.status === "servico" &&
       (!appointment.plate || a.plate === appointment.plate),
   );
@@ -6021,6 +6054,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         id: Date.now(),
         date: iso(new Date()),
         time: "08:00",
+        absenceEndTime: "",
         client: "",
         phone: "",
         vehicle: "",
@@ -6044,6 +6078,13 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         className="modal appointment-modal"
         onSubmit={(e) => {
           e.preventDefault();
+          if (
+            f.type === "bloqueio" &&
+            (!f.absenceEndTime || f.absenceEndTime <= f.time)
+          ) {
+            alert("Informe um horário final posterior ao início da ausência.");
+            return;
+          }
           save(f);
         }}
       >
@@ -6188,7 +6229,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             />
           </label>
           <label>
-            Horário
+            {f.type === "bloqueio" ? "Início da ausência" : "Horário"}
             <input
               required
               type="time"
@@ -6196,14 +6237,31 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               onChange={(e) => setF({ ...f, time: e.target.value })}
             />
           </label>
+          {f.type === "bloqueio" && (
+            <label>
+              Final da ausência
+              <input
+                required
+                type="time"
+                value={f.absenceEndTime || ""}
+                onChange={(e) =>
+                  setF({ ...f, absenceEndTime: e.target.value })
+                }
+              />
+            </label>
+          )}
           <label>
-            Nome do cliente / funcionário
+            {f.type === "bloqueio"
+              ? "Nome do funcionário ausente"
+              : "Nome do cliente / funcionário"}
             <input
               required
               value={f.client}
               onChange={(e) => setF({ ...f, client: e.target.value })}
             />
           </label>
+          {f.type !== "bloqueio" && (
+            <>
           <label>
             WhatsApp
             <input
@@ -6293,13 +6351,19 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               onChange={(e) => setF({ ...f, km: e.target.value })}
             />
           </label>
+            </>
+          )}
           <label className="wide appointment-customer-note-field">
-            Relato do cliente (opcional)
+            {f.type === "bloqueio"
+              ? "Motivo da ausência (opcional)"
+              : "Relato do cliente (opcional)"}
             <textarea
               value={f.note}
               onChange={(e) => setF({ ...f, note: e.target.value })}
               placeholder={
-                f.type === "revisao"
+                f.type === "bloqueio"
+                  ? "Ex.: consulta médica, compromisso particular ou outro motivo."
+                  : f.type === "revisao"
                   ? "Informe o serviço que será revisado."
                   : f.type === "garantia"
                     ? "Descreva o item ou serviço coberto pela garantia."
@@ -6309,17 +6373,19 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               }
             />
           </label>
-          <label className="wide appointment-internal-note-field">
-            Observação interna da equipe (opcional)
-            <textarea
-              value={f.internalNote || ""}
-              onChange={(e) => setF({ ...f, internalNote: e.target.value })}
-              placeholder="Anote aqui orientações importantes para a equipe antes de abrir o atendimento."
-            />
-            <small>
-              Visível apenas para a equipe. Não será enviada nas mensagens ao cliente.
-            </small>
-          </label>
+          {f.type !== "bloqueio" && (
+            <label className="wide appointment-internal-note-field">
+              Observação interna da equipe (opcional)
+              <textarea
+                value={f.internalNote || ""}
+                onChange={(e) => setF({ ...f, internalNote: e.target.value })}
+                placeholder="Anote aqui orientações importantes para a equipe antes de abrir o atendimento."
+              />
+              <small>
+                Visível apenas para a equipe. Não será enviada nas mensagens ao cliente.
+              </small>
+            </label>
+          )}
           {f.type !== "bloqueio" && (
             <label className="wide appointment-progress-toggle">
               <input
@@ -6337,10 +6403,12 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             </label>
           )}
         </section>
-        <label className="toggle">
-          <input type="checkbox" defaultChecked /> Preparar lembrete um dia
-          antes
-        </label>
+        {f.type !== "bloqueio" && (
+          <label className="toggle">
+            <input type="checkbox" defaultChecked /> Preparar lembrete um dia
+            antes
+          </label>
+        )}
         <footer>
           {initial && (
             <button
@@ -7856,7 +7924,7 @@ function Reports({
     (filter === "revisoes" && a.type === "revisao") ||
     (filter === "faltas" && a.status === "faltou");
   const rows = (data as Appt[])
-    .filter((a) => a.type !== "bloqueio")
+    .filter((a) => !isEmployeeAbsence(a))
     .filter(matches)
     .filter((a) =>
       `${a.client} ${a.vehicle} ${a.plate} ${a.note} ${a.internalNote ?? ""}`
@@ -7872,7 +7940,7 @@ function Reports({
   saturday.setDate(monday.getDate() + 5);
   const weeklyRows = (data as Appt[]).filter(
     (a) =>
-      a.type !== "bloqueio" && a.date >= iso(monday) && a.date <= iso(saturday),
+      !isEmployeeAbsence(a) && a.date >= iso(monday) && a.date <= iso(saturday),
   );
   const weeklyMetrics = [
     ["Agendamentos", weeklyRows.length],
@@ -7906,7 +7974,7 @@ function Reports({
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowIso = iso(tomorrow);
   const tomorrowRows = (data as Appt[])
-    .filter((a) => a.type !== "bloqueio" && a.date === tomorrowIso)
+    .filter((a) => !isEmployeeAbsence(a) && a.date === tomorrowIso)
     .sort((a, b) => a.time.localeCompare(b.time));
   const tomorrowMessage = [
     `*AGENDA MONOCENTER - ${tomorrow.toLocaleDateString("pt-BR", {
@@ -8007,7 +8075,7 @@ function Reports({
         (a.inProgress ||
           a.status === "servico" ||
           (a.type === "revisao" && a.reviewWithService && !!a.review)) &&
-        a.type !== "bloqueio" &&
+        !isEmployeeAbsence(a) &&
         a.budget?.processStatus !== "Finalizado",
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
