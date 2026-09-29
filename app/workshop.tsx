@@ -4447,6 +4447,18 @@ function Agenda({
   useEffect(() => {
     localStorage.setItem("monocenter-calendar-mode", mode);
   }, [mode]);
+  const editCalendarAbsence = (appointment: Appt) =>
+    edit(
+      appointment.type === "bloqueio"
+        ? appointment
+        : {
+            ...appointment,
+            type: "bloqueio",
+            client: employeeAbsenceName(appointment),
+            note: employeeAbsenceReason(appointment),
+            appointmentServiceType: undefined,
+          },
+    );
   const carryLimitIso = todayIso,
     isBusinessDay = (targetDate: string) => {
       const weekday = new Date(`${targetDate}T12:00:00`).getDay();
@@ -4744,6 +4756,7 @@ function Agenda({
         .app.dark .week-appointment>.week-internal-note-indicator{background:#493713;color:#ffe29a}
         .week-appointment.block,.days span.block,.day article.absence{border-color:#d18a00!important;border-left:5px solid #d18a00!important;background:rgb(255,232,124)!important;color:#4a3300!important;box-shadow:inset 0 0 0 1px #e1a900,0 2px 7px rgba(122,75,0,.22)!important}
         .week-appointment.block>small,.day article.absence p,.day article.absence span>small,.day article.absence time>small{color:#704600!important}.day article.absence time>small{font-weight:900}
+        .week-appointment.block,.days span.block{cursor:pointer!important}.week-appointment.block>.absence-label{grid-column:1/-1;color:#704600!important;font-size:8px;font-weight:900;text-transform:uppercase}.week-appointment.block>.absence-person{grid-column:1/-1;padding-right:16px;color:#3f2c00;font-size:11px}.week-appointment.block>.absence-details{grid-column:1/-1;color:#704600!important;font-size:8px}.week-appointment.block>.absence-edit-icon{position:absolute;top:4px;right:5px;color:#704600;font-size:12px;font-style:normal}
         .app.dark .week-appointment.block,.app.dark .days span.block,.app.dark .day article.absence{background:rgb(255,232,124)!important;color:#3f2c00!important}
         .day article .appointment-service-type{display:block;margin-top:3px;color:#7c2d12;font-size:10px;font-weight:900;text-transform:uppercase}
         .day article .appointment-internal-note{display:block;margin-top:6px;padding:6px 7px;border-left:3px solid #d98b00;border-radius:5px;background:#fff4cc;color:#5d3b00!important;font-size:10px!important;line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
@@ -4949,6 +4962,23 @@ function Agenda({
                               <span
                                 className={`week-appointment ${apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
                                 key={a.id}
+                                role={isEmployeeAbsence(a) ? "button" : undefined}
+                                tabIndex={isEmployeeAbsence(a) ? 0 : undefined}
+                                onClick={(event) => {
+                                  if (!isEmployeeAbsence(a)) return;
+                                  event.stopPropagation();
+                                  editCalendarAbsence(a);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (
+                                    isEmployeeAbsence(a) &&
+                                    (event.key === "Enter" || event.key === " ")
+                                  ) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    editCalendarAbsence(a);
+                                  }
+                                }}
                                 style={{
                                   top: `${top}px`,
                                 }}
@@ -4960,13 +4990,21 @@ function Agenda({
                               >
                                 {isEmployeeAbsence(a) ? (
                                   <>
-                                    <b>{employeeAbsencePeriod(a)}</b>
-                                    <strong>{employeeAbsenceName(a)}</strong>
-                                    {employeeAbsenceReason(a) && (
-                                      <small className="absence-reason">
-                                        Motivo: {employeeAbsenceReason(a)}
-                                      </small>
-                                    )}
+                                    <small className="absence-label">
+                                      Funcionário ausente
+                                    </small>
+                                    <strong className="absence-person">
+                                      {employeeAbsenceName(a)}
+                                    </strong>
+                                    <i className="absence-edit-icon" aria-hidden="true">
+                                      ✎
+                                    </i>
+                                    <small className="absence-details">
+                                      {employeeAbsencePeriod(a)}
+                                      {employeeAbsenceReason(a)
+                                        ? ` · ${employeeAbsenceReason(a)}`
+                                        : ""}
+                                    </small>
                                   </>
                                 ) : (
                                   <>
@@ -5038,9 +5076,19 @@ function Agenda({
                           <span
                             className={`${apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
                             key={a.id}
+                            onClick={(event) => {
+                              if (!isEmployeeAbsence(a)) return;
+                              event.stopPropagation();
+                              editCalendarAbsence(a);
+                            }}
+                            title={
+                              isEmployeeAbsence(a)
+                                ? "Clique para editar ou excluir esta ausência"
+                                : undefined
+                            }
                           >
                             {isEmployeeAbsence(a)
-                              ? `${employeeAbsencePeriod(a)} ${employeeAbsenceName(a)}${employeeAbsenceReason(a) ? ` — ${employeeAbsenceReason(a)}` : ""}`
+                              ? `FUNCIONÁRIO AUSENTE · ${employeeAbsenceName(a)} · ${employeeAbsencePeriod(a)}${employeeAbsenceReason(a) ? ` · ${employeeAbsenceReason(a)}` : ""}`
                               : `${isCarriedInto(a, ds) ? "↳ " : `${a.time} `}${a.client.split(" ")[0]}${a.quoteSentAt ? " ✓" : ""}`}
                           </span>
                         ))}
