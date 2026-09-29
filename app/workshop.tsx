@@ -1,128 +1,96 @@
-                    </button>
-                    <button onClick={() => edit(a)}>Editar</button>
-                    {a.status === "avaliou" && a.type === "cliente" && (
-                      <button
-                        onClick={() =>
-                          message(
-                            `Olá, ${a.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${a.vehicle || ""}${a.plate ? `, placa ${a.plate}` : ""}. Podemos ajudar com o agendamento?`,
-                          )
-                        }
-                      >
-                        Mensagem
-                      </button>
-                    )}
-                    <button onClick={() => print(a)}>Imprimir</button>
-                    <button className="danger" onClick={() => remove(a)}>
-                      Excluir
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-      {printRow && (
-        <div className="report-document">
-          <h1>MONOCENTER ALINHAMENTO TÉCNICO</h1>
-          <p>
-            Av. Itavuvu, 5341 - Jd. Santa Cecília - Sorocaba/SP · WhatsApp (15)
-            99657-4741
-          </p>
-          <h2>{category(printRow)}</h2>
-          <div className="report-data">
-            <span>
-              <b>Data e horário</b>
-              {new Date(printRow.date + "T12:00:00").toLocaleDateString(
-                "pt-BR",
-              )}{" "}
-              · {printRow.time}
-            </span>
-            <span>
-              <b>Cliente</b>
-              {printRow.client}
-            </span>
-            <span>
-              <b>Veículo</b>
-              {printRow.vehicle || "Não informado"}
-            </span>
-            <span>
-              <b>Placa</b>
-              {printRow.plate || "Sem placa"}
-            </span>
-            <span>
-              <b>Situação</b>
-              {category(printRow)}
-            </span>
-            <span>
-              <b>Avaliador</b>
-              {printRow.tech || "Não informado"}
-            </span>
-          </div>
-          <h3>Relato / observação</h3>
-          <p className="report-note">
-            {printRow.note || "Nenhuma observação registrada."}
-          </p>
-          {printRow.evaluation && (
-            <>
-              <h3>Itens avaliados</h3>
-              {evaluatedItems.length === 0 ? (
-                <p className="report-note">
-                  Nenhum estado de peça foi informado.
-                </p>
-              ) : (
-                evaluatedItems.map((x, i) => (
-                  <div
-                    className={"report-item state-" + x.state}
-                    key={x.name + i}
-                  >
-                    <span>
-                      {i + 1}. {x.name}
-                    </span>
-                    <b>{stateLabel(x.state)}</b>
-                  </div>
-                ))
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-const TITLES: Record<View, [string, string]> = {
-  agenda: [
-    "Agenda Monocenter",
-    "Agendamentos, ausências e situação dos atendimentos.",
+"use client";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { CarFront } from "lucide-react";
+const ITEMS = [
+  "Amortecedor Dianteiro Direito",
+  "Amortecedor Dianteiro Esquerdo",
+  "Amortecedor Traseiro Direito",
+  "Amortecedor Traseiro Esquerdo",
+  "Mola Dianteira Direita",
+  "Mola Dianteira Esquerda",
+  "Mola Traseira Direita",
+  "Mola Traseira Esquerda",
+  "Kit do Amortecedor Dianteiro Direito",
+  "Kit do Amortecedor Dianteiro Esquerdo",
+  "Kit do Amortecedor Traseiro Direito",
+  "Kit do Amortecedor Traseiro Esquerdo",
+  "Coxim do Motor",
+  "Coxim do Câmbio",
+  "Braço Oscilante LD",
+  "Braço Oscilante LE",
+  "Bandeja Dianteira Direita",
+  "Bandeja Dianteira Esquerda",
+  "Bucha Diant. da Bandeja Dianteira",
+  "Bucha Traseira da Bandeja Dianteira",
+  "Suporte Barra Tensora LD (morceguinho)",
+  "Suporte Barra Tensora LE (morceguinho)",
+  "Bieleta Dianteira Direita",
+  "Bieleta Dianteira Esquerda",
+  "Bieleta Traseira Direita",
+  "Bieleta Traseira Esquerda",
+  "Pivô Dianteiro Direito",
+  "Pivô Dianteiro Esquerdo",
+  "Bucha Barra Estabilizadora",
+  "Terminal de Direção Direito",
+  "Terminal de Direção Esquerdo",
+  "Terminal do Tensor",
+  "Axial da Direção Direito",
+  "Axial da Direção Esquerdo",
+  "Cubo de Roda Dianteiro Direito",
+  "Cubo de Roda Dianteiro Esquerdo",
+  "Cubo de Roda Traseiro Direito",
+  "Cubo de Roda Traseiro Esquerdo",
+  "Rolamento de Roda Dianteiro",
+  "Rolamento de Roda Traseiro",
+  "Bucha do Eixo",
+  "Barra de Direção",
+  "Caixa de Direção",
+  "Fluido de Direção",
+  "Junta Homocinética Interna",
+  "Junta Homocinética Externa",
+  "Coifa",
+  "Semi-eixo",
+  "Pneu",
+  "Pastilha de Freio",
+  "Disco de freio",
+  "Cilindro de Freio (Tras. Esq./Dir.) Mestre",
+  "Sapata de freio Traseira",
+  "Pastilha de freio Traseira",
+  "Válvula de Pneus (Bico)",
+];
+const FRONT = [
+    "Amortecedores dianteiros",
+    "Coxim dos amortecedores",
+    "Rolamentos do coxim",
+    "Molas dianteiras",
+    "Bandejas",
+    "Buchas das bandejas",
+    "Pivôs",
+    "Terminais de direção",
+    "Axiais de direção",
+    "Bieletas",
+    "Barra estabilizadora",
+    "Buchas da barra estabilizadora",
+    "Agregado/suporte motor",
+    "Cubos de roda",
   ],
-  veiculos: [
-    "Veículos na oficina",
-    "Modelos aguardando avaliação, revisão ou conclusão do serviço.",
+  REAR = [
+    "Amortecedores traseiros",
+    "Coxim traseiros",
+    "Molas traseiras",
+    "Buchas traseiras",
+    "Eixo traseiro",
+    "Braços oscilantes",
+    "Barra estabilizadora traseira",
+    "Cubo de roda traseiros",
   ],
-  atendimento: [
-    "Atendimento concluído",
-    "Avaliação, orçamento aprovado e conferência final.",
-  ],
-  avaliacao: [
-    "Avaliação veicular",
-    "Checklist técnico de suspensão, freios e peças do veículo.",
-  ],
-  orcamento: [
-    "Montar orçamento",
-    "Custos, margem, peças e tabela de serviços.",
-  ],
-  proposta: ["Orçamento do cliente", "Data, placa, pagamento e mensagem."],
-  torque: [
-    "Conferência de torque",
-    "Geometria, alinhamento, segurança e finalização do serviço.",
-  ],
-  revisao: [
-    "Revisão de 30 dias",
-    "Conferência cortesia do serviço executado anteriormente.",
-  ],
-  compras: [
-    "Pedido de compra",
-    "Acompanhe as peças compradas, recebidas e conferidas.",
-  ],
-  relatorios: [
-    "Relatórios de avaliações",
+  SAFE = [
+    "Todos os parafusos reapertados",
+    "Torque aplicado conforme fabricante",
+    "Conferido aperto de rodas",
+    "Conferido altura do veículo",
+    "Conferido folgas",
+    "Conferido vazamentos",
+    "Conferido posição mola e coxins",
+    "Conferido alinhamento",
+    "Conferido balanceamento",
