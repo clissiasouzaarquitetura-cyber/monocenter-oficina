@@ -525,8 +525,10 @@ function VehiclePicture({ appointment }: { appointment: Appt }) {
     </div>
   );
 }
+const isEmployeeAbsence = (a: Appt) =>
+  a.type === "bloqueio" || normalizeSearch(a.client).includes("ausente");
 const apptClass = (a: Appt) =>
-  a.type === "bloqueio"
+  isEmployeeAbsence(a)
     ? "block"
     : a.status === "faltou"
       ? "faltou"
@@ -545,7 +547,7 @@ const apptClass = (a: Appt) =>
                 ? "inprogress"
                 : a.status;
 const agendaStatusLabel = (a: Appt) => {
-  if (a.type === "bloqueio") return "AUSENTE";
+  if (isEmployeeAbsence(a)) return "AUSENTE";
   if (a.budget?.processStatus === "Finalizado")
     return completedAttendanceLabel(a).toLocaleUpperCase("pt-BR");
   if (a.status === "faltou") return "FALTOU";
@@ -4725,6 +4727,9 @@ function Agenda({
         .week-appointment>.week-budget-type{color:#7c2d12;font-size:8px;font-weight:900;text-transform:uppercase}
         .week-appointment>.week-internal-note-indicator{position:absolute;right:3px;bottom:2px;z-index:2;width:auto;max-width:calc(100% - 8px);padding:1px 3px;border-radius:3px;background:#fff4cc;color:#7a4b00;font-size:8px;font-weight:900;line-height:1.1;text-transform:uppercase;white-space:nowrap}
         .app.dark .week-appointment>.week-internal-note-indicator{background:#493713;color:#ffe29a}
+        .week-appointment.block,.days span.block,.day article.absence{border-color:#d18a00!important;border-left:5px solid #d18a00!important;background:rgb(255,232,124)!important;color:#4a3300!important;box-shadow:inset 0 0 0 1px #e1a900,0 2px 7px rgba(122,75,0,.22)!important}
+        .week-appointment.block>small,.day article.absence p,.day article.absence span>small,.day article.absence time>small{color:#704600!important}.day article.absence time>small{font-weight:900}
+        .app.dark .week-appointment.block,.app.dark .days span.block,.app.dark .day article.absence{background:rgb(255,232,124)!important;color:#3f2c00!important}
         .day article .appointment-service-type{display:block;margin-top:3px;color:#7c2d12;font-size:10px;font-weight:900;text-transform:uppercase}
         .day article .appointment-internal-note{display:block;margin-top:6px;padding:6px 7px;border-left:3px solid #d98b00;border-radius:5px;background:#fff4cc;color:#5d3b00!important;font-size:10px!important;line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
         .day article .appointment-internal-note b{font-weight:900}
@@ -5076,7 +5081,7 @@ function Agenda({
                   )}
                 {(!isOngoingVehicle(a) || showOngoingVehicles) && (
                   <article
-                    className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
+                    className={`${isEmployeeAbsence(a) ? "absence" : apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
                   >
                 <time>
                   <b>{a.time}</b>
@@ -5087,13 +5092,13 @@ function Agenda({
                         ? "FINALIZADO"
                         : agendaStatusLabel(a)}
                   </small>
-                  {expanded && a.type !== "bloqueio" && a.tech && (
+                  {expanded && !isEmployeeAbsence(a) && a.tech && (
                     <small className="card-tech">
                       {a.status === "avaliou" ? "Avaliado por" : "Téc."}{" "}
                       {a.tech}
                     </small>
                   )}
-                  {expanded && a.type !== "bloqueio" && a.startedAt && (
+                  {expanded && !isEmployeeAbsence(a) && a.startedAt && (
                     <small className="card-start">Início: {a.startedAt}</small>
                   )}
                 </time>
@@ -5121,7 +5126,7 @@ function Agenda({
                     </button>
                   </div>
                   <p>
-                    {a.type === "bloqueio"
+                    {isEmployeeAbsence(a)
                       ? "Ausência de funcionário"
                       : a.vehicle}
                     {a.plate && (
@@ -5131,7 +5136,7 @@ function Agenda({
                       </>
                     )}
                   </p>
-                  {weeklyBudgetTypeLabel(a) && (
+                  {!isEmployeeAbsence(a) && weeklyBudgetTypeLabel(a) && (
                     <small className="appointment-service-type">
                       {weeklyBudgetTypeLabel(a)}
                     </small>
@@ -5283,7 +5288,7 @@ function Agenda({
                 </span>
                 {expanded && (
                   <div className="appointment-actions">
-                    {a.type !== "bloqueio" && (
+                    {!isEmployeeAbsence(a) && (
                       <button
                         onClick={() =>
                           message(
@@ -5294,7 +5299,7 @@ function Agenda({
                         Mensagem
                       </button>
                     )}
-                    {a.type !== "bloqueio" && (
+                    {!isEmployeeAbsence(a) && (
                       <button
                         className="summary-button"
                         onClick={() => preview(a)}
@@ -5302,7 +5307,7 @@ function Agenda({
                         Visualizar resumo
                       </button>
                     )}
-                    {a.type !== "bloqueio" &&
+                    {!isEmployeeAbsence(a) &&
                       a.budget?.processStatus !== "Finalizado" &&
                       (a.status === "agendado" || a.status === "faltou") && (
                         <button
@@ -5318,7 +5323,7 @@ function Agenda({
                     <button className="danger" onClick={() => remove(a)}>
                       Excluir
                     </button>
-                    {a.type !== "bloqueio" && a.status !== "faltou" && (
+                    {!isEmployeeAbsence(a) && a.status !== "faltou" && (
                       <button onClick={() => start(a)}>
                         {a.type === "revisao" && !a.review
                           ? "Abrir revisão →"
