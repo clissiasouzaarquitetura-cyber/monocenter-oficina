@@ -235,6 +235,7 @@ const REVIEW_ITEMS = [
   "Geometria / alinhamento",
   "Teste de rodagem",
 ];
+const REVIEW_TECHNICIANS = ["Saulo", "Tiago", "Divair", "Vitor"] as const;
 type ReviewState = {
   previousId?: number;
   reference: string;
@@ -5371,7 +5372,6 @@ function Agenda({
 function ReviewScreen({
   appointment,
   appointments,
-  techs,
   onBack,
   onSave,
 }: any) {
@@ -5396,7 +5396,13 @@ function ReviewScreen({
     saved?.result ?? "Revisão concluída",
   );
   const [notes, setNotes] = useState(saved?.notes ?? "");
-  const [reviewer, setReviewer] = useState(saved?.reviewer ?? techs[0] ?? "");
+  const savedReviewer =
+    saved?.reviewer === "Victor" ? "Vitor" : saved?.reviewer ?? "";
+  const [reviewer, setReviewer] = useState(
+    REVIEW_TECHNICIANS.includes(savedReviewer as (typeof REVIEW_TECHNICIANS)[number])
+      ? savedReviewer
+      : "",
+  );
   const selected = previous.find((a: Appt) => a.id === previousId);
   const review: ReviewState = {
     previousId,
@@ -5449,12 +5455,14 @@ function ReviewScreen({
             </select>
           </label>
           <label>
-            Responsável
+            Quem fez a revisão? *
             <select
               value={reviewer}
               onChange={(e) => setReviewer(e.target.value)}
+              required
             >
-              {techs.map((x: string) => (
+              <option value="">Selecione o responsável</option>
+              {REVIEW_TECHNICIANS.map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>
@@ -5518,7 +5526,18 @@ function ReviewScreen({
         <div className="review-actions">
           <button onClick={onBack}>← Voltar à agenda</button>
           <button onClick={print}>Imprimir revisão</button>
-          <button className="primary" onClick={() => onSave(review)}>
+          <button
+            className="primary"
+            onClick={() => {
+              if (!reviewer.trim()) {
+                alert(
+                  "Selecione quem fez a revisão de 30 dias antes de finalizar.",
+                );
+                return;
+              }
+              onSave({ ...review, reviewer: reviewer.trim() });
+            }}
+          >
             {appointment.reviewWithService
               ? "Salvar revisão e continuar para avaliação →"
               : "Salvar e concluir revisão"}
