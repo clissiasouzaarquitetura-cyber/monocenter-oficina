@@ -6007,19 +6007,44 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
   return (
     <div className="backdrop">
       <form
-        className="modal"
+        className="modal appointment-modal"
         onSubmit={(e) => {
           e.preventDefault();
           save(f);
         }}
       >
         <style>{`
+          .appointment-modal{display:flex;flex-direction:column;width:min(1120px,calc(100vw - 40px))!important;max-width:1120px!important;max-height:calc(100vh - 30px)!important;overflow:hidden!important}
+          .appointment-modal>div:first-of-type{flex:0 0 auto}
+          .appointment-modal>section{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:11px 12px!important;min-height:0;overflow-y:auto;padding-right:5px}
+          .appointment-modal>section>label{min-width:0;margin:0!important}
+          .appointment-modal>section>label.wide{grid-column:span 2}
+          .appointment-modal input,.appointment-modal select{min-width:0}
+          .appointment-modal textarea{min-height:82px;resize:vertical}
+          .appointment-customer-note-field{grid-column:1/span 2!important}
+          .appointment-internal-note-field{grid-column:3/span 2!important}
+          .appointment-modal .appointment-progress-toggle{grid-column:1/-1!important}
+          .appointment-modal>.toggle{flex:0 0 auto;margin:10px 0 0!important}
+          .appointment-modal>footer{position:sticky;bottom:0;z-index:3;flex:0 0 auto;margin-top:8px;padding-top:10px;background:var(--card,#fff);box-shadow:0 -8px 16px rgba(255,255,255,.88)}
           .appointment-internal-note-field{padding:10px;border:1px solid #efd58b;border-radius:9px;background:#fffaf0}
           .appointment-internal-note-field textarea{background:#fffef9}
           .appointment-internal-note-field>small{display:block;margin-top:5px;color:#7a5a13;font-size:11px}
           .app.dark .appointment-internal-note-field{border-color:#735c25;background:#302816}
           .app.dark .appointment-internal-note-field textarea{background:#17202c}
           .app.dark .appointment-internal-note-field>small{color:#ffe29a}
+          .app.dark .appointment-modal>footer{background:#111c29;box-shadow:0 -8px 16px rgba(17,28,41,.9)}
+          @media(max-width:900px){
+            .appointment-modal{width:min(650px,calc(100vw - 24px))!important;max-height:calc(100vh - 20px)!important}
+            .appointment-modal>section{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+            .appointment-customer-note-field,.appointment-internal-note-field{grid-column:1/-1!important}
+          }
+          @media(max-width:580px){
+            .appointment-modal{width:calc(100vw - 12px)!important}
+            .appointment-modal>section{grid-template-columns:1fr!important}
+            .appointment-modal>section>label.wide,.appointment-customer-note-field,.appointment-internal-note-field,.appointment-modal .appointment-progress-toggle{grid-column:1!important}
+            .appointment-modal>footer{display:grid!important;grid-template-columns:1fr 1fr}
+            .appointment-modal>footer .danger{grid-column:1/-1}
+          }
         `}</style>
         <div>
           <span>
@@ -6234,7 +6259,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               onChange={(e) => setF({ ...f, km: e.target.value })}
             />
           </label>
-          <label className="wide">
+          <label className="wide appointment-customer-note-field">
             Relato do cliente (opcional)
             <textarea
               value={f.note}
