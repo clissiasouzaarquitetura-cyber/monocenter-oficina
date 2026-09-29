@@ -4722,6 +4722,8 @@ function Agenda({
         .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:9px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
         .week-appointment>.week-appointment-status{color:#334155;font-size:8px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}.week-appointment>.status-finalizado{color:#087d47}.week-appointment>.status-faltou{color:#c51d25}.week-appointment>.status-em-andamento{color:#1d4ed8}
         .week-appointment>.week-budget-type{color:#7c2d12;font-size:8px;font-weight:900;text-transform:uppercase}
+        .week-appointment>.week-internal-note-indicator{position:absolute;right:3px;bottom:2px;z-index:2;width:auto;max-width:calc(100% - 8px);padding:1px 3px;border-radius:3px;background:#fff4cc;color:#7a4b00;font-size:8px;font-weight:900;line-height:1.1;text-transform:uppercase;white-space:nowrap}
+        .app.dark .week-appointment>.week-internal-note-indicator{background:#493713;color:#ffe29a}
         .day article .appointment-service-type{display:block;margin-top:3px;color:#7c2d12;font-size:10px;font-weight:900;text-transform:uppercase}
         .day article .appointment-internal-note{display:block;margin-top:6px;padding:6px 7px;border-left:3px solid #d98b00;border-radius:5px;background:#fff4cc;color:#5d3b00!important;font-size:10px!important;line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
         .day article .appointment-internal-note b{font-weight:900}
@@ -4948,6 +4950,14 @@ function Agenda({
                                 {weeklyBudgetTypeLabel(a) && (
                                   <small className="week-budget-type">
                                     {weeklyBudgetTypeLabel(a)}
+                                  </small>
+                                )}
+                                {a.internalNote?.trim() && (
+                                  <small
+                                    className="week-internal-note-indicator"
+                                    title="Há uma observação interna registrada"
+                                  >
+                                    * Observação interna
                                   </small>
                                 )}
                               </span>
@@ -5178,13 +5188,13 @@ function Agenda({
                         {agendaStatusLabel(a)}
                       </small>
                     )}
-                  {a.internalNote?.trim() && (
-                    <small className="appointment-internal-note">
-                      <b>OBSERVAÇÃO INTERNA:</b> {a.internalNote.trim()}
-                    </small>
-                  )}
                   {expanded && (
                     <div className="appointment-details">
+                      {a.internalNote?.trim() && (
+                        <small className="appointment-internal-note">
+                          <b>OBSERVAÇÃO INTERNA:</b> {a.internalNote.trim()}
+                        </small>
+                      )}
                       {a.note?.trim() && (
                         <small className="appointment-customer-note">
                           <b>Relato do cliente:</b> {a.note.trim()}
