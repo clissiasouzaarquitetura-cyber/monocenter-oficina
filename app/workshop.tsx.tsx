@@ -176,9 +176,9 @@ const findVehicle = (value: string) => {
 const vehicleColorHex = (value?: string) =>
   VEHICLE_COLORS[(value || "").trim().toLocaleLowerCase("pt-BR")] ?? "#d8dde4";
 const SERVICES = [
-  ["Alinhamento de direção - Passeio", 100],
-  ["Alinhamento de direção - SUV", 120],
-  ["Alinhamento de direção - Caminhonete/Van", 150],
+  ["Alinhamento de direção 3D - Passeio", 100],
+  ["Alinhamento de direção 3D - SUV", 120],
+  ["Alinhamento de direção 3D - Caminhonete/Van", 150],
   ["Balanceamento - roda aro 13, 14 ou 15", 20],
   ["Balanceamento - roda aro 16, 17 ou 18", 25],
   ["Balanceamento - roda de caminhonete", 50],
@@ -197,9 +197,9 @@ const SERVICE_GROUPS = [
   { title: "1. Montagem de pneus", indexes: [6, 7, 8] },
   { title: "2. Balanceamento", indexes: [3, 4, 5] },
   { title: "3. Rodízio", indexes: [9] },
-  { title: "4. Alinhamento de direção", indexes: [0, 1, 2] },
+  { title: "4. Alinhamento de direção 3D", indexes: [0, 1, 2] },
   {
-    title: "5. Mãos de obra e alinhamentos técnicos",
+    title: "5. Gabaritagem",
     indexes: [10, 11, 12, 13, 14, 15],
   },
 ];
@@ -207,6 +207,11 @@ const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
 const servicePrice = (index: number, prices?: Record<number, number>) =>
   prices?.[index] ?? SERVICES[index]?.[1] ?? 0;
+const isGabaritagemManualService = (service: any) =>
+  service?.category === "gabaritagem" ||
+  /gabarit|alinhamento técnico|longarina|eixo traseiro|solda/i.test(
+    String(service?.name ?? ""),
+  );
 const encodeBudgetTransfer = (value: unknown) => {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
   let binary = "";
@@ -230,6 +235,7 @@ const REVIEW_ITEMS = [
   "Geometria / alinhamento",
   "Teste de rodagem",
 ];
+const REVIEW_TECHNICIANS = ["Saulo", "Tiago", "Divair", "Vitor"] as const;
 type ReviewState = {
   previousId?: number;
   reference: string;
@@ -269,6 +275,7 @@ type BudgetState = {
   serviceQty: Record<number, number>;
   servicePrices?: Record<number, number>;
   manualServices: any[];
+  proposalPaymentOptions?: { pix: boolean; card: boolean };
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
   internalReview?: InternalBudgetReview;
@@ -304,6 +311,7 @@ type Appt = {
   workOrder?: string;
   date: string;
   time: string;
+  absenceEndTime?: string;
   client: string;
   phone: string;
   vehicle: string;
@@ -313,7 +321,15 @@ type Appt = {
   plate: string;
   km: string;
   note: string;
+  internalNote?: string;
   type: "cliente" | "retorno" | "garantia" | "revisao" | "bloqueio";
+  appointmentServiceType?:
+    | "gabaritagem"
+    | "pecas"
+    | "alinhamento_3d"
+    | "alinhamento_balanceamento"
+    | "servicos";
+  partsEvaluationSkipped?: boolean;
   reviewWithService?: boolean;
   status: "agendado" | "avaliou" | "servico" | "faltou";
   tech?: string;
@@ -337,6 +353,13 @@ type Appt = {
   };
   quoteSentAt?: string;
   quoteSentBy?: string;
+  quoteFollowUpDays?: number;
+  quoteFollowUpDueDate?: string;
+  quoteFollowUpDecision?: "message" | "declined";
+  quoteFollowUpUpdatedBy?: string;
+  quoteFollowUpUpdatedAt?: string;
+  quoteFollowUpPreparedBy?: string;
+  quoteFollowUpPreparedAt?: string;
   serviceScheduled?: boolean;
   serviceScheduledFor?: string;
   serviceScheduledTime?: string;
@@ -352,6 +375,10 @@ type Appt = {
   lastEditedAt?: string;
   startedAt?: string;
   inProgress?: boolean;
+  statusBeforeNoShow?: Appt["status"];
+  inProgressBeforeNoShow?: boolean;
+  noShowMarkedBy?: string;
+  noShowMarkedAt?: string;
   _updatedAt?: number;
 };
 const iso = (d: Date) =>
@@ -499,10 +526,25 @@ function VehiclePicture({ appointment }: { appointment: Appt }) {
     </div>
   );
 }
+const isEmployeeAbsence = (a: Appt) =>
+  a.type === "bloqueio" || normalizeSearch(a.client).includes("ausente");
+const employeeAbsenceName = (a: Appt) => {
+  const name = a.client.split(/\s+ausente\b/i)[0]?.trim();
+  return name || a.client;
+};
+const employeeAbsenceReason = (a: Appt) => {
+  if (a.note?.trim()) return a.note.trim();
+  const legacyReason = a.client.match(/\bausente\b\s*(.*)$/i)?.[1]?.trim();
+  return legacyReason || "";
+};
+const employeeAbsencePeriod = (a: Appt) =>
+  a.absenceEndTime ? `${a.time}–${a.absenceEndTime}` : `${a.time} em diante`;
 const apptClass = (a: Appt) =>
-  a.type === "bloqueio"
+  isEmployeeAbsence(a)
     ? "block"
-    : (a.serviceScheduled && a.status === "agendado") ||
+    : a.status === "faltou"
+      ? "faltou"
+      : (a.serviceScheduled && a.status === "agendado") ||
         !!a.serviceAppointmentId
       ? "scheduled-service"
       : a.type === "retorno"
@@ -517,9 +559,10 @@ const apptClass = (a: Appt) =>
                 ? "inprogress"
                 : a.status;
 const agendaStatusLabel = (a: Appt) => {
-  if (a.type === "bloqueio") return "AUSENTE";
+  if (isEmployeeAbsence(a)) return "AUSENTE";
   if (a.budget?.processStatus === "Finalizado")
     return completedAttendanceLabel(a).toLocaleUpperCase("pt-BR");
+  if (a.status === "faltou") return "FALTOU";
   if (a.type === "retorno") return "RETORNO";
   if (a.type === "garantia") return "GARANTIA";
   if (a.type === "revisao" && !a.review)
@@ -551,6 +594,7 @@ const EMPTY_APPT: Appt = {
   plate: "",
   km: "",
   note: "",
+  internalNote: "",
   type: "cliente",
   status: "agendado",
 };
@@ -570,6 +614,7 @@ export default function App({ initialState, user, onLogout }: any) {
     ),
     [modal, setModal] = useState<Appt | boolean>(false),
     [evaluationEntry, setEvaluationEntry] = useState<Appt | null>(null),
+    [attendancePreview, setAttendancePreview] = useState<Appt | null>(null),
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
@@ -675,6 +720,10 @@ export default function App({ initialState, user, onLogout }: any) {
       shared.servicePrices ?? {},
     ),
     [manualServices, setManualServices] = useState(shared.manualServices ?? []),
+    [proposalPaymentOptions, setProposalPaymentOptions] = useState<{
+      pix: boolean;
+      card: boolean;
+    }>(shared.proposalPaymentOptions ?? { pix: true, card: true }),
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
       shared.processStatus ?? "Em andamento",
@@ -724,6 +773,7 @@ export default function App({ initialState, user, onLogout }: any) {
         serviceQty,
         servicePrices,
         manualServices,
+        proposalPaymentOptions,
         patioNotes,
         processStatus,
         purchaseChecks,
@@ -768,6 +818,7 @@ export default function App({ initialState, user, onLogout }: any) {
     serviceQty,
     servicePrices,
     manualServices,
+    proposalPaymentOptions,
     patioNotes,
     processStatus,
     purchaseChecks,
@@ -870,7 +921,13 @@ export default function App({ initialState, user, onLogout }: any) {
       ) + manualServices.reduce((s: number, x: any) => s + x.qty * x.value, 0),
     total = pieces + serviceTotal,
     totalCash = piecesCash + serviceTotal,
-    totalInstallment = piecesInstallment + serviceTotal;
+    totalInstallment = piecesInstallment + serviceTotal,
+    tireTotal = tireParts.reduce(
+      (sum: number, part: any) => sum + part.qty * saleOf(part, roundStep),
+      0,
+    ),
+    pixDiscountBase = Math.max(0, total - tireTotal),
+    pixTotal = pixDiscountBase * 0.95 + tireTotal;
   const reviewParts = parts
       .map((part: any, index: number) => ({ part, index }))
       .filter(
@@ -1037,6 +1094,7 @@ export default function App({ initialState, user, onLogout }: any) {
     setServiceQty({});
     setServicePrices({});
     setManualServices([]);
+    setProposalPaymentOptions({ pix: true, card: true });
     setPatioNotes("");
     setChecks({});
     setGeometry({});
@@ -1186,8 +1244,34 @@ export default function App({ initialState, user, onLogout }: any) {
         : "Nenhum serviço"
     }\n\n${
       tireParts.length
-        ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)`
-        : `TOTAL: ${brl(total)}\n\nPagamento:\n• Pix com 5% de desconto: ${brl(total * 0.95)}\n• Cartão: até 5x sem juros de ${brl(total / 5)}`
+        ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)${
+            proposalPaymentOptions.pix || proposalPaymentOptions.card
+              ? `\n\nPagamento:\n${[
+                  proposalPaymentOptions.pix
+                    ? `• Pix com 5% de desconto em peças e serviços (pneus sem desconto): ${brl(pixTotal)}`
+                    : "",
+                  proposalPaymentOptions.card
+                    ? `• Cartão: total parcelado ${brl(totalInstallment)} em até 5x sem juros de ${brl(totalInstallment / 5)}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join("\n")}`
+              : ""
+          }`
+        : `TOTAL: ${brl(total)}${
+            proposalPaymentOptions.pix || proposalPaymentOptions.card
+              ? `\n\nPagamento:\n${[
+                  proposalPaymentOptions.pix
+                    ? `• Pix com 5% de desconto: ${brl(pixTotal)}`
+                    : "",
+                  proposalPaymentOptions.card
+                    ? `• Cartão: até 5x sem juros de ${brl(total / 5)}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join("\n")}`
+              : ""
+          }`
     }`;
   return (
     <div className={darkMode ? "app dark" : "app"}>
@@ -1319,6 +1403,9 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  a.budget.proposalPaymentOptions ?? { pix: true, card: true },
+                );
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else if (
@@ -1330,6 +1417,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
@@ -1347,6 +1435,45 @@ export default function App({ initialState, user, onLogout }: any) {
               scrollTo(0, 0);
             }}
             edit={(a: Appt) => setModal(a)}
+            preview={(a: Appt) => setAttendancePreview(a)}
+            markNoShow={(a: Appt) => {
+              const markAsNoShow = a.status !== "faltou";
+              if (
+                markAsNoShow &&
+                !confirm(`Confirmar que ${a.client} faltou ao agendamento?`)
+              )
+                return;
+              const now = new Date().toISOString();
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((item) =>
+                  item.id === a.id
+                    ? {
+                        ...item,
+                        status: markAsNoShow
+                          ? "faltou"
+                          : item.statusBeforeNoShow ?? "agendado",
+                        inProgress: markAsNoShow
+                          ? false
+                          : item.inProgressBeforeNoShow ?? false,
+                        statusBeforeNoShow: markAsNoShow
+                          ? item.status
+                          : undefined,
+                        inProgressBeforeNoShow: markAsNoShow
+                          ? item.inProgress
+                          : undefined,
+                        noShowMarkedBy: markAsNoShow
+                          ? user.displayName
+                          : undefined,
+                        noShowMarkedAt: markAsNoShow ? now : undefined,
+                        lastEditedBy: user.displayName,
+                        lastEditedAt: now,
+                        _updatedAt: Date.now(),
+                      }
+                    : item,
+                ),
+              );
+            }}
             remove={(a: Appt) => {
               if (
                 confirm(
@@ -1392,6 +1519,11 @@ export default function App({ initialState, user, onLogout }: any) {
                       activeAppointment.budget?.servicePrices ?? {},
                     manualServices:
                       activeAppointment.budget?.manualServices ?? [],
+                    proposalPaymentOptions:
+                      activeAppointment.budget?.proposalPaymentOptions ?? {
+                        pix: true,
+                        card: true,
+                      },
                     patioNotes: activeAppointment.budget?.patioNotes ?? "",
                     processStatus: "Finalizado",
                     internalReview:
@@ -1505,6 +1637,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus,
                             internalReview:
@@ -1837,6 +1970,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           serviceQty,
                           servicePrices,
                           manualServices,
+                          proposalPaymentOptions,
                           patioNotes,
                           processStatus,
                         };
@@ -2177,7 +2311,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           onClick={() =>
                             setManualServices([
                               ...manualServices,
-                              { name: "", qty: 0, value: 0 },
+                              { name: "", qty: 0, value: 0, category: "labor" },
                             ])
                           }
                         >
@@ -2195,7 +2329,30 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="servicegrid">
                         {SERVICE_GROUPS.map((group) => (
                           <section className="service-group" key={group.title}>
-                            <h3>{group.title}</h3>
+                            <div
+                              className="service-group-heading"
+                              style={{ gridColumn: "1 / -1" }}
+                            >
+                              <h3>{group.title}</h3>
+                              {group.title === "5. Gabaritagem" && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setManualServices([
+                                      ...manualServices,
+                                      {
+                                        name: "",
+                                        qty: 1,
+                                        value: 0,
+                                        category: "gabaritagem",
+                                      },
+                                    ])
+                                  }
+                                >
+                                  + Adicionar serviço
+                                </button>
+                              )}
+                            </div>
                             {group.indexes.map((i) => {
                               const x = SERVICES[i];
                               return (
@@ -2326,11 +2483,125 @@ export default function App({ initialState, user, onLogout }: any) {
                                 </div>
                               );
                             })}
+                            {group.title === "5. Gabaritagem" && (
+                              <div className="manualservices gabaritagem-manual-services">
+                                {manualServices
+                                .map((x, i) => ({ x, i }))
+                                .filter(({ x }) =>
+                                  isGabaritagemManualService(x),
+                                )
+                                .map(({ x, i }) => (
+                                  <div
+                                    className="manual-service-in-category"
+                                    key={`gabaritagem-${i}`}
+                                  >
+                                    <input
+                                      placeholder="Nome do serviço de gabaritagem"
+                                      value={x.name}
+                                      onChange={(e) => {
+                                        const a = [...manualServices];
+                                        a[i] = {
+                                          ...a[i],
+                                          name: e.target.value,
+                                          category: "gabaritagem",
+                                        };
+                                        setManualServices(a);
+                                      }}
+                                    />
+                                    <label>
+                                      Qtd.
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={x.qty || ""}
+                                        onChange={(e) => {
+                                          const a = [...manualServices];
+                                          a[i] = {
+                                            ...a[i],
+                                            qty: +e.target.value,
+                                            category: "gabaritagem",
+                                          };
+                                          setManualServices(a);
+                                        }}
+                                      />
+                                    </label>
+                                    <label>
+                                      Valor unitário R$
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={
+                                          serviceValueDrafts[`manual-${i}`] ??
+                                          decimalValue(x.value)
+                                        }
+                                        onFocus={(event) => {
+                                          setServiceValueDrafts((current) => ({
+                                            ...current,
+                                            [`manual-${i}`]: decimalValue(
+                                              x.value,
+                                            ),
+                                          }));
+                                          event.currentTarget.select();
+                                        }}
+                                        onChange={(e) => {
+                                          const typed = e.target.value;
+                                          setServiceValueDrafts((current) => ({
+                                            ...current,
+                                            [`manual-${i}`]: typed,
+                                          }));
+                                          const a = [...manualServices];
+                                          a[i] = {
+                                            ...a[i],
+                                            value: parseDecimalValue(typed),
+                                            category: "gabaritagem",
+                                          };
+                                          setManualServices(a);
+                                        }}
+                                        onBlur={() =>
+                                          setServiceValueDrafts((current) => {
+                                            const next = { ...current };
+                                            delete next[`manual-${i}`];
+                                            return next;
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                    <b>{brl(x.qty * x.value)}</b>
+                                    <button
+                                      type="button"
+                                      className="manual-service-delete"
+                                      aria-label={`Excluir serviço ${x.name || "sem nome"}`}
+                                      title="Excluir este serviço"
+                                      onClick={() => {
+                                        if (
+                                          confirm(
+                                            `Excluir o serviço “${x.name || "sem nome"}”?`,
+                                          )
+                                        ) {
+                                          setManualServices((current) =>
+                                            current.filter(
+                                              (_: any, index: number) =>
+                                                index !== i,
+                                            ),
+                                          );
+                                          setServiceValueDrafts({});
+                                        }
+                                      }}
+                                    >
+                                      🗑
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </section>
                         ))}
                       </div>
                       <div className="manualservices">
-                        {manualServices.map((x, i) => (
+                        {manualServices
+                          .map((x, i) => ({ x, i }))
+                          .filter(({ x }) => !isGabaritagemManualService(x))
+                          .map(({ x, i }) => (
                           <div key={i}>
                             <input
                               placeholder="Nome do serviço"
@@ -2413,7 +2684,7 @@ export default function App({ initialState, user, onLogout }: any) {
                               🗑
                             </button>
                           </div>
-                        ))}
+                          ))}
                       </div>
                     </div>
                   </Collapse>
@@ -2634,6 +2905,7 @@ export default function App({ initialState, user, onLogout }: any) {
                                   serviceQty,
                                   servicePrices,
                                   manualServices,
+                                  proposalPaymentOptions,
                                   patioNotes,
                                   processStatus,
                                   internalReview,
@@ -2763,16 +3035,73 @@ export default function App({ initialState, user, onLogout }: any) {
                     <div className="grand">
                       Total do orçamento <b>{brl(total)}</b>
                     </div>
-                    <div className="payments">
+                    <div className="payment-options no-print">
+                      <strong>Formas de pagamento exibidas na proposta</strong>
                       <label>
-                        <input type="radio" name="pay" defaultChecked /> Pix -
-                        5% de desconto <b>{brl(total * 0.95)}</b>
+                        <input
+                          type="checkbox"
+                          checked={proposalPaymentOptions.pix}
+                          onChange={(e) =>
+                            setProposalPaymentOptions({
+                              ...proposalPaymentOptions,
+                              pix: e.target.checked,
+                            })
+                          }
+                        />
+                        Pix com 5% de desconto
                       </label>
                       <label>
-                        <input type="radio" name="pay" /> Cartão - até 5x sem
-                        juros <b>5x de {brl(total / 5)}</b>
+                        <input
+                          type="checkbox"
+                          checked={proposalPaymentOptions.card}
+                          onChange={(e) =>
+                            setProposalPaymentOptions({
+                              ...proposalPaymentOptions,
+                              card: e.target.checked,
+                            })
+                          }
+                        />
+                        Cartão em até 5x sem juros
                       </label>
+                      {!proposalPaymentOptions.pix &&
+                        !proposalPaymentOptions.card && (
+                          <small>Nenhuma forma de pagamento será enviada.</small>
+                        )}
                     </div>
+                    {(proposalPaymentOptions.pix ||
+                      proposalPaymentOptions.card) && (
+                      <div className="payments">
+                        {proposalPaymentOptions.pix && (
+                          <label>
+                            Pix - 5% de desconto <b>{brl(pixTotal)}</b>
+                            {tireParts.length > 0 && (
+                              <small>
+                                Desconto aplicado somente em peças e serviços.
+                                Pneus permanecem sem desconto.
+                              </small>
+                            )}
+                          </label>
+                        )}
+                        {proposalPaymentOptions.card && (
+                          <label>
+                            Cartão - até 5x sem juros
+                            {tireParts.length > 0 && (
+                              <small>
+                                Total parcelado: {brl(totalInstallment)}
+                              </small>
+                            )}
+                            <b>
+                              5x de{" "}
+                              {brl(
+                                (tireParts.length > 0
+                                  ? totalInstallment
+                                  : total) / 5,
+                              )}
+                            </b>
+                          </label>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="schedule-service-box">
                     <span>
@@ -2815,6 +3144,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
                             internalReview:
@@ -2901,6 +3231,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
                             internalReview:
@@ -2969,8 +3300,8 @@ export default function App({ initialState, user, onLogout }: any) {
                                 supplierName: String(part.supplier ?? ""),
                               })),
                             ...selectedServices.map((index: number) => ({
-                              category: /alinhamento técnico/i.test(
-                                SERVICES[index]?.[0] ?? "",
+                              category: SERVICE_GROUPS[4].indexes.includes(
+                                index,
                               )
                                 ? "gabaritagem"
                                 : "labor",
@@ -2982,7 +3313,9 @@ export default function App({ initialState, user, onLogout }: any) {
                             ...manualServices
                               .filter((service: any) => service.name?.trim())
                               .map((service: any) => ({
-                                category: "labor",
+                                category: isGabaritagemManualService(service)
+                                  ? "gabaritagem"
+                                  : "labor",
                                 description: service.name.trim(),
                                 quantity: Number(service.qty) || 1,
                                 unitPrice: Number(service.value) || 0,
@@ -3014,6 +3347,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
                             internalReview:
@@ -3390,6 +3724,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           serviceQty,
                           servicePrices,
                           manualServices,
+                          proposalPaymentOptions,
                           patioNotes,
                           processStatus: "Finalizado",
                           internalReview:
@@ -3485,6 +3820,9 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  a.budget.proposalPaymentOptions ?? { pix: true, card: true },
+                );
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else {
@@ -3493,6 +3831,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
@@ -3520,6 +3859,25 @@ export default function App({ initialState, user, onLogout }: any) {
                 setDeletedAppointmentIds((ids) => [...new Set([...ids, a.id])]);
                 setAppointments((list) => list.filter((x) => x.id !== a.id));
               }
+            }}
+            updateQuoteFollowUp={(id: number, changes: Partial<Appt>) => {
+              const now = new Date().toISOString();
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((appointment) =>
+                  appointment.id === id
+                    ? {
+                        ...appointment,
+                        ...changes,
+                        quoteFollowUpUpdatedBy: user.displayName,
+                        quoteFollowUpUpdatedAt: now,
+                        lastEditedBy: user.displayName,
+                        lastEditedAt: now,
+                        _updatedAt: Date.now(),
+                      }
+                    : appointment,
+                ),
+              );
             }}
             message={setMessage}
           />
@@ -3625,6 +3983,16 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
+        {attendancePreview && (
+          <AttendancePreviewModal
+            appointment={
+              appointments.find((item) => item.id === attendancePreview.id) ??
+              attendancePreview
+            }
+            roundStep={roundStep}
+            close={() => setAttendancePreview(null)}
+          />
+        )}
         {evaluationEntry && (
           <EvaluationStartModal
             appointment={evaluationEntry}
@@ -3636,14 +4004,20 @@ export default function App({ initialState, user, onLogout }: any) {
               startedAt,
               vehicle,
               plate,
+              evaluateParts,
             }: any) => {
               syncBlockedUntil.current = Date.now() + 4000;
+              const skipPartsEvaluation = evaluateParts === "nao";
               const opened: Appt = {
                 ...evaluationEntry,
                 vehicle: vehicle.trim(),
                 plate: plate.trim().toLocaleUpperCase("pt-BR"),
                 tech: selectedEvaluator,
                 startedAt,
+                status: skipPartsEvaluation
+                  ? "avaliou"
+                  : evaluationEntry.status,
+                partsEvaluationSkipped: skipPartsEvaluation,
                 inProgress: true,
                 lastEditedBy: user.displayName,
                 lastEditedAt: new Date().toISOString(),
@@ -3679,6 +4053,12 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(opened.budget.serviceQty ?? {});
                 setServicePrices(opened.budget.servicePrices ?? {});
                 setManualServices(opened.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  opened.budget.proposalPaymentOptions ?? {
+                    pix: true,
+                    card: true,
+                  },
+                );
                 setPatioNotes(opened.budget.patioNotes ?? "");
                 setProcessStatus(opened.budget.processStatus ?? "Em andamento");
               } else {
@@ -3687,14 +4067,15 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
               setCheckOpen(false);
               setPartsOpen(false);
-              setServicesOpen(false);
+              setServicesOpen(skipPartsEvaluation);
               setEvaluationEntry(null);
-              setView("avaliacao");
+              setView(skipPartsEvaluation ? "orcamento" : "avaliacao");
               scrollTo(0, 0);
             }}
           />
@@ -3962,8 +4343,33 @@ function Check({ title, items, vals, set, tri }: any) {
           )}
         </span>
       </div>
-      {items.map((x: string) => (
-        <div key={x}>
+      {items.map((x: string) => {
+        const checked = tri ? !!vals[x + "-ok"] : !!vals[x],
+          notApplicable = tri ? !!vals[x + "-na"] : false;
+        return (
+        <div
+          key={x}
+          className={
+            checked
+              ? "conference-row-selected conference-row-checked"
+              : notApplicable
+                ? "conference-row-selected conference-row-na"
+                : ""
+          }
+          style={
+            checked
+              ? {
+                  background: "#e7f7ee",
+                  boxShadow: "inset 5px 0 #159957",
+                }
+              : notApplicable
+                ? {
+                    background: "#fff6dd",
+                    boxShadow: "inset 5px 0 #e0a11a",
+                  }
+                : undefined
+          }
+        >
           <span>{x}</span>
           {tri ? (
             <>
@@ -4001,7 +4407,8 @@ function Check({ title, items, vals, set, tri }: any) {
             </button>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -4013,6 +4420,8 @@ function Agenda({
   showInProgress,
   start,
   edit,
+  preview,
+  markNoShow,
   remove,
   message,
 }: any) {
@@ -4022,10 +4431,34 @@ function Agenda({
     [cursor, setCursor] = useState(
       new Date(today.getFullYear(), today.getMonth(), 1),
     ),
-    [mode, setMode] = useState<"dia" | "semana" | "mes">("mes"),
+    [mode, setMode] = useState<"dia" | "semana" | "mes">(() => {
+      if (typeof window === "undefined") return "mes";
+      const savedMode = localStorage.getItem("monocenter-calendar-mode");
+      return savedMode === "dia" ||
+        savedMode === "semana" ||
+        savedMode === "mes"
+        ? savedMode
+        : "mes";
+    }),
     [openCal, setOpenCal] = useState(true),
+    [showSaturday, setShowSaturday] = useState(false),
     [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
+  useEffect(() => {
+    localStorage.setItem("monocenter-calendar-mode", mode);
+  }, [mode]);
+  const editCalendarAbsence = (appointment: Appt) =>
+    edit(
+      appointment.type === "bloqueio"
+        ? appointment
+        : {
+            ...appointment,
+            type: "bloqueio",
+            client: employeeAbsenceName(appointment),
+            note: employeeAbsenceReason(appointment),
+            appointmentServiceType: undefined,
+          },
+    );
   const carryLimitIso = todayIso,
     isBusinessDay = (targetDate: string) => {
       const weekday = new Date(`${targetDate}T12:00:00`).getDay();
@@ -4036,7 +4469,7 @@ function Agenda({
       );
     },
     isCarriedInto = (appointment: Appt, targetDate: string) =>
-      appointment.type !== "bloqueio" &&
+      !isEmployeeAbsence(appointment) &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado" &&
       appointment.date < targetDate &&
@@ -4071,30 +4504,53 @@ function Agenda({
       });
     }, [cursor, date, mode]);
   const isOngoingVehicle = (appointment: Appt) =>
-      appointment.type !== "bloqueio" &&
+      !isEmployeeAbsence(appointment) &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado",
-    list = [...appointmentsForDate(date)].sort((first, second) => {
+    selectedDayAppointments =
+      mode === "semana"
+        ? (data as Appt[]).filter((appointment) => appointment.date === date)
+        : appointmentsForDate(date),
+    visibleSelectedDayAppointments = selectedDayAppointments.filter(
+      (appointment) => !isEmployeeAbsence(appointment),
+    ),
+    ongoingVehicles = (data as Appt[]).filter(isOngoingVehicle),
+    dayAppointments = Array.from(
+      new Map(
+        [
+          ...visibleSelectedDayAppointments.filter(
+            (appointment) => !isOngoingVehicle(appointment),
+          ),
+          ...ongoingVehicles,
+        ].map((appointment) => [appointment.id, appointment]),
+      ).values(),
+    ),
+    list = [...dayAppointments].sort((first, second) => {
       const groupDifference =
         Number(isOngoingVehicle(first)) - Number(isOngoingVehicle(second));
       if (groupDifference !== 0) return groupDifference;
+      if (isOngoingVehicle(first) && isOngoingVehicle(second)) {
+        const dateDifference = second.date.localeCompare(first.date);
+        if (dateDifference !== 0) return dateDifference;
+      }
       return (
         first.time.localeCompare(second.time, "pt-BR", { numeric: true }) ||
         first.client.localeCompare(second.client, "pt-BR")
       );
     }),
-    ongoingVehicleCount = list.filter(isOngoingVehicle).length,
+    ongoingVehicleCount = ongoingVehicles.length,
     openQuotesCount = (data as Appt[]).filter(
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        a.quoteFollowUpDecision !== "declined" &&
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     inProgressCount = (data as Appt[]).filter(
       (a) =>
         (a.inProgress || a.status === "servico") &&
-        a.type !== "bloqueio" &&
+        !isEmployeeAbsence(a) &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     weekLabels =
@@ -4107,6 +4563,152 @@ function Agenda({
         : mode === "semana"
           ? `${calendarDays[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${calendarDays[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
           : fmt(date);
+  const weekStartHour = 7,
+    weekEndHour = 20,
+    weekHourHeight = 116,
+    weekHours = Array.from(
+      { length: weekEndHour - weekStartHour + 1 },
+      (_, index) => weekStartHour + index,
+    ),
+    appointmentMinute = (time?: string) => {
+      const [hour, minute] = String(time || "").split(":").map(Number);
+      return Number.isFinite(hour) && Number.isFinite(minute)
+        ? hour * 60 + minute
+        : weekStartHour * 60;
+    },
+    visibleWeekDays = calendarDays.filter(
+      (day) => day.getDay() !== 0 && (showSaturday || day.getDay() !== 6),
+    ),
+    appointmentKindLabel = (appointment: Appt) => {
+      if (isEmployeeAbsence(appointment)) return "Ausente";
+      if (appointment.type === "revisao") return "Revisão 30 dias";
+      if (appointment.type === "retorno") return "Retorno";
+      if (appointment.type === "garantia") return "Garantia";
+      if (appointment.serviceScheduled) return "Serviço agendado";
+      if (appointment.status === "avaliou") return "Orçamento";
+      if (appointment.status === "servico") return "Serviço aprovado";
+      return "Agendamento";
+    };
+  const weeklyProgressLabel = (appointment: Appt) => {
+      if (appointment.budget?.processStatus === "Finalizado")
+        return "Finalizado";
+      if (appointment.status === "faltou") return "Faltou";
+      if (appointment.inProgress || appointment.status === "servico")
+        return "Em andamento";
+      return "";
+    },
+    weeklyBudgetTypeLabel = (appointment: Appt) => {
+      if (
+        appointment.type === "revisao" ||
+        appointment.type === "retorno" ||
+        appointment.type === "garantia"
+      )
+        return "";
+      const scheduledTypeLabels: Record<string, string> = {
+        gabaritagem: "Orçamento: gabaritagem",
+        pecas: "Orçamento: peças",
+        alinhamento_3d: "Alinhamento 3D",
+        alinhamento_balanceamento: "Alinhamento e balanceamento",
+        servicos: "Orçamento: serviços",
+      };
+      if (appointment.appointmentServiceType)
+        return scheduledTypeLabels[appointment.appointmentServiceType] ?? "";
+      const budget = appointment.budget;
+      if (!budget) return "";
+      const selectedNames = (budget.selectedServices ?? [])
+          .map((index) => SERVICES[index]?.[0] ?? "")
+          .filter(Boolean),
+        manualServices = budget.manualServices ?? [],
+        manualNames = manualServices
+          .map((service: any) => String(service?.name ?? "").trim())
+          .filter(Boolean),
+        serviceNames = [...selectedNames, ...manualNames],
+        hasGabaritagem =
+          (budget.selectedServices ?? []).some((index) => index >= 10) ||
+          manualServices.some(isGabaritagemManualService),
+        hasParts = (budget.parts ?? []).some(
+          (part: any) =>
+            String(part?.item ?? part?.name ?? "").trim() &&
+            Number(part?.qty ?? 1) > 0,
+        ),
+        onlyAlignmentAndBalance =
+          serviceNames.length > 0 &&
+          serviceNames.every((name) =>
+            /alinhamento de direção|balanceamento/i.test(name),
+          );
+      if (hasGabaritagem) return "Orçamento: gabaritagem";
+      if (hasParts) return "Orçamento: peças";
+      if (onlyAlignmentAndBalance) return "Alinhamento e balanceamento";
+      if (serviceNames.length) return "Orçamento: serviços";
+      return "";
+    },
+    teamAgendaDate = (() => {
+      const next = new Date(today);
+      if (next.getDay() === 5) {
+        const saturday = new Date(next);
+        saturday.setDate(next.getDate() + 1);
+        const hasSaturdayAppointments = (data as Appt[]).some(
+          (appointment) =>
+            !isEmployeeAbsence(appointment) &&
+            appointment.date === iso(saturday),
+        );
+        next.setDate(next.getDate() + (hasSaturdayAppointments ? 1 : 3));
+      } else if (next.getDay() === 6) {
+        next.setDate(next.getDate() + 2);
+      } else if (next.getDay() === 0) {
+        next.setDate(next.getDate() + 1);
+      } else {
+        next.setDate(next.getDate() + 1);
+      }
+      return next;
+    })(),
+    teamAgendaRows = (data as Appt[])
+      .filter(
+        (appointment) =>
+          !isEmployeeAbsence(appointment) &&
+          appointment.date === iso(teamAgendaDate),
+      )
+      .sort(
+        (first, second) =>
+          first.time.localeCompare(second.time) ||
+          first.client.localeCompare(second.client, "pt-BR"),
+      ),
+    teamAgendaLabel = teamAgendaDate.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+    }),
+    teamAgendaMessage = [
+      `*AGENDA MONOCENTER - ${teamAgendaDate
+        .toLocaleDateString("pt-BR", {
+          weekday: "long",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+        .toLocaleUpperCase("pt-BR")}*`,
+      "",
+      ...(teamAgendaRows.length
+        ? teamAgendaRows.map((appointment) =>
+            [
+              `*${appointment.time} - ${appointment.client}*`,
+              `${appointment.vehicle || "Veículo não informado"}${appointment.plate ? ` - ${appointment.plate}` : ""}`,
+              `Situação: ${weeklyProgressLabel(appointment) || appointmentKindLabel(appointment)}`,
+              weeklyBudgetTypeLabel(appointment)
+                ? `Tipo: ${weeklyBudgetTypeLabel(appointment)}`
+                : "",
+              appointment.note
+                ? `Relato do cliente: ${appointment.note}`
+                : "",
+              appointment.internalNote
+                ? `Observação interna: ${appointment.internalNote}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          )
+        : ["Nenhum agendamento para este dia."]),
+    ].join("\n\n");
   const move = (n: number) => {
       if (mode === "mes") {
         const next = new Date(cursor.getFullYear(), cursor.getMonth() + n, 1);
@@ -4126,6 +4728,50 @@ function Agenda({
     };
   return (
     <section className="agenda">
+      <style>{`
+        .agenda-grid-semana{grid-template-columns:minmax(0,1fr) 430px!important;align-items:stretch}
+        .agenda-grid-semana>.calendar,.agenda-grid-semana>.day{align-self:stretch;margin-top:0}
+        .agenda-grid-semana>.day{position:relative;top:auto;height:auto;max-height:none;overflow-y:visible}
+        .calendar-semana{overflow-x:auto!important;padding:0!important}
+        .week-timeline{min-width:760px;overflow:hidden;border-radius:11px}
+        .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
+        .week-time-zone{display:flex;align-items:flex-end;justify-content:center;padding:0 4px 9px;color:#64748b;font-size:9px;font-weight:800}
+        .week-timeline-head button{display:flex!important;min-width:0;border:0!important;border-left:1px solid #e1e7ee!important;border-radius:0!important;background:#fff!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#172033!important}
+        .week-timeline-head button small{text-transform:uppercase;font-size:9px;font-weight:800}
+        .week-timeline-head button b{display:grid;width:34px;height:34px;place-items:center;border-radius:50%;font-size:20px}
+        .week-timeline-head button.today b{background:#2563eb;color:#fff}
+        .week-timeline-head button.selected:not(.today){background:#fff6f6!important}
+        .week-timeline-head button em{max-width:100%;overflow:hidden;color:#c51d25;font-size:8px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
+        .week-timeline-body{position:relative!important;min-width:760px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 115px,#dbe3ec 115px,#dbe3ec 116px)}
+        .week-time-column{position:absolute!important;inset:0 auto 0 0;width:54px;background:#fff}
+        .week-time-column span{position:absolute!important;right:8px;z-index:2;padding:0 2px;transform:translateY(-50%);background:#fff;color:#475569;font-size:10px;line-height:1}
+        .week-day-columns{display:grid!important;height:100%;margin-left:54px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}
+        .week-day-column{position:relative!important;min-width:0;border-left:1px solid #dbe3ec;cursor:pointer}
+        .week-day-column.selected{background:rgba(227,27,35,.025);box-shadow:inset 0 0 0 2px rgba(227,27,35,.45)}
+        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:64px;max-height:66px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 5px;color:#172033;font-size:9px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+        .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:9px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
+        .week-appointment>.week-appointment-status{color:#334155;font-size:8px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}.week-appointment>.status-finalizado{color:#087d47}.week-appointment>.status-faltou{color:#c51d25}.week-appointment>.status-em-andamento{color:#1d4ed8}
+        .week-appointment>.week-budget-type{color:#7c2d12;font-size:8px;font-weight:900;text-transform:uppercase}
+        .week-appointment>.week-internal-note-indicator{position:absolute;right:3px;bottom:2px;z-index:2;width:auto;max-width:calc(100% - 8px);padding:1px 3px;border-radius:3px;background:#fff4cc;color:#7a4b00;font-size:8px;font-weight:900;line-height:1.1;text-transform:uppercase;white-space:nowrap}
+        .app.dark .week-appointment>.week-internal-note-indicator{background:#493713;color:#ffe29a}
+        .week-appointment.block,.days span.block,.day article.absence{border-color:#d18a00!important;border-left:5px solid #d18a00!important;background:rgb(255,232,124)!important;color:#4a3300!important;box-shadow:inset 0 0 0 1px #e1a900,0 2px 7px rgba(122,75,0,.22)!important}
+        .week-appointment.block>small,.day article.absence p,.day article.absence span>small,.day article.absence time>small{color:#704600!important}.day article.absence time>small{font-weight:900}
+        .week-appointment.block,.days span.block{cursor:pointer!important}.week-appointment.block>.absence-label{grid-column:1/-1;color:#704600!important;font-size:8px;font-weight:900;text-transform:uppercase}.week-appointment.block>.absence-person{grid-column:1/-1;padding-right:16px;color:#3f2c00;font-size:11px}.week-appointment.block>.absence-details{grid-column:1/-1;color:#704600!important;font-size:8px}.week-appointment.block>.absence-edit-icon{position:absolute;top:4px;right:5px;color:#704600;font-size:12px;font-style:normal}
+        .app.dark .week-appointment.block,.app.dark .days span.block,.app.dark .day article.absence{background:rgb(255,232,124)!important;color:#3f2c00!important}
+        .day article .appointment-service-type{display:block;margin-top:3px;color:#7c2d12;font-size:10px;font-weight:900;text-transform:uppercase}
+        .day article .appointment-internal-note{display:block;margin-top:6px;padding:6px 7px;border-left:3px solid #d98b00;border-radius:5px;background:#fff4cc;color:#5d3b00!important;font-size:10px!important;line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
+        .day article .appointment-internal-note b{font-weight:900}
+        .day article .appointment-customer-note{display:block;white-space:pre-wrap}
+        .app.dark .day article .appointment-internal-note{background:#493713;color:#ffe29a!important}
+        .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}
+        .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:#4d171b!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
+        .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
+        .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
+        @media(min-width:1600px){.agenda{max-width:1600px!important}.agenda-grid-semana{grid-template-columns:minmax(0,1fr) 460px!important}.week-time-zone,.week-timeline-head button small{font-size:10px}.week-timeline-head button b{font-size:22px}.week-appointment{font-size:10px}.week-appointment>b{font-size:10px}.week-appointment>strong{font-size:12px}.week-appointment>small{font-size:10px}.week-appointment>.week-appointment-status,.week-appointment>.week-budget-type{font-size:9px}.week-time-column span{font-size:11px}.agenda-grid-semana .day article time>b{font-size:12px}.agenda-grid-semana .day article h3{font-size:13px}.agenda-grid-semana .day article p,.agenda-grid-semana .day article span>small{font-size:10px}.agenda-grid-semana .day article .appointment-toggle{font-size:11px!important}}
+        @media(max-width:1500px){.agenda-grid-semana .agenda-finalization.compact{padding:6px 7px}.agenda-grid-semana .agenda-finalization.compact>b{display:block;font-size:11px!important;line-height:1.2;letter-spacing:-.04em;white-space:nowrap!important}}
+        @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
+      `}</style>
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
         <span>
@@ -4208,6 +4854,14 @@ function Agenda({
             <option value="semana">Semana</option>
             <option value="mes">Mês</option>
           </select>
+          {mode === "semana" && (
+            <button
+              type="button"
+              onClick={() => setShowSaturday((current) => !current)}
+            >
+              {showSaturday ? "Ocultar sábado" : "Mostrar sábado"}
+            </button>
+          )}
           <button onClick={() => setOpenCal(!openCal)}>
             {openCal ? "Ocultar calendário ⌃" : "Mostrar calendário ⌄"}
           </button>
@@ -4216,47 +4870,234 @@ function Agenda({
           </button>
         </div>
       </div>
-      <div className={openCal ? "aggrid" : "aggrid calendar-closed"}>
+      <div
+        className={`${openCal ? "aggrid" : "aggrid calendar-closed"} agenda-grid-${mode}`}
+      >
         {openCal && (
           <div className={"calendar calendar-" + mode}>
-            <div className="week">
-              {weekLabels.map((x) => (
-                <b key={x}>{x}</b>
-              ))}
-            </div>
-            <div className="days">
-              {calendarDays.map((d) => {
-                const ds = iso(d),
-                  apps = appointmentsForDate(ds),
-                  holiday = holidays.find((h: any) => h.date === ds);
-                return (
-                  <button
-                    onClick={() => setDate(ds)}
-                    className={
-                      (ds === date ? "selected " : "") +
-                      (mode === "mes" && d.getMonth() !== cursor.getMonth()
-                        ? "muted"
-                        : "") +
-                      (holiday ? " holiday" : "")
-                    }
-                    key={ds}
-                  >
-                    <b>{mode === "dia" ? fmt(ds) : d.getDate()}</b>
-                    {holiday && <em title={holiday.name}>● {holiday.name}</em>}
-                    {apps.map((a: Appt) => (
-                      <span
-                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
-                        key={a.id}
+            {mode === "semana" ? (
+              <div
+                className="week-timeline"
+                style={{ "--week-days": visibleWeekDays.length } as any}
+              >
+                <div className="week-timeline-head">
+                  <span className="week-time-zone">Horário</span>
+                  {visibleWeekDays.map((d) => {
+                    const ds = iso(d),
+                      holiday = holidays.find((h: any) => h.date === ds);
+                    return (
+                      <button
+                        type="button"
+                        key={ds}
+                        className={`${ds === date ? "selected" : ""}${ds === todayIso ? " today" : ""}`}
+                        onClick={() => setDate(ds)}
                       >
-                        {isCarriedInto(a, ds) ? "↳ " : `${a.time} `}
-                        {a.client.split(" ")[0]}
-                        {a.quoteSentAt ? " ✓" : ""}
+                        <small>
+                          {d
+                            .toLocaleDateString("pt-BR", { weekday: "short" })
+                            .replace(".", "")}
+                        </small>
+                        <b>{d.getDate()}</b>
+                        {holiday && <em title={holiday.name}>{holiday.name}</em>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  className="week-timeline-body"
+                  style={{
+                    height: `${(weekEndHour - weekStartHour) * weekHourHeight}px`,
+                  }}
+                >
+                  <div className="week-time-column">
+                    {weekHours.map((hour) => (
+                      <span
+                        key={hour}
+                        style={{ top: `${(hour - weekStartHour) * weekHourHeight}px` }}
+                      >
+                        {String(hour).padStart(2, "0")}:00
                       </span>
                     ))}
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                  <div className="week-day-columns">
+                    {visibleWeekDays.map((d) => {
+                      const ds = iso(d),
+                        apps = (data as Appt[]).filter(
+                          (appointment) => appointment.date === ds,
+                        );
+                      return (
+                        <div
+                          className={`week-day-column${ds === date ? " selected" : ""}`}
+                          key={ds}
+                          onClick={() => setDate(ds)}
+                        >
+                          {[...apps]
+                            .sort(
+                              (first, second) =>
+                                first.time.localeCompare(second.time) ||
+                                first.client.localeCompare(second.client),
+                            )
+                            .map((a: Appt, appointmentIndex, sortedApps) => {
+                            const stackedTops = sortedApps
+                                .slice(0, appointmentIndex + 1)
+                                .reduce<number[]>((tops, appointment, index) => {
+                                  const minutes = appointmentMinute(
+                                      appointment.time,
+                                    ),
+                                    naturalTop = Math.max(
+                                      0,
+                                      ((minutes - weekStartHour * 60) / 60) *
+                                        weekHourHeight,
+                                    ),
+                                    previousTop = tops[index - 1];
+                                  tops.push(
+                                    index === 0
+                                      ? naturalTop
+                                      : Math.max(naturalTop, previousTop + 70),
+                                  );
+                                  return tops;
+                                }, []),
+                              top = stackedTops[stackedTops.length - 1] ?? 0;
+                            return (
+                              <span
+                                className={`week-appointment ${apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
+                                key={a.id}
+                                role={isEmployeeAbsence(a) ? "button" : undefined}
+                                tabIndex={isEmployeeAbsence(a) ? 0 : undefined}
+                                onClick={(event) => {
+                                  if (!isEmployeeAbsence(a)) return;
+                                  event.stopPropagation();
+                                  editCalendarAbsence(a);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (
+                                    isEmployeeAbsence(a) &&
+                                    (event.key === "Enter" || event.key === " ")
+                                  ) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    editCalendarAbsence(a);
+                                  }
+                                }}
+                                style={{
+                                  top: `${top}px`,
+                                }}
+                                title={
+                                  isEmployeeAbsence(a)
+                                    ? `${employeeAbsenceName(a)} · ${employeeAbsencePeriod(a)}${employeeAbsenceReason(a) ? ` · ${employeeAbsenceReason(a)}` : ""}`
+                                    : `${a.time} · ${a.client}${a.vehicle ? ` · ${a.vehicle}` : ""}`
+                                }
+                              >
+                                {isEmployeeAbsence(a) ? (
+                                  <>
+                                    <small className="absence-label">
+                                      Funcionário ausente
+                                    </small>
+                                    <strong className="absence-person">
+                                      {employeeAbsenceName(a)}
+                                    </strong>
+                                    <i className="absence-edit-icon" aria-hidden="true">
+                                      ✎
+                                    </i>
+                                    <small className="absence-details">
+                                      {employeeAbsencePeriod(a)}
+                                      {employeeAbsenceReason(a)
+                                        ? ` · ${employeeAbsenceReason(a)}`
+                                        : ""}
+                                    </small>
+                                  </>
+                                ) : (
+                                  <>
+                                    <b>{isCarriedInto(a, ds) ? "↳" : a.time}</b>
+                                    <strong>{a.client}</strong>
+                                    {a.quoteSentAt && <i>✓</i>}
+                                    <small>
+                                      {a.vehicle || "Veículo não informado"} ·{" "}
+                                      {appointmentKindLabel(a)}
+                                    </small>
+                                    {weeklyProgressLabel(a) && (
+                                      <small
+                                        className={`week-appointment-status status-${weeklyProgressLabel(a).toLocaleLowerCase("pt-BR").replaceAll(" ", "-")}`}
+                                      >
+                                        {weeklyProgressLabel(a)}
+                                      </small>
+                                    )}
+                                    {weeklyBudgetTypeLabel(a) && (
+                                      <small className="week-budget-type">
+                                        {weeklyBudgetTypeLabel(a)}
+                                      </small>
+                                    )}
+                                    {a.internalNote?.trim() && (
+                                      <small
+                                        className="week-internal-note-indicator"
+                                        title="Há uma observação interna registrada"
+                                      >
+                                        * Observação interna
+                                      </small>
+                                    )}
+                                  </>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="week">
+                  {weekLabels.map((x) => (
+                    <b key={x}>{x}</b>
+                  ))}
+                </div>
+                <div className="days">
+                  {calendarDays.map((d) => {
+                    const ds = iso(d),
+                      apps = appointmentsForDate(ds),
+                      holiday = holidays.find((h: any) => h.date === ds);
+                    return (
+                      <button
+                        onClick={() => setDate(ds)}
+                        className={
+                          (ds === date ? "selected " : "") +
+                          (mode === "mes" && d.getMonth() !== cursor.getMonth()
+                            ? "muted"
+                            : "") +
+                          (holiday ? " holiday" : "")
+                        }
+                        key={ds}
+                      >
+                        <b>{mode === "dia" ? fmt(ds) : d.getDate()}</b>
+                        {holiday && <em title={holiday.name}>● {holiday.name}</em>}
+                        {apps.map((a: Appt) => (
+                          <span
+                            className={`${apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
+                            key={a.id}
+                            onClick={(event) => {
+                              if (!isEmployeeAbsence(a)) return;
+                              event.stopPropagation();
+                              editCalendarAbsence(a);
+                            }}
+                            title={
+                              isEmployeeAbsence(a)
+                                ? "Clique para editar ou excluir esta ausência"
+                                : undefined
+                            }
+                          >
+                            {isEmployeeAbsence(a)
+                              ? `FUNCIONÁRIO AUSENTE · ${employeeAbsenceName(a)} · ${employeeAbsencePeriod(a)}${employeeAbsenceReason(a) ? ` · ${employeeAbsenceReason(a)}` : ""}`
+                              : `${isCarriedInto(a, ds) ? "↳ " : `${a.time} `}${a.client.split(" ")[0]}${a.quoteSentAt ? " ✓" : ""}`}
+                          </span>
+                        ))}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
         <div className="day">
@@ -4269,6 +5110,23 @@ function Agenda({
               {list.length} {list.length === 1 ? "registro" : "registros"}
             </b>
           </div>
+          {date === todayIso && (
+            <div className="team-agenda-reminder">
+              <span>
+                <small>Lembrete para a equipe</small>
+                <b>{teamAgendaLabel}</b>
+                <em>
+                  {teamAgendaRows.length}{" "}
+                  {teamAgendaRows.length === 1
+                    ? "agendamento"
+                    : "agendamentos"}
+                </em>
+              </span>
+              <button type="button" onClick={() => message(teamAgendaMessage)}>
+                Preparar WhatsApp
+              </button>
+            </div>
+          )}
           {list.length === 0 && (
             <div className="emptyday">
               Nenhum agendamento. Clique em “Novo agendamento” para incluir.
@@ -4304,7 +5162,7 @@ function Agenda({
                   )}
                 {(!isOngoingVehicle(a) || showOngoingVehicles) && (
                   <article
-                    className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
+                    className={`${isEmployeeAbsence(a) ? "absence" : apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
                   >
                 <time>
                   <b>{a.time}</b>
@@ -4315,13 +5173,13 @@ function Agenda({
                         ? "FINALIZADO"
                         : agendaStatusLabel(a)}
                   </small>
-                  {expanded && a.type !== "bloqueio" && a.tech && (
+                  {expanded && !isEmployeeAbsence(a) && a.tech && (
                     <small className="card-tech">
                       {a.status === "avaliou" ? "Avaliado por" : "Téc."}{" "}
                       {a.tech}
                     </small>
                   )}
-                  {expanded && a.type !== "bloqueio" && a.startedAt && (
+                  {expanded && !isEmployeeAbsence(a) && a.startedAt && (
                     <small className="card-start">Início: {a.startedAt}</small>
                   )}
                 </time>
@@ -4349,7 +5207,7 @@ function Agenda({
                     </button>
                   </div>
                   <p>
-                    {a.type === "bloqueio"
+                    {isEmployeeAbsence(a)
                       ? "Ausência de funcionário"
                       : a.vehicle}
                     {a.plate && (
@@ -4359,6 +5217,11 @@ function Agenda({
                       </>
                     )}
                   </p>
+                  {!isEmployeeAbsence(a) && weeklyBudgetTypeLabel(a) && (
+                    <small className="appointment-service-type">
+                      {weeklyBudgetTypeLabel(a)}
+                    </small>
+                  )}
                   {isCarriedInto(a, date) && (
                     <small className="carry-over-notice">
                       ↳ Na oficina desde{" "}
@@ -4369,11 +5232,22 @@ function Agenda({
                   )}
                   {a.budget?.processStatus === "Finalizado" ? (
                     <div className="agenda-finalization compact">
-                      <b>✓ {completedAttendanceLabel(a)}</b>
+                      <b
+                        style={{
+                          display: "block",
+                          fontSize: "clamp(8.5px, 0.72vw, 14px)",
+                          letterSpacing: "-0.035em",
+                          lineHeight: 1.2,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        ✓ {completedAttendanceLabel(a)}
+                      </b>
                     </div>
                   ) : null}
                   {a.type === "cliente" &&
                     a.status === "avaliou" &&
+                    a.quoteFollowUpDecision !== "declined" &&
                     !a.quoteSentAt &&
                     !a.serviceAppointmentId &&
                     a.budget?.processStatus !== "Finalizado" && (
@@ -4381,6 +5255,11 @@ function Agenda({
                         {quoteWaitingLabel(a)}
                       </small>
                     )}
+                  {a.quoteFollowUpDecision === "declined" && (
+                    <small className="quote-waiting">
+                      Cliente desistiu do serviço
+                    </small>
+                  )}
                   {a.quoteSentAt &&
                     a.budget?.processStatus !== "Finalizado" && (
                       <small className="quote-sent">
@@ -4398,7 +5277,16 @@ function Agenda({
                     )}
                   {expanded && (
                     <div className="appointment-details">
-                      {a.note && <small>{a.note}</small>}
+                      {a.internalNote?.trim() && (
+                        <small className="appointment-internal-note">
+                          <b>OBSERVAÇÃO INTERNA:</b> {a.internalNote.trim()}
+                        </small>
+                      )}
+                      {a.note?.trim() && (
+                        <small className="appointment-customer-note">
+                          <b>Relato do cliente:</b> {a.note.trim()}
+                        </small>
+                      )}
                       {a.scheduledBy && a.createdAt && (
                         <small className="schedule-meta">
                           Agendado por {a.scheduledBy} em{" "}
@@ -4448,6 +5336,22 @@ function Agenda({
                           Última edição por {a.lastEditedBy}
                         </small>
                       )}
+                      {a.status === "faltou" && a.noShowMarkedBy && (
+                        <small className="schedule-meta no-show-meta">
+                          Falta registrada por {a.noShowMarkedBy}
+                          {a.noShowMarkedAt
+                            ? ` em ${new Date(a.noShowMarkedAt).toLocaleString(
+                                "pt-BR",
+                                {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}`
+                            : ""}
+                        </small>
+                      )}
                       {a.quoteSentAt && (
                         <small className="schedule-meta">
                           Enviado em{" "}
@@ -4465,7 +5369,7 @@ function Agenda({
                 </span>
                 {expanded && (
                   <div className="appointment-actions">
-                    {a.type !== "bloqueio" && (
+                    {!isEmployeeAbsence(a) && (
                       <button
                         onClick={() =>
                           message(
@@ -4476,11 +5380,31 @@ function Agenda({
                         Mensagem
                       </button>
                     )}
+                    {!isEmployeeAbsence(a) && (
+                      <button
+                        className="summary-button"
+                        onClick={() => preview(a)}
+                      >
+                        Visualizar resumo
+                      </button>
+                    )}
+                    {!isEmployeeAbsence(a) &&
+                      a.budget?.processStatus !== "Finalizado" &&
+                      (a.status === "agendado" || a.status === "faltou") && (
+                        <button
+                          className={`no-show-action${a.status === "faltou" ? " undo" : ""}`}
+                          onClick={() => markNoShow(a)}
+                        >
+                          {a.status === "faltou"
+                            ? "Desfazer falta"
+                            : "Cliente faltou"}
+                        </button>
+                      )}
                     <button onClick={() => edit(a)}>Editar</button>
                     <button className="danger" onClick={() => remove(a)}>
                       Excluir
                     </button>
-                    {a.type !== "bloqueio" && (
+                    {!isEmployeeAbsence(a) && a.status !== "faltou" && (
                       <button onClick={() => start(a)}>
                         {a.type === "revisao" && !a.review
                           ? "Abrir revisão →"
@@ -4497,7 +5421,7 @@ function Agenda({
                                     ? "Iniciar serviço →"
                                     : a.status === "avaliou"
                                       ? "Abrir orçamento →"
-                                      : "Abrir avaliação →"}
+                                      : "Abrir atendimento →"}
                       </button>
                     )}
                   </div>
@@ -4534,14 +5458,13 @@ function Agenda({
 function ReviewScreen({
   appointment,
   appointments,
-  techs,
   onBack,
   onSave,
 }: any) {
   const previous = appointments.filter(
     (a: Appt) =>
       a.id !== appointment.id &&
-      a.type !== "bloqueio" &&
+      !isEmployeeAbsence(a) &&
       a.status === "servico" &&
       (!appointment.plate || a.plate === appointment.plate),
   );
@@ -4559,7 +5482,13 @@ function ReviewScreen({
     saved?.result ?? "Revisão concluída",
   );
   const [notes, setNotes] = useState(saved?.notes ?? "");
-  const [reviewer, setReviewer] = useState(saved?.reviewer ?? techs[0] ?? "");
+  const savedReviewer =
+    saved?.reviewer === "Victor" ? "Vitor" : saved?.reviewer ?? "";
+  const [reviewer, setReviewer] = useState(
+    REVIEW_TECHNICIANS.includes(savedReviewer as (typeof REVIEW_TECHNICIANS)[number])
+      ? savedReviewer
+      : "",
+  );
   const selected = previous.find((a: Appt) => a.id === previousId);
   const review: ReviewState = {
     previousId,
@@ -4612,12 +5541,14 @@ function ReviewScreen({
             </select>
           </label>
           <label>
-            Responsável
+            Quem fez a revisão? *
             <select
               value={reviewer}
               onChange={(e) => setReviewer(e.target.value)}
+              required
             >
-              {techs.map((x: string) => (
+              <option value="">Selecione o responsável</option>
+              {REVIEW_TECHNICIANS.map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>
@@ -4681,7 +5612,18 @@ function ReviewScreen({
         <div className="review-actions">
           <button onClick={onBack}>← Voltar à agenda</button>
           <button onClick={print}>Imprimir revisão</button>
-          <button className="primary" onClick={() => onSave(review)}>
+          <button
+            className="primary"
+            onClick={() => {
+              if (!reviewer.trim()) {
+                alert(
+                  "Selecione quem fez a revisão de 30 dias antes de finalizar.",
+                );
+                return;
+              }
+              onSave({ ...review, reviewer: reviewer.trim() });
+            }}
+          >
             {appointment.reviewWithService
               ? "Salvar revisão e continuar para avaliação →"
               : "Salvar e concluir revisão"}
@@ -4762,6 +5704,260 @@ function ReviewScreen({
     </>
   );
 }
+function AttendancePreviewModal({ appointment, roundStep, close }: any) {
+  const budget = appointment.budget as BudgetState | undefined,
+    evaluationStates = Object.values(
+      appointment.evaluation?.status ?? {},
+    ) as string[],
+    evaluatedCount = evaluationStates.filter(
+      (state) => state && state !== "na",
+    ).length,
+    attentionCount = evaluationStates.filter(
+      (state) => state === "y" || state === "r",
+    ).length,
+    partRows = (budget?.parts ?? []).filter(
+      (part: any) => String(part?.item ?? part?.name ?? "").trim(),
+    ),
+    selectedServiceRows = (budget?.selectedServices ?? [])
+      .map((index: number) => ({
+        name: SERVICES[index]?.[0] ?? "Serviço",
+        quantity: Number(budget?.serviceQty?.[index] ?? 1),
+        value: servicePrice(index, budget?.servicePrices),
+        courtesy: serviceIsCourtesy(index),
+      }))
+      .filter((service: any) => service.quantity > 0),
+    manualServiceRows = (budget?.manualServices ?? [])
+      .filter((service: any) => String(service?.name ?? "").trim())
+      .map((service: any) => ({
+        name: service.name,
+        quantity: Number(service.qty ?? 1),
+        value: Number(service.value ?? 0),
+        courtesy: false,
+      })),
+    serviceRows = [...selectedServiceRows, ...manualServiceRows],
+    partsTotal = partRows.reduce(
+      (total: number, part: any) =>
+        total + Number(part.qty ?? 1) * saleOf(part, roundStep),
+      0,
+    ),
+    servicesTotal = serviceRows.reduce(
+      (total: number, service: any) =>
+        total +
+        (service.courtesy ? 0 : service.quantity * Number(service.value ?? 0)),
+      0,
+    ),
+    conferenceChecks = Object.values(
+      appointment.conference?.checks ?? {},
+    ).filter(Boolean).length,
+    serviceTypeLabels: Record<string, string> = {
+      gabaritagem: "Orçamento: gabaritagem",
+      pecas: "Orçamento: peças",
+      alinhamento_3d: "Alinhamento 3D",
+      alinhamento_balanceamento: "Alinhamento e balanceamento",
+      servicos: "Orçamento: serviços",
+    },
+    attendanceType =
+      appointment.type === "revisao"
+        ? "Revisão de 30 dias"
+        : appointment.type === "retorno"
+          ? "Retorno"
+          : appointment.type === "garantia"
+            ? "Garantia"
+            : (appointment.appointmentServiceType
+                ? serviceTypeLabels[appointment.appointmentServiceType]
+                : "") ||
+              "Atendimento comum",
+    statusLabel =
+      appointment.budget?.processStatus === "Finalizado"
+        ? completedAttendanceLabel(appointment)
+        : agendaStatusLabel(appointment),
+    dateTime = (value?: string) =>
+      value
+        ? new Date(value).toLocaleString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "Não registrado";
+
+  return (
+    <div className="backdrop attendance-preview-backdrop" role="presentation">
+      <section
+        className="modal attendance-preview-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="attendance-preview-title"
+      >
+        <header className="attendance-preview-header">
+          <span>
+            <small>VISUALIZAÇÃO RÁPIDA</small>
+            <h2 id="attendance-preview-title">Resumo do atendimento</h2>
+            <p>
+              {appointment.client} · {appointment.vehicle || "Veículo não informado"}
+              {appointment.plate ? ` · ${appointment.plate}` : ""}
+            </p>
+          </span>
+          <button className="attendance-preview-close" onClick={close} aria-label="Fechar">
+            ×
+          </button>
+        </header>
+
+        <div className="attendance-preview-badges">
+          <b>{statusLabel}</b>
+          <span>{attendanceType}</span>
+          {appointment.workOrder && <span>OS {appointment.workOrder}</span>}
+        </div>
+
+        <div className="attendance-preview-grid">
+          <section>
+            <h3>Agendamento</h3>
+            <p><b>Data e horário</b>{fmt(appointment.date)}, às {appointment.time}</p>
+            <p><b>Contato</b>{appointment.phone || "Não informado"}</p>
+            <p><b>Quilometragem</b>{appointment.km ? `${appointment.km} km` : "Não informada"}</p>
+            <p><b>Agendado por</b>{appointment.scheduledBy || "Não informado"}</p>
+            <p><b>Registro</b>{dateTime(appointment.createdAt)}</p>
+          </section>
+          <section>
+            <h3>Abertura e avaliação</h3>
+            <p><b>Início</b>{appointment.startedAt || "Não iniciado"}</p>
+            <p><b>Técnico</b>{appointment.tech || "Não informado"}</p>
+            <p>
+              <b>Avaliação de peças</b>
+              {appointment.partsEvaluationSkipped
+                ? "Não realizada por opção do atendimento"
+                : evaluatedCount
+                  ? `${evaluatedCount} itens avaliados${attentionCount ? ` · ${attentionCount} com atenção` : ""}`
+                  : "Ainda sem itens registrados"}
+            </p>
+            <p><b>Registrada por</b>{appointment.evaluationRecordedBy || "Não informado"}</p>
+            <p><b>Data do registro</b>{dateTime(appointment.evaluationRecordedAt)}</p>
+          </section>
+        </div>
+
+        <section className="attendance-preview-section">
+          <div className="attendance-preview-section-title">
+            <h3>Orçamento e serviços</h3>
+            <strong>{brl(partsTotal + servicesTotal)}</strong>
+          </div>
+          {!partRows.length && !serviceRows.length ? (
+            <p className="attendance-preview-empty">Nenhum item de orçamento foi preenchido.</p>
+          ) : (
+            <div className="attendance-preview-items">
+              {partRows.map((part: any, index: number) => (
+                <div key={`part-${index}`}>
+                  <span><b>{Number(part.qty ?? 1)}x</b> {part.item ?? part.name}</span>
+                  <strong>{brl(Number(part.qty ?? 1) * saleOf(part, roundStep))}</strong>
+                </div>
+              ))}
+              {serviceRows.map((service: any, index: number) => (
+                <div key={`service-${index}`}>
+                  <span><b>{service.quantity}x</b> {service.name}</span>
+                  <strong>
+                    {service.courtesy
+                      ? "Cortesia"
+                      : brl(service.quantity * service.value)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="attendance-preview-meta">
+            <span>
+              <b>Orçamento preenchido por</b>
+              {appointment.budgetEditedBy || "Não informado"}
+              {appointment.budgetEditedAt ? ` · ${dateTime(appointment.budgetEditedAt)}` : ""}
+            </span>
+            <span>
+              <b>Envio ao cliente</b>
+              {appointment.quoteSentAt
+                ? `${dateTime(appointment.quoteSentAt)}${appointment.quoteSentBy ? ` por ${appointment.quoteSentBy}` : ""}`
+                : "Ainda não registrado"}
+            </span>
+          </div>
+        </section>
+
+        <div className="attendance-preview-grid">
+          <section>
+            <h3>Conferência</h3>
+            <p><b>Marcações registradas</b>{conferenceChecks}</p>
+            <p><b>Situação</b>{appointment.conference?.finalizedAt ? "Finalizada" : "Em aberto"}</p>
+            <p><b>Finalizada por</b>{appointment.conference?.finalizedBy || "Não informado"}</p>
+            <p><b>Data</b>{dateTime(appointment.conference?.finalizedAt)}</p>
+          </section>
+          <section>
+            <h3>Observações</h3>
+            <p className="attendance-preview-note">
+              <b>Relato do cliente</b>
+              {appointment.note?.trim() || "Não informado."}
+            </p>
+            <p className="attendance-preview-note attendance-preview-internal-note">
+              <b>Observação interna da equipe</b>
+              {appointment.internalNote?.trim() || "Nenhuma observação interna."}
+            </p>
+            {budget?.patioNotes?.trim() && (
+              <p className="attendance-preview-note"><b>Orientações para o pátio</b>{budget.patioNotes}</p>
+            )}
+            <p><b>Última edição</b>{appointment.lastEditedBy || "Não informado"}</p>
+            <p><b>Data</b>{dateTime(appointment.lastEditedAt)}</p>
+          </section>
+        </div>
+
+        <footer className="attendance-preview-footer">
+          <small>Consulta rápida — nenhuma informação é alterada nesta janela.</small>
+          <button className="primary" onClick={close}>Fechar resumo</button>
+        </footer>
+      </section>
+      <style>{`
+        .attendance-preview-backdrop{z-index:1200;padding:20px;overflow:auto}
+        .attendance-preview-modal{width:min(900px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:0;border-radius:18px;background:var(--card,#fff)}
+        .attendance-preview-header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:20px;padding:22px 24px 16px;background:var(--card,#fff);border-bottom:1px solid var(--line,#dce2ea)}
+        .attendance-preview-header small{color:#df1823;font-weight:900;letter-spacing:.08em}
+        .attendance-preview-header h2{margin:3px 0;font-size:24px}
+        .attendance-preview-header p{margin:0;color:var(--muted,#5d6878)}
+        .attendance-preview-close{flex:0 0 42px;height:42px;font-size:27px;line-height:1}
+        .attendance-preview-badges{display:flex;flex-wrap:wrap;gap:8px;padding:16px 24px 0}
+        .attendance-preview-badges>*{padding:7px 11px;border-radius:999px;background:#edf2f7;font-size:12px;text-transform:uppercase}
+        .attendance-preview-badges b{background:#dff7e9;color:#08723c}
+        .attendance-preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 24px 0}
+        .attendance-preview-grid>section,.attendance-preview-section{border:1px solid var(--line,#dce2ea);border-radius:13px;padding:16px;background:var(--card,#fff)}
+        .attendance-preview-grid h3,.attendance-preview-section h3{margin:0 0 12px;font-size:16px}
+        .attendance-preview-grid p{display:grid;grid-template-columns:145px 1fr;gap:8px;margin:7px 0;font-size:13px;line-height:1.4}
+        .attendance-preview-grid p b{color:var(--muted,#5d6878)}
+        .attendance-preview-section{margin:14px 24px 0}
+        .attendance-preview-section-title{display:flex;align-items:center;justify-content:space-between;gap:15px}
+        .attendance-preview-section-title strong{font-size:19px;color:#df1823}
+        .attendance-preview-items{display:grid;gap:6px;margin-top:8px}
+        .attendance-preview-items>div{display:flex;justify-content:space-between;gap:20px;padding:8px 10px;border-radius:8px;background:#f4f7fa;font-size:13px}
+        .attendance-preview-items span{min-width:0;overflow-wrap:anywhere}
+        .attendance-preview-items span b{margin-right:5px}
+        .attendance-preview-items strong{white-space:nowrap}
+        .attendance-preview-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line,#dce2ea)}
+        .attendance-preview-meta span{font-size:12px;line-height:1.4}
+        .attendance-preview-meta b{display:block;color:var(--muted,#5d6878)}
+        .attendance-preview-empty{margin:6px 0;color:var(--muted,#5d6878)}
+        .attendance-preview-note{display:block!important;padding:10px;border-radius:8px;background:#f4f7fa;white-space:pre-wrap}
+        .attendance-preview-note b{display:block;margin-bottom:4px}
+        .attendance-preview-internal-note{background:#fff4cc!important;border-left:4px solid #d98b00;color:#5d3b00}
+        .attendance-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 24px 24px}
+        .attendance-preview-footer small{color:var(--muted,#5d6878)}
+        .attendance-preview-footer button{white-space:nowrap}
+        .dark .attendance-preview-items>div,.dark .attendance-preview-note,.dark .attendance-preview-badges>*{background:#1c2938}
+        .dark .attendance-preview-internal-note{background:#493713!important;color:#ffe29a}
+        @media(max-width:720px){
+          .attendance-preview-backdrop{padding:8px}
+          .attendance-preview-modal{max-height:calc(100vh - 16px)}
+          .attendance-preview-header,.attendance-preview-badges,.attendance-preview-grid,.attendance-preview-footer{padding-left:14px;padding-right:14px}
+          .attendance-preview-grid,.attendance-preview-meta{grid-template-columns:1fr}
+          .attendance-preview-section{margin-left:14px;margin-right:14px}
+          .attendance-preview-grid p{grid-template-columns:125px 1fr}
+          .attendance-preview-footer{align-items:stretch;flex-direction:column}
+        }
+      `}</style>
+    </div>
+  );
+}
 function EvaluationStartModal({
   appointment,
   techs,
@@ -4774,6 +5970,7 @@ function EvaluationStartModal({
       minute: "2-digit",
     }),
     [form, setForm] = useState({
+      evaluateParts: "",
       evaluator: appointment.tech || techs[0] || "",
       startedAt: appointment.startedAt || now,
       vehicle: appointment.vehicle || "",
@@ -4790,8 +5987,8 @@ function EvaluationStartModal({
       >
         <div>
           <span>
-            <h2>Iniciar avaliação</h2>
-            <p>Confirme os dados antes de abrir a ficha de avaliação.</p>
+            <h2>Iniciar atendimento</h2>
+            <p>Confirme os dados e escolha se haverá avaliação de peças.</p>
           </span>
           <button type="button" onClick={close} aria-label="Fechar">
             ×
@@ -4804,8 +6001,26 @@ function EvaluationStartModal({
           </small>
         </div>
         <section>
+          <label className="wide">
+            Será feita avaliação de peças?
+            <select
+              required
+              value={form.evaluateParts}
+              onChange={(event) =>
+                setForm({ ...form, evaluateParts: event.target.value })
+              }
+            >
+              <option value="">Selecione uma opção</option>
+              <option value="sim">Sim — abrir avaliação de peças</option>
+              <option value="nao">
+                Não — ir direto para orçamento de serviços
+              </option>
+            </select>
+          </label>
           <label>
-            Quem está avaliando
+            {form.evaluateParts === "nao"
+              ? "Responsável pelo atendimento"
+              : "Quem está avaliando"}
             <select
               required
               value={form.evaluator}
@@ -4858,15 +6073,18 @@ function EvaluationStartModal({
           </label>
         </section>
         <p className="evaluation-start-help">
-          O avaliador ficará registrado separadamente do usuário que está
-          preenchendo o sistema.
+          {form.evaluateParts === "nao"
+            ? "A dispensa da avaliação ficará registrada e o orçamento abrirá diretamente na parte de serviços."
+            : "O avaliador ficará registrado separadamente do usuário que está preenchendo o sistema."}
         </p>
         <footer>
           <button type="button" onClick={close}>
             Cancelar
           </button>
           <button type="submit" className="primary">
-            Confirmar e abrir avaliação →
+            {form.evaluateParts === "nao"
+              ? "Confirmar e abrir orçamento →"
+              : "Confirmar e abrir avaliação →"}
           </button>
         </footer>
       </form>
@@ -4884,6 +6102,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         id: Date.now(),
         date: iso(new Date()),
         time: "08:00",
+        absenceEndTime: "",
         client: "",
         phone: "",
         vehicle: "",
@@ -4893,6 +6112,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         plate: "",
         km: "",
         note: "",
+        internalNote: "",
         type: "cliente",
         status: "agendado",
         tech: "",
@@ -4903,12 +6123,52 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
   return (
     <div className="backdrop">
       <form
-        className="modal"
+        className="modal appointment-modal"
         onSubmit={(e) => {
           e.preventDefault();
+          if (
+            f.type === "bloqueio" &&
+            (!f.absenceEndTime || f.absenceEndTime <= f.time)
+          ) {
+            alert("Informe um horário final posterior ao início da ausência.");
+            return;
+          }
           save(f);
         }}
       >
+        <style>{`
+          .appointment-modal{display:flex;flex-direction:column;width:min(1120px,calc(100vw - 40px))!important;max-width:1120px!important;max-height:calc(100vh - 30px)!important;overflow:hidden!important}
+          .appointment-modal>div:first-of-type{flex:0 0 auto}
+          .appointment-modal>section{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:11px 12px!important;min-height:0;overflow-y:auto;padding-right:5px}
+          .appointment-modal>section>label{min-width:0;margin:0!important}
+          .appointment-modal>section>label.wide{grid-column:span 2}
+          .appointment-modal input,.appointment-modal select{min-width:0}
+          .appointment-modal textarea{min-height:82px;resize:vertical}
+          .appointment-customer-note-field{grid-column:1/span 2!important}
+          .appointment-internal-note-field{grid-column:3/span 2!important}
+          .appointment-modal .appointment-progress-toggle{grid-column:1/-1!important}
+          .appointment-modal>.toggle{flex:0 0 auto;margin:10px 0 0!important}
+          .appointment-modal>footer{position:sticky;bottom:0;z-index:3;flex:0 0 auto;margin-top:8px;padding-top:10px;background:var(--card,#fff);box-shadow:0 -8px 16px rgba(255,255,255,.88)}
+          .appointment-internal-note-field{padding:10px;border:1px solid #efd58b;border-radius:9px;background:#fffaf0}
+          .appointment-internal-note-field textarea{background:#fffef9}
+          .appointment-internal-note-field>small{display:block;margin-top:5px;color:#7a5a13;font-size:11px}
+          .app.dark .appointment-internal-note-field{border-color:#735c25;background:#302816}
+          .app.dark .appointment-internal-note-field textarea{background:#17202c}
+          .app.dark .appointment-internal-note-field>small{color:#ffe29a}
+          .app.dark .appointment-modal>footer{background:#111c29;box-shadow:0 -8px 16px rgba(17,28,41,.9)}
+          @media(max-width:900px){
+            .appointment-modal{width:min(650px,calc(100vw - 24px))!important;max-height:calc(100vh - 20px)!important}
+            .appointment-modal>section{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+            .appointment-customer-note-field,.appointment-internal-note-field{grid-column:1/-1!important}
+          }
+          @media(max-width:580px){
+            .appointment-modal{width:calc(100vw - 12px)!important}
+            .appointment-modal>section{grid-template-columns:1fr!important}
+            .appointment-modal>section>label.wide,.appointment-customer-note-field,.appointment-internal-note-field,.appointment-modal .appointment-progress-toggle{grid-column:1!important}
+            .appointment-modal>footer{display:grid!important;grid-template-columns:1fr 1fr}
+            .appointment-modal>footer .danger{grid-column:1/-1}
+          }
+        `}</style>
         <div>
           <span>
             <h2>{initial ? "Editar agendamento" : "Novo agendamento"}</h2>
@@ -4927,6 +6187,10 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
                 setF({
                   ...f,
                   type: e.target.value as any,
+                  appointmentServiceType:
+                    e.target.value === "cliente"
+                      ? f.appointmentServiceType
+                      : undefined,
                   reviewWithService:
                     e.target.value === "revisao" ? f.reviewWithService : false,
                 })
@@ -4939,6 +6203,41 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               <option value="bloqueio">Ausência de funcionário</option>
             </select>
           </label>
+          {f.type === "cliente" && (
+            <label className="wide">
+              Tipo do serviço previsto
+              <select
+                required
+                value={f.appointmentServiceType || ""}
+                onChange={(e) =>
+                  setF({
+                    ...f,
+                    appointmentServiceType: e.target.value as
+                      | "gabaritagem"
+                      | "pecas"
+                      | "alinhamento_3d"
+                      | "alinhamento_balanceamento"
+                      | "servicos",
+                  })
+                }
+              >
+                <option value="">Selecione o motivo do agendamento</option>
+                <option value="gabaritagem">Orçamento: gabaritagem</option>
+                <option value="pecas">Orçamento: peças</option>
+                <option value="alinhamento_3d">Alinhamento 3D</option>
+                <option value="alinhamento_balanceamento">
+                  Alinhamento e balanceamento
+                </option>
+                <option value="servicos">
+                  Orçamento: serviços — outro tipo
+                </option>
+              </select>
+              <small>
+                Esta informação aparecerá imediatamente na agenda dos
+                técnicos.
+              </small>
+            </label>
+          )}
           {f.type === "revisao" && (
             <label className="wide appointment-progress-toggle">
               <input
@@ -4978,7 +6277,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             />
           </label>
           <label>
-            Horário
+            {f.type === "bloqueio" ? "Início da ausência" : "Horário"}
             <input
               required
               type="time"
@@ -4986,14 +6285,31 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               onChange={(e) => setF({ ...f, time: e.target.value })}
             />
           </label>
+          {f.type === "bloqueio" && (
+            <label>
+              Final da ausência
+              <input
+                required
+                type="time"
+                value={f.absenceEndTime || ""}
+                onChange={(e) =>
+                  setF({ ...f, absenceEndTime: e.target.value })
+                }
+              />
+            </label>
+          )}
           <label>
-            Nome do cliente / funcionário
+            {f.type === "bloqueio"
+              ? "Nome do funcionário ausente"
+              : "Nome do cliente / funcionário"}
             <input
               required
               value={f.client}
               onChange={(e) => setF({ ...f, client: e.target.value })}
             />
           </label>
+          {f.type !== "bloqueio" && (
+            <>
           <label>
             WhatsApp
             <input
@@ -5083,13 +6399,19 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               onChange={(e) => setF({ ...f, km: e.target.value })}
             />
           </label>
-          <label className="wide">
-            Relato do cliente / observação (opcional)
+            </>
+          )}
+          <label className="wide appointment-customer-note-field">
+            {f.type === "bloqueio"
+              ? "Motivo da ausência (opcional)"
+              : "Relato do cliente (opcional)"}
             <textarea
               value={f.note}
               onChange={(e) => setF({ ...f, note: e.target.value })}
               placeholder={
-                f.type === "revisao"
+                f.type === "bloqueio"
+                  ? "Ex.: consulta médica, compromisso particular ou outro motivo."
+                  : f.type === "revisao"
                   ? "Informe o serviço que será revisado."
                   : f.type === "garantia"
                     ? "Descreva o item ou serviço coberto pela garantia."
@@ -5099,6 +6421,19 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               }
             />
           </label>
+          {f.type !== "bloqueio" && (
+            <label className="wide appointment-internal-note-field">
+              Observação interna da equipe (opcional)
+              <textarea
+                value={f.internalNote || ""}
+                onChange={(e) => setF({ ...f, internalNote: e.target.value })}
+                placeholder="Anote aqui orientações importantes para a equipe antes de abrir o atendimento."
+              />
+              <small>
+                Visível apenas para a equipe. Não será enviada nas mensagens ao cliente.
+              </small>
+            </label>
+          )}
           {f.type !== "bloqueio" && (
             <label className="wide appointment-progress-toggle">
               <input
@@ -5116,10 +6451,12 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             </label>
           )}
         </section>
-        <label className="toggle">
-          <input type="checkbox" defaultChecked /> Preparar lembrete um dia
-          antes
-        </label>
+        {f.type !== "bloqueio" && (
+          <label className="toggle">
+            <input type="checkbox" defaultChecked /> Preparar lembrete um dia
+            antes
+          </label>
+        )}
         <footer>
           {initial && (
             <button
@@ -6437,6 +7774,30 @@ function AttendanceSummary({
       ...SAFE.filter((item) => appointment.conference?.checks?.[item]),
       ...TQ.filter((item) => appointment.conference?.checks?.[item]),
     ];
+  const finalization = appointment.conference?.finalization,
+    performedBy =
+      finalization?.executor?.trim() ||
+      finalization?.technician?.trim() ||
+      appointment.review?.reviewer?.trim() ||
+      appointment.tech?.trim() ||
+      "Não informado",
+    checkedBy =
+      finalization?.checker?.trim() ||
+      appointment.conference?.finalizedBy?.trim() ||
+      "Não informado",
+    finalizedBy =
+      appointment.conference?.finalizedBy?.trim() || checkedBy,
+    finalizedAt = appointment.conference?.finalizedAt
+      ? new Date(appointment.conference.finalizedAt).toLocaleString("pt-BR")
+      : "Data não registrada";
+  const shareAsPdf = () => {
+    document.body.classList.add("print-attendance-summary");
+    const cleanup = () =>
+      document.body.classList.remove("print-attendance-summary");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    setTimeout(() => window.print(), 50);
+    setTimeout(cleanup, 15000);
+  };
   return (
     <section className="page attendance-summary">
       <Vehicle />
@@ -6562,13 +7923,61 @@ function AttendanceSummary({
             </section>
           ))}
         </div>
+        <section className="attendance-responsibles">
+          <h3>Responsáveis pela execução e conferência</h3>
+          <div>
+            <p>
+              <small>Serviço executado por</small>
+              <b>{performedBy}</b>
+            </p>
+            <p>
+              <small>Serviço conferido por</small>
+              <b>{checkedBy}</b>
+            </p>
+            <p>
+              <small>Finalização registrada por</small>
+              <b>{finalizedBy}</b>
+              <span>{finalizedAt}</span>
+            </p>
+          </div>
+        </section>
       </div>
       <div className="summary-actions">
         <button onClick={onBack}>← Voltar à agenda</button>
+        <button className="share-pdf" onClick={shareAsPdf}>
+          Compartilhar em PDF
+        </button>
         <button className="primary" onClick={onEditConference}>
           Editar conferência
         </button>
       </div>
+      <style>{`
+        .attendance-responsibles{margin-top:18px;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;background:#f8fafc}
+        .attendance-responsibles>h3{margin:0;padding:12px 15px;background:#111d2b;color:#fff;font-size:16px}
+        .attendance-responsibles>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#d8e0e8}
+        .attendance-responsibles p{display:flex;flex-direction:column;gap:4px;margin:0;padding:14px;background:#fff;min-width:0}
+        .attendance-responsibles small{color:#667085;font-weight:700}
+        .attendance-responsibles b{font-size:16px;overflow-wrap:anywhere}
+        .attendance-responsibles span{font-size:12px;color:#667085}
+        .summary-actions .share-pdf{background:#087f45;color:#fff;border-color:#087f45}
+        @media(max-width:700px){
+          .attendance-responsibles>div{grid-template-columns:1fr}
+          .attendance-summary .summary-actions{display:grid;grid-template-columns:1fr;gap:10px}
+          .attendance-summary .summary-actions button{width:100%}
+        }
+        @media print{
+          body.print-attendance-summary *{visibility:hidden!important}
+          body.print-attendance-summary .attendance-summary,
+          body.print-attendance-summary .attendance-summary *{visibility:visible!important}
+          body.print-attendance-summary .attendance-summary{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-width:none!important;margin:0!important;padding:12mm!important;background:#fff!important;color:#111!important;overflow:visible!important}
+          body.print-attendance-summary .summary-actions{display:none!important}
+          body.print-attendance-summary .summary-card,
+          body.print-attendance-summary .attendance-responsibles{break-inside:avoid;page-break-inside:avoid}
+          body.print-attendance-summary .printheader{display:block!important}
+          body.print-attendance-summary .attendance-responsibles>h3{background:#111d2b!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+          @page{size:A4;margin:10mm}
+        }
+      `}</style>
     </section>
   );
 }
@@ -6579,6 +7988,7 @@ function Reports({
   open,
   edit,
   remove,
+  updateQuoteFollowUp,
   message,
 }: any) {
   const [query, setQuery] = useState(""),
@@ -6591,12 +8001,17 @@ function Reports({
         ? initialMode
         : "registros",
     ),
-    [weekDate, setWeekDate] = useState(iso(new Date()));
+    [weekDate, setWeekDate] = useState(iso(new Date())),
+    [reminderDayDrafts, setReminderDayDrafts] = useState<
+      Record<number, number>
+    >({});
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
   const category = (a: Appt) =>
-    a.budget?.processStatus === "Finalizado"
+    a.quoteFollowUpDecision === "declined"
+      ? "Cliente desistiu"
+      : a.budget?.processStatus === "Finalizado"
       ? "Atendimento concluído"
       : a.type === "retorno"
         ? "Retorno"
@@ -6629,10 +8044,10 @@ function Reports({
     (filter === "revisoes" && a.type === "revisao") ||
     (filter === "faltas" && a.status === "faltou");
   const rows = (data as Appt[])
-    .filter((a) => a.type !== "bloqueio")
+    .filter((a) => !isEmployeeAbsence(a))
     .filter(matches)
     .filter((a) =>
-      `${a.client} ${a.vehicle} ${a.plate} ${a.note}`
+      `${a.client} ${a.vehicle} ${a.plate} ${a.note} ${a.internalNote ?? ""}`
         .toLocaleLowerCase("pt-BR")
         .includes(query.toLocaleLowerCase("pt-BR")),
     )
@@ -6645,7 +8060,7 @@ function Reports({
   saturday.setDate(monday.getDate() + 5);
   const weeklyRows = (data as Appt[]).filter(
     (a) =>
-      a.type !== "bloqueio" && a.date >= iso(monday) && a.date <= iso(saturday),
+      !isEmployeeAbsence(a) && a.date >= iso(monday) && a.date <= iso(saturday),
   );
   const weeklyMetrics = [
     ["Agendamentos", weeklyRows.length],
@@ -6661,6 +8076,7 @@ function Reports({
         (a) =>
           a.status === "avaliou" &&
           a.type === "cliente" &&
+          a.quoteFollowUpDecision !== "declined" &&
           !a.serviceAppointmentId &&
           a.budget?.processStatus !== "Finalizado",
       ).length,
@@ -6678,7 +8094,7 @@ function Reports({
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowIso = iso(tomorrow);
   const tomorrowRows = (data as Appt[])
-    .filter((a) => a.type !== "bloqueio" && a.date === tomorrowIso)
+    .filter((a) => !isEmployeeAbsence(a) && a.date === tomorrowIso)
     .sort((a, b) => a.time.localeCompare(b.time));
   const tomorrowMessage = [
     `*AGENDA MONOCENTER - ${tomorrow.toLocaleDateString("pt-BR", {
@@ -6694,7 +8110,8 @@ function Reports({
             `*${a.time} - ${a.client}*`,
             `${a.vehicle || "Veículo não informado"}${a.plate ? ` - ${a.plate}` : ""}`,
             `Situação: ${category(a)}${a.inProgress ? " - veículo na oficina" : ""}`,
-            a.note ? `Observação: ${a.note}` : "",
+            a.note ? `Relato do cliente: ${a.note}` : "",
+            a.internalNote ? `Observação interna: ${a.internalNote}` : "",
           ].filter(Boolean).join("\n"),
         )
       : ["Nenhum agendamento para amanhã."]),
@@ -6704,17 +8121,81 @@ function Reports({
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        a.quoteFollowUpDecision !== "declined" &&
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     )
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    .sort((a, b) => {
+      const aReminder = a.quoteFollowUpDueDate || "9999-12-31",
+        bReminder = b.quoteFollowUpDueDate || "9999-12-31";
+      return (
+        aReminder.localeCompare(bReminder) ||
+        `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)
+      );
+    });
+  const declinedQuotes = (data as Appt[])
+    .filter(
+      (a) =>
+        a.type === "cliente" &&
+        a.status === "avaliou" &&
+        a.quoteFollowUpDecision === "declined" &&
+        !a.serviceAppointmentId &&
+        a.budget?.processStatus !== "Finalizado",
+    )
+    .sort((a, b) =>
+      String(b.quoteFollowUpUpdatedAt || b.date).localeCompare(
+        String(a.quoteFollowUpUpdatedAt || a.date),
+      ),
+    );
+  const dueQuoteReminders = openQuotes.filter(
+    (appointment) =>
+      !!appointment.quoteFollowUpDueDate &&
+      appointment.quoteFollowUpDueDate <= iso(new Date()),
+  ).length;
+  const reminderDaysFor = (appointment: Appt) =>
+      reminderDayDrafts[appointment.id] ??
+      appointment.quoteFollowUpDays ??
+      3,
+    reminderDateFromToday = (days: number) => {
+      const date = new Date();
+      date.setHours(12, 0, 0, 0);
+      date.setDate(date.getDate() + Math.max(1, Math.min(90, days)));
+      return iso(date);
+    },
+    scheduleQuoteReminder = (appointment: Appt) => {
+      const days = Math.max(
+        1,
+        Math.min(90, Number(reminderDaysFor(appointment)) || 3),
+      );
+      updateQuoteFollowUp(appointment.id, {
+        quoteFollowUpDays: days,
+        quoteFollowUpDueDate: reminderDateFromToday(days),
+        quoteFollowUpDecision: "message",
+      });
+    },
+    prepareQuoteFollowUp = (appointment: Appt) => {
+      const days = Math.max(
+        1,
+        Math.min(90, Number(reminderDaysFor(appointment)) || 3),
+      );
+      updateQuoteFollowUp(appointment.id, {
+        quoteFollowUpDays: days,
+        quoteFollowUpDueDate: reminderDateFromToday(days),
+        quoteFollowUpDecision: "message",
+        quoteFollowUpPreparedBy: user.displayName,
+        quoteFollowUpPreparedAt: new Date().toISOString(),
+      });
+      message(
+        `Olá, ${appointment.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${appointment.vehicle || ""}${appointment.plate ? `, placa ${appointment.plate}` : ""}. Podemos ajudar com o agendamento?`,
+      );
+    };
   const inProgress = (data as Appt[])
     .filter(
       (a) =>
         (a.inProgress ||
           a.status === "servico" ||
           (a.type === "revisao" && a.reviewWithService && !!a.review)) &&
-        a.type !== "bloqueio" &&
+        !isEmployeeAbsence(a) &&
         a.budget?.processStatus !== "Finalizado",
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
@@ -6769,6 +8250,9 @@ function Reports({
             onClick={() => setReportMode("abertos")}
           >
             Orçamentos em aberto
+            {dueQuoteReminders > 0
+              ? ` · ${dueQuoteReminders} ${dueQuoteReminders === 1 ? "lembrete" : "lembretes"}`
+              : ""}
           </button>
           <button
             className={reportMode === "andamento" ? "active" : ""}
@@ -6869,7 +8353,12 @@ function Reports({
                     <span>
                       <b>{a.client}</b>
                       <small>{a.vehicle || "Veículo não informado"} · {a.plate || "Sem placa"}</small>
-                      {a.note && <small>Observação: {a.note}</small>}
+                      {a.note && <small>Relato do cliente: {a.note}</small>}
+                      {a.internalNote && (
+                        <small className="tomorrow-internal-note">
+                          Observação interna: {a.internalNote}
+                        </small>
+                      )}
                     </span>
                     <strong>{category(a)}</strong>
                   </article>
@@ -6882,54 +8371,169 @@ function Reports({
         )}
         {reportMode === "abertos" && (
           <div className="management-report-panel open-quotes-panel">
+            <style>{`
+              .compact-quotes-wrap{overflow-x:auto;border:1px solid #d9e1ea;border-radius:10px;background:#fff}
+              .compact-quotes-table{min-width:980px}
+              .compact-quotes-head,.compact-quote-row{display:grid;grid-template-columns:minmax(210px,1.55fr) 130px minmax(210px,1.25fr) minmax(225px,1.3fr) 210px;gap:10px;align-items:center}
+              .compact-quotes-head{padding:8px 12px;background:#eef2f6;color:#526274;font-size:10px;font-weight:900;text-transform:uppercase}
+              .compact-quote-row{min-height:72px;padding:8px 12px;border-top:1px solid #e4e9ef}
+              .compact-quote-row:first-child{border-top:0}
+              .compact-quote-client{display:grid;gap:2px;min-width:0}
+              .compact-quote-client b{overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+              .compact-quote-client small,.compact-quote-age small,.compact-reminder small{color:#64748b;font-size:10px;line-height:1.25}
+              .compact-quote-age,.compact-reminder{display:grid;gap:3px}
+              .compact-reminder-control{display:flex;align-items:center;gap:5px}
+              .compact-reminder-control input{width:56px!important;min-width:56px;padding:5px 6px;text-align:center}
+              .compact-reminder-control button{padding:6px 8px;font-size:10px}
+              .compact-reminder-date{font-weight:800}
+              .compact-reminder-date.due{color:#c51d25}
+              .compact-quote-decision{display:grid;gap:5px}
+              .compact-quote-decision label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;cursor:pointer}
+              .compact-quote-decision input{width:15px;height:15px;margin:0}
+              .compact-quote-actions{display:flex;justify-content:flex-end;gap:6px}
+              .compact-quote-actions button{padding:7px 9px;font-size:10px;white-space:nowrap}
+              .compact-quote-actions .wa{background:#16864b;color:#fff}
+              .declined-quotes{margin-top:12px;border:1px solid #f1c0c3;border-radius:9px;background:#fff7f7}
+              .declined-quotes summary{padding:10px 12px;color:#a3131c;font-size:12px;font-weight:900;cursor:pointer}
+              .declined-quote-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:8px 12px;border-top:1px solid #f1d4d6;font-size:11px}
+              .declined-quote-row span{display:grid;gap:2px}.declined-quote-row small{color:#64748b}
+              .declined-quote-row button{padding:6px 9px;font-size:10px}
+              .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
+            `}</style>
             <div className="management-report-head">
               <span>
                 <h2>Orçamentos em aberto</h2>
-                <p>{openQuotes.length} aguardando retorno do cliente</p>
+                <p>
+                  {openQuotes.length} aguardando retorno do cliente
+                  {dueQuoteReminders > 0
+                    ? ` · ${dueQuoteReminders} ${dueQuoteReminders === 1 ? "lembrete vencido" : "lembretes vencidos"}`
+                    : ""}
+                </p>
               </span>
             </div>
-            <div className="open-quotes-list">
+            <div className="compact-quotes-wrap">
+              <div className="compact-quotes-table">
+                <div className="compact-quotes-head">
+                  <span>Cliente e veículo</span>
+                  <span>Tempo em aberto</span>
+                  <span>Próximo lembrete</span>
+                  <span>Decisão</span>
+                  <span>Ações</span>
+                </div>
               {openQuotes.length ? (
                 openQuotes.map((a) => {
                   const daysOpen = Math.max(
                     0,
                     Math.floor(
                       (Date.now() - new Date(a.date + "T12:00:00").getTime()) /
-                        86400000,
+                      86400000,
                     ),
-                  );
+                  ),
+                    reminderDays = reminderDaysFor(a),
+                    reminderDue =
+                      !!a.quoteFollowUpDueDate &&
+                      a.quoteFollowUpDueDate <= iso(new Date());
                   return (
-                    <article key={a.id}>
-                      <span>
+                    <article className="compact-quote-row" key={a.id}>
+                      <span className="compact-quote-client">
                         <b>{a.client}</b>
                         <small>
                           {a.vehicle || "Veículo não informado"} ·{" "}
                           {a.plate || "Sem placa"}
                         </small>
+                      </span>
+                      <span className="compact-quote-age">
+                        <b>{daysOpen} {daysOpen === 1 ? "dia" : "dias"}</b>
                         <small>
-                          Avaliado em{" "}
                           {new Date(a.date + "T12:00:00").toLocaleDateString(
                             "pt-BR",
-                          )}{" "}
-                          · {daysOpen} {daysOpen === 1 ? "dia" : "dias"} em
-                          aberto
+                          )}
                         </small>
                         {a.quoteSentAt && (
                           <small>
-                            Enviado em{" "}
-                            {new Date(a.quoteSentAt).toLocaleString("pt-BR")}{" "}
-                            por {a.quoteSentBy || "não informado"}
+                            Enviado por {a.quoteSentBy || "não informado"}
                           </small>
                         )}
                       </span>
-                      <div>
+                      <span className="compact-reminder">
+                        <span className="compact-reminder-control">
+                          <input
+                            type="number"
+                            min="1"
+                            max="90"
+                            value={reminderDays}
+                            onChange={(event) =>
+                              setReminderDayDrafts((current) => ({
+                                ...current,
+                                [a.id]: Math.max(
+                                  1,
+                                  Math.min(90, Number(event.target.value) || 1),
+                                ),
+                              }))
+                            }
+                            aria-label={`Dias para lembrar ${a.client}`}
+                          />
+                          <small>dias</small>
+                          <button onClick={() => scheduleQuoteReminder(a)}>
+                            Programar
+                          </button>
+                        </span>
+                        <small
+                          className={`compact-reminder-date${reminderDue ? " due" : ""}`}
+                        >
+                          {a.quoteFollowUpDueDate
+                            ? `${reminderDue ? "Lembrete vencido: " : "Lembrar em: "}${new Date(`${a.quoteFollowUpDueDate}T12:00:00`).toLocaleDateString("pt-BR")}`
+                            : "Lembrete ainda não programado"}
+                        </small>
+                        {a.quoteFollowUpPreparedAt && (
+                          <small>
+                            Última mensagem preparada em{" "}
+                            {new Date(a.quoteFollowUpPreparedAt).toLocaleDateString(
+                              "pt-BR",
+                            )}
+                          </small>
+                        )}
+                      </span>
+                      <span className="compact-quote-decision">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={a.quoteFollowUpDecision === "message"}
+                            onChange={(event) =>
+                              updateQuoteFollowUp(a.id, {
+                                quoteFollowUpDecision: event.target.checked
+                                  ? "message"
+                                  : undefined,
+                              })
+                            }
+                          />
+                          Mandar nova mensagem
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            onChange={(event) => {
+                              if (
+                                event.target.checked &&
+                                confirm(
+                                  `Confirmar que ${a.client} desistiu de fazer o serviço?`,
+                                )
+                              )
+                                updateQuoteFollowUp(a.id, {
+                                  quoteFollowUpDecision: "declined",
+                                  quoteFollowUpDueDate: undefined,
+                                });
+                            }}
+                          />
+                          Cliente desistiu
+                        </label>
+                      </span>
+                      <div className="compact-quote-actions">
                         <button onClick={() => open(a)}>Abrir orçamento</button>
                         <button
-                          onClick={() =>
-                            message(
-                              `Olá, ${a.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${a.vehicle || ""}${a.plate ? `, placa ${a.plate}` : ""}. Podemos ajudar com o agendamento?`,
-                            )
-                          }
+                          className="wa"
+                          onClick={() => prepareQuoteFollowUp(a)}
                         >
                           Preparar mensagem
                         </button>
@@ -6938,9 +8542,43 @@ function Reports({
                   );
                 })
               ) : (
-                <p>Nenhum orçamento em aberto.</p>
+                <p style={{ padding: 16 }}>Nenhum orçamento em aberto.</p>
               )}
+              </div>
             </div>
+            {declinedQuotes.length > 0 && (
+              <details className="declined-quotes">
+                <summary>
+                  Clientes que desistiram ({declinedQuotes.length})
+                </summary>
+                {declinedQuotes.map((a) => (
+                  <div className="declined-quote-row" key={a.id}>
+                    <span>
+                      <b>{a.client}</b>
+                      <small>
+                        {a.vehicle || "Veículo não informado"} ·{" "}
+                        {a.plate || "Sem placa"}
+                        {a.quoteFollowUpUpdatedBy
+                          ? ` · registrado por ${a.quoteFollowUpUpdatedBy}`
+                          : ""}
+                      </small>
+                    </span>
+                    <button
+                      onClick={() =>
+                        updateQuoteFollowUp(a.id, {
+                          quoteFollowUpDecision: "message",
+                          quoteFollowUpDueDate: reminderDateFromToday(
+                            reminderDaysFor(a),
+                          ),
+                        })
+                      }
+                    >
+                      Reabrir acompanhamento
+                    </button>
+                  </div>
+                ))}
+              </details>
+            )}
           </div>
         )}
         {reportMode === "andamento" && (
