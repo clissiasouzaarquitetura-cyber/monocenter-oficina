@@ -8076,6 +8076,7 @@ function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, ri
 
 function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: any) {
   const storageKey = `geometry-report-${appointment.id ?? appointment.plate ?? appointment.name}`;
+  const extraStorageKey = `${storageKey}-extra-fields`;
   const [sourcePdf, setSourcePdf] = useState("");
   const [sourceName, setSourceName] = useState(appointment.geometryReport?.sourceName || "");
   const [technician, setTechnician] = useState(appointment.geometryReport?.technician || appointment.tech || "");
@@ -8088,9 +8089,17 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     if (typeof window === "undefined") return {};
     try { return JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch { return {}; }
   });
+  const [extraFields, setExtraFields] = useState<any>(() => {
+    if (appointment.geometryReport?.extraFields) return appointment.geometryReport.extraFields;
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem(extraStorageKey) || "{}"); } catch { return {}; }
+  });
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(values));
   }, [storageKey, values]);
+  useEffect(() => {
+    localStorage.setItem(extraStorageKey, JSON.stringify(extraFields));
+  }, [extraStorageKey, extraFields]);
   useEffect(() => () => { if (sourcePdf) URL.revokeObjectURL(sourcePdf); }, [sourcePdf]);
   const numberOf = (value: any) => {
     const raw = String(value ?? "").trim().replace(",", ".");
@@ -8123,6 +8132,8 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   };
   const updateValue = (index: number, field: string, value: string) =>
     setValues((current: any) => ({ ...current, [index]: { ...(current[index] || {}), [field]: value } }));
+  const updateExtra = (field: string, value: string) =>
+    setExtraFields((current: any) => ({ ...current, [field]: value }));
   const formatAngle = (raw: string) => {
     const cleaned = raw.replace(/\s/g, "").replace(",", ".");
     const match = cleaned.match(/([+-]?\d+)[°º](?:(\d+)[\'’′\"”″])?/);
@@ -8255,25 +8266,58 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     await scanPdf(file);
   };
   const printGeometry = () => {
+    const report = document.querySelector(".geometry-template-sheet") as HTMLElement | null;
+    if (!report) { setReadMessage("Não foi possível localizar o laudo para impressão."); return; }
+    setReadMessage("Abrindo a impressão do laudo...");
     document.body.classList.add("print-geometry-report");
-    const cleanup = () => document.body.classList.remove("print-geometry-report");
-    window.addEventListener("afterprint", cleanup, { once: true });
-    window.print();
-    setTimeout(cleanup, 15000);
+    const finishPrint = () => document.body.classList.remove("print-geometry-report");
+    window.addEventListener("afterprint", finishPrint, { once: true });
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      try {
+        window.print();
+        setReadMessage("Escolha imprimir ou salvar como PDF.");
+      } catch {
+        finishPrint();
+        setReadMessage("Não foi possível abrir a impressão neste navegador.");
+      }
+    }));
   };
   const saveGeometry = () => {
-    onSave?.({ values, technician, notes, sourceName });
+    onSave?.({ values, technician, notes, sourceName, extraFields });
     setReadMessage("Laudo salvo no atendimento do cliente.");
   };
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <button onClick={onBack}>← Voltar à proposta</button>
+        <span className="geometry-version">Laudo corrigido V11</span>
+        <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
-        <button onClick={saveGeometry}>Salvar laudo</button>
+        <button type="button" onClick={saveGeometry}>Salvar laudo</button>
         <button type="button" className="primary print-geometry-button" onClick={printGeometry}>Imprimir / compartilhar PDF</button>
-        {onContinue && <button className="primary" onClick={() => { saveGeometry(); onContinue(); }}>Ir para conferência →</button>}
+        {onContinue && <button type="button" className="primary" onClick={() => { saveGeometry(); onContinue(); }}>Ir para conferência →</button>}
       </div>
+      <details className="geometry-extra-editor" open>
+        <summary>Editar dados complementares do laudo</summary>
+        <div className="geometry-extra-grid">
+          <label>Técnico<input value={technician} onChange={(e)=>setTechnician(e.target.value)}/></label>
+          <label>Diagonal esquerda (A)<input value={extraFields.chassisA || ""} onChange={(e)=>updateExtra("chassisA",e.target.value)}/></label>
+          <label>Diagonal direita (B)<input value={extraFields.chassisB || ""} onChange={(e)=>updateExtra("chassisB",e.target.value)}/></label>
+          <label>Diferença A - B<input value={extraFields.chassisDifference || ""} onChange={(e)=>updateExtra("chassisDifference",e.target.value)}/></label>
+          <label>Entre eixos dianteiro<input value={extraFields.wheelbaseFront || ""} onChange={(e)=>updateExtra("wheelbaseFront",e.target.value)}/></label>
+          <label>Entre eixos traseiro<input value={extraFields.wheelbaseRear || ""} onChange={(e)=>updateExtra("wheelbaseRear",e.target.value)}/></label>
+          <label>Bitola dianteira<input value={extraFields.trackFront || ""} onChange={(e)=>updateExtra("trackFront",e.target.value)}/></label>
+          <label>Bitola traseira<input value={extraFields.trackRear || ""} onChange={(e)=>updateExtra("trackRear",e.target.value)}/></label>
+          <label>Pneu dianteiro esquerdo<input value={extraFields.tireFrontLeft || ""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/></label>
+          <label>Pneu dianteiro direito<input value={extraFields.tireFrontRight || ""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/></label>
+          <label>Pneu traseiro esquerdo<input value={extraFields.tireRearLeft || ""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/></label>
+          <label>Pneu traseiro direito<input value={extraFields.tireRearRight || ""} onChange={(e)=>updateExtra("tireRearRight",e.target.value)}/></label>
+          <label>Ângulo do volante<input value={extraFields.steeringAngle || ""} onChange={(e)=>updateExtra("steeringAngle",e.target.value)}/></label>
+          <label>Próxima revisão - data<input value={extraFields.nextReviewDate || ""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label>
+          <label>Próxima revisão - KM<input value={extraFields.nextReviewKm || ""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label>
+          <label className="wide">Observações técnicas<textarea value={notes} onChange={(e)=>setNotes(e.target.value)}/></label>
+        </div>
+        <p>As alterações aparecem automaticamente no laudo abaixo. Clique em <b>Salvar laudo</b> ao terminar.</p>
+      </details>
       {readMessage && <div className={`ocr-message ${readingPdf ? "reading" : ""}`}>{readMessage}</div>}
       {pendingValues && (
         <section className="geometry-import-review" role="dialog" aria-modal="true" aria-label="Confirmar medidas lidas do PDF">
@@ -8310,46 +8354,18 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       <article className="geometry-template-sheet">
         <img className="geometry-template-bg" src="/laudo-geometria-template.png" alt="Laudo técnico de geometria Monocenter no modelo oficial"/>
         <div className="geometry-official-logo" aria-label="Logo oficial Monocenter">
-          <img src="/logo-monocenter-oficial-transparente.png" alt="Monocenter"/>
-          <span>ALINHAMENTO TÉCNICO</span>
+          <img src="/logo-monocenter.jpg" alt="Monocenter Alinhamento Técnico"/>
         </div>
-        <svg className="geometry-dynamic-guides" viewBox="0 0 1024 1536" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <marker id="dynamicArrowGreen" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L0,9 L8,4.5 z" fill="#079447"/></marker>
-            <marker id="dynamicArrowRed" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L0,9 L8,4.5 z" fill="#df171f"/></marker>
-          </defs>
-          {values[0]?.left && <line x1="90" y1="590" x2="90" y2="380" stroke={guideColor(0,values[0]?.left)} strokeWidth="6" transform={`rotate(${clampAngle(values[0]?.left,-7)} 90 590)`}/>} 
-          {values[0]?.right && <line x1="455" y1="590" x2="455" y2="380" stroke={guideColor(0,values[0]?.right)} strokeWidth="6" transform={`rotate(${clampAngle(values[0]?.right,7)} 455 590)`}/>} 
-          {values[1]?.left && <line x1="150" y1="535" x2="183" y2="368" stroke={guideColor(1,values[1]?.left)} strokeWidth="6" transform={`rotate(${clampAngle(values[1]?.left,-2.2)} 150 535)`}/>} 
-          {values[1]?.right && <line x1="395" y1="535" x2="362" y2="368" stroke={guideColor(1,values[1]?.right)} strokeWidth="6" transform={`rotate(${clampAngle(values[1]?.right,2.2)} 395 535)`}/>} 
-          {values[2]?.left && <line x1="42" y1="626" x2="123" y2="626" stroke={guideColor(2,values[2]?.left)} strokeWidth="7" markerEnd={stateOf(values[2]?.left,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[2]?.left,16)} 83 626)`}/>} 
-          {values[2]?.right && <line x1="501" y1="626" x2="420" y2="626" stroke={guideColor(2,values[2]?.right)} strokeWidth="7" markerEnd={stateOf(values[2]?.right,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[2]?.right,-16)} 460 626)`}/>} 
-          {values[5]?.left && <line x1="88" y1="1055" x2="88" y2="875" stroke={guideColor(5,values[5]?.left)} strokeWidth="6" transform={`rotate(${clampAngle(values[5]?.left,-7)} 88 1055)`}/>} 
-          {values[5]?.right && <line x1="452" y1="1055" x2="452" y2="875" stroke={guideColor(5,values[5]?.right)} strokeWidth="6" transform={`rotate(${clampAngle(values[5]?.right,7)} 452 1055)`}/>} 
-          {values[6]?.left && <line x1="42" y1="1080" x2="123" y2="1080" stroke={guideColor(6,values[6]?.left)} strokeWidth="7" markerEnd={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[6]?.left,16)} 83 1080)`}/>} 
-          {values[6]?.right && <line x1="501" y1="1080" x2="420" y2="1080" stroke={guideColor(6,values[6]?.right)} strokeWidth="7" markerEnd={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[6]?.right,-16)} 460 1080)`}/>} 
-        </svg>
         <div className="geometry-template-overlay">
-          <b style={{left:"14.4%",top:"10.15%"}}>{appointment.client || appointment.name || ""}</b>
-          <b style={{left:"14.4%",top:"12.2%"}}>{appointment.vehicle || appointment.model || ""}</b>
-          <b style={{left:"14.4%",top:"14.25%"}}>{appointment.vehicleYear || appointment.year || ""}</b>
-          <b style={{left:"14.4%",top:"16.3%"}}>{appointment.plate || ""}</b>
-          <b style={{left:"50.8%",top:"10.15%"}}>{appointment.km || ""}</b>
-          <b style={{left:"50.8%",top:"12.2%"}}>{appointment.chassis || ""}</b>
-          <b style={{left:"50.8%",top:"14.25%"}}>{new Date().toLocaleDateString("pt-BR")}</b>
-          <b style={{left:"65.2%",top:"14.25%"}}>{new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b>
-          <b style={{left:"50.8%",top:"16.3%"}}>{technician}</b>
-          {[
-            [values[0]?.left,"8.4%","22.5%"],[values[1]?.left,"16.4%","22.5%"],[values[1]?.right,"36.7%","22.5%"],[values[0]?.right,"43.8%","22.5%"],
-            [values[2]?.left,"8.3%","40.7%"],[values[2]?.right,"44.4%","40.7%"],
-            [values[5]?.left,"8.5%","56.5%"],[values[5]?.right,"43.8%","56.5%"],[values[6]?.left,"8.2%","69.1%"],[values[6]?.right,"44.0%","69.1%"],
-          ].map(([value,left,top],index)=>{
-            const field = index < 4 ? (index === 0 || index === 3 ? 0 : 1) : (index < 6 ? 2 : index < 8 ? 5 : 6);
-            const row = values[field] || {};
-            const min = row.min ?? GEOMETRY_FIELDS[field][1];
-            const max = row.max ?? GEOMETRY_FIELDS[field][2];
-            return <b key={`diagram-${index}`} className={`measure diagram-mask ${stateOf(value,min,max)}`} style={{left,top}}>{value || "--"}</b>;
-          })}
+          <b className="header-value" style={{left:"14.4%",top:"10.15%"}}>{appointment.client || appointment.name || ""}</b>
+          <b className="header-value" style={{left:"14.4%",top:"12.2%"}}>{appointment.vehicle || appointment.model || ""}</b>
+          <b className="header-value" style={{left:"14.4%",top:"14.25%"}}>{appointment.vehicleYear || appointment.year || ""}</b>
+          <b className="header-value" style={{left:"14.4%",top:"16.3%"}}>{appointment.plate || ""}</b>
+          <b className="header-value right" style={{left:"50.8%",top:"10.15%"}}>{appointment.km || ""}</b>
+          <b className="header-value right" style={{left:"50.8%",top:"12.2%"}}>{appointment.chassis || ""}</b>
+          <b className="header-value date" style={{left:"50.8%",top:"14.25%"}}>{new Date().toLocaleDateString("pt-BR")}</b>
+          <b className="header-value time" style={{left:"65.2%",top:"14.25%"}}>{new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b>
+          <b className="header-value right" style={{left:"50.8%",top:"16.3%"}}>{technician}</b>
           {[
             [0,"23.2%"],[1,"26.9%"],[2,"30.7%"],[3,"34.4%"],[4,"37.5%"],
             [5,"56.8%"],[6,"60.7%"],[7,"63.5%"],[8,"65.4%"],
@@ -8361,7 +8377,21 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
               <b key={`${field}-r`} className={`cell-value ${stateOf(row.right,min,max)}`} style={{left:"93.0%",top}}>{row.right||""}</b>,
             ];
           })}
-          <div className="template-notes">{notes}</div>
+          <input className="editable-report-field chassis-a" aria-label="Diagonal esquerda A" placeholder="Editar" value={extraFields.chassisA || ""} onChange={(e)=>updateExtra("chassisA",e.target.value)}/>
+          <input className="editable-report-field chassis-b" aria-label="Diagonal direita B" placeholder="Editar" value={extraFields.chassisB || ""} onChange={(e)=>updateExtra("chassisB",e.target.value)}/>
+          <input className="editable-report-field chassis-difference" aria-label="Diferença A menos B" placeholder="Editar" value={extraFields.chassisDifference || ""} onChange={(e)=>updateExtra("chassisDifference",e.target.value)}/>
+          <input className="editable-report-field wheelbase-front" aria-label="Entre eixos dianteiro" placeholder="Editar" value={extraFields.wheelbaseFront || ""} onChange={(e)=>updateExtra("wheelbaseFront",e.target.value)}/>
+          <input className="editable-report-field wheelbase-rear" aria-label="Entre eixos traseiro" placeholder="Editar" value={extraFields.wheelbaseRear || ""} onChange={(e)=>updateExtra("wheelbaseRear",e.target.value)}/>
+          <input className="editable-report-field track-front" aria-label="Bitola dianteira" placeholder="Editar" value={extraFields.trackFront || ""} onChange={(e)=>updateExtra("trackFront",e.target.value)}/>
+          <input className="editable-report-field track-rear" aria-label="Bitola traseira" placeholder="Editar" value={extraFields.trackRear || ""} onChange={(e)=>updateExtra("trackRear",e.target.value)}/>
+          <input className="editable-report-field tire-front-left" aria-label="Condição pneu dianteiro esquerdo" placeholder="Editar" value={extraFields.tireFrontLeft || ""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/>
+          <input className="editable-report-field tire-front-right" aria-label="Condição pneu dianteiro direito" placeholder="Editar" value={extraFields.tireFrontRight || ""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/>
+          <input className="editable-report-field tire-rear-left" aria-label="Condição pneu traseiro esquerdo" placeholder="Editar" value={extraFields.tireRearLeft || ""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/>
+          <input className="editable-report-field tire-rear-right" aria-label="Condição pneu traseiro direito" placeholder="Editar" value={extraFields.tireRearRight || ""} onChange={(e)=>updateExtra("tireRearRight",e.target.value)}/>
+          <input className="editable-report-field steering-angle" aria-label="Ângulo do volante" placeholder="Editar" value={extraFields.steeringAngle || ""} onChange={(e)=>updateExtra("steeringAngle",e.target.value)}/>
+          <input className="editable-report-field next-review-date" aria-label="Data da próxima revisão" placeholder="Data" value={extraFields.nextReviewDate || ""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/>
+          <input className="editable-report-field next-review-km" aria-label="Quilometragem da próxima revisão" placeholder="KM" value={extraFields.nextReviewKm || ""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/>
+          <textarea className="editable-report-field template-notes" aria-label="Observações técnicas" value={notes} onChange={(e)=>setNotes(e.target.value)}/>
         </div>
       </article>
       <article className="geometry-sheet geometry-entry-sheet" aria-hidden="true">
@@ -8420,9 +8450,16 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       </article>
       {sourcePdf && <section className="source-pdf"><h3>PDF original do alinhador: {sourceName}</h3><object data={sourcePdf} type="application/pdf"><a href={sourcePdf} target="_blank">Abrir PDF original</a></object></section>}
       <style>{`
-        .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-import-review{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#07111dcc}.geometry-import-card{width:min(900px,96vw);max-height:92vh;overflow:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px #0008}.geometry-import-card>header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;background:#111d2b;color:#fff;border-bottom:5px solid #e31b23}.geometry-import-card h2{margin:3px 0 0}.geometry-import-card header small{color:#ff4a52;font-weight:900}.geometry-import-card header button{border:0;background:transparent;color:#fff;font-size:30px;line-height:1;cursor:pointer}.geometry-import-card>p{margin:0;padding:15px 20px;background:#edf5ff}.import-measure-table{margin:16px 20px;border:1px solid #d8e0e8}.import-measure-row{display:grid;grid-template-columns:1.45fr .7fr 1.15fr .7fr;border-top:1px solid #d8e0e8}.import-measure-row:first-child{border-top:0}.import-measure-row>*{min-width:0;padding:10px;border:0;border-right:1px solid #d8e0e8}.import-measure-row.heading{background:#111d2b;color:#fff}.import-measure-row input{text-align:center;font-weight:800;background:#f8fafc}.import-measure-row>span{display:flex;align-items:center;justify-content:center;gap:5px}.import-measure-row>span input{width:72px;padding:5px}.geometry-import-card>footer{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px}.geometry-import-card>footer button{padding:11px 15px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:900}.geometry-import-card>footer .primary{background:#168b4b;color:#fff;border-color:#168b4b}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf h3{margin-top:0}
-        @media(max-width:720px){.geometry-toolbar{display:grid}.geometry-customer{grid-template-columns:1fr 1fr}.geometry-header{grid-template-columns:1fr}.geometry-header h1{font-size:24px}.geometry-row{grid-template-columns:1.2fr .7fr 1fr .7fr;font-size:11px}.geometry-row>*{padding:6px}.geometry-notes{grid-template-columns:1fr}.geometry-notes aside{border-left:0;border-top:1px solid #d8e0e8}}
-        .geometry-entry-sheet{display:none!important}.geometry-template-sheet{position:relative;container-type:inline-size;max-width:1024px;margin:0 auto 18px;background:#fff;box-shadow:0 12px 30px #0f172a20}.geometry-template-bg{position:relative;z-index:1;display:block;width:100%;height:auto}.geometry-official-logo{position:absolute;z-index:5;left:2.2%;top:.6%;width:36%;height:7.5%;overflow:hidden;background:#080b0e;text-align:center}.geometry-official-logo img{display:block;width:100%;height:78%;object-fit:cover;object-position:center center}.geometry-official-logo span{display:block;margin-top:-.25cqw;color:#fff;font:600 1.05cqw/1 Arial,sans-serif;letter-spacing:.34cqw}.geometry-dynamic-guides{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none}.geometry-template-overlay{position:absolute;z-index:4;inset:0;font-family:Arial,sans-serif;color:#111;pointer-events:none}.geometry-template-overlay>b{position:absolute;max-width:27%;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-size:1.18cqw;line-height:1.1;white-space:nowrap}.geometry-template-overlay .measure{font-size:15px;font-size:1.48cqw;transform:translateX(-50%);padding:.1cqw .25cqw;background:#fffffff5;border-radius:3px;box-shadow:0 0 0 1px #ffffff80}.geometry-template-overlay .ok{color:#07883e}.geometry-template-overlay .bad{color:#df171f}.geometry-template-overlay .pending{color:#111}.geometry-template-overlay .cell-value{width:8%;text-align:center;transform:translateX(-50%);font-size:14px;font-size:1.35cqw;padding:.15% 0;background:#fffffff5}.geometry-template-overlay .cell-spec{width:13%;text-align:center;transform:translateX(-50%);font-size:11px;font-size:1.04cqw;font-weight:700;padding:.2% 0;background:#fffffff5}.template-notes{position:absolute;left:3.4%;right:27%;top:91.7%;font-size:11px;font-size:1.05cqw;line-height:1.35;white-space:pre-wrap;background:#fff}.print-geometry-button{pointer-events:auto!important;cursor:pointer!important;opacity:1!important}
+        .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-version{margin-right:auto;border-radius:999px;background:#e9f8ef;color:#08783b;padding:7px 11px;font-size:12px;font-weight:900}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.geometry-extra-editor{max-width:1050px;margin:0 auto 14px;border:1px solid #b9c8da;border-radius:12px;background:#fff;overflow:hidden}.geometry-extra-editor summary{padding:13px 16px;background:#111d2b;color:#fff;font-weight:900;cursor:pointer}.geometry-extra-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.geometry-extra-grid label{display:flex;flex-direction:column;gap:5px;color:#344054;font-size:12px;font-weight:800}.geometry-extra-grid input,.geometry-extra-grid textarea{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:7px;background:#fff;padding:9px;color:#111;font-size:14px}.geometry-extra-grid .wide{grid-column:1/-1}.geometry-extra-grid textarea{min-height:70px;resize:vertical}.geometry-extra-editor>p{margin:0;padding:0 14px 14px;color:#475467}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-import-review{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#07111dcc}.geometry-import-card{width:min(900px,96vw);max-height:92vh;overflow:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px #0008}.geometry-import-card>header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;background:#111d2b;color:#fff;border-bottom:5px solid #e31b23}.geometry-import-card h2{margin:3px 0 0}.geometry-import-card header small{color:#ff4a52;font-weight:900}.geometry-import-card header button{border:0;background:transparent;color:#fff;font-size:30px;line-height:1;cursor:pointer}.geometry-import-card>p{margin:0;padding:15px 20px;background:#edf5ff}.import-measure-table{margin:16px 20px;border:1px solid #d8e0e8}.import-measure-row{display:grid;grid-template-columns:1.45fr .7fr 1.15fr .7fr;border-top:1px solid #d8e0e8}.import-measure-row:first-child{border-top:0}.import-measure-row>*{min-width:0;padding:10px;border:0;border-right:1px solid #d8e0e8}.import-measure-row.heading{background:#111d2b;color:#fff}.import-measure-row input{text-align:center;font-weight:800;background:#f8fafc}.import-measure-row>span{display:flex;align-items:center;justify-content:center;gap:5px}.import-measure-row>span input{width:72px;padding:5px}.geometry-import-card>footer{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px}.geometry-import-card>footer button{padding:11px 15px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:900}.geometry-import-card>footer .primary{background:#168b4b;color:#fff;border-color:#168b4b}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf h3{margin-top:0}
+        @media(max-width:720px){.geometry-toolbar{display:grid}.geometry-extra-grid{grid-template-columns:1fr 1fr}.geometry-customer{grid-template-columns:1fr 1fr}.geometry-header{grid-template-columns:1fr}.geometry-header h1{font-size:24px}.geometry-row{grid-template-columns:1.2fr .7fr 1fr .7fr;font-size:11px}.geometry-row>*{padding:6px}.geometry-notes{grid-template-columns:1fr}.geometry-notes aside{border-left:0;border-top:1px solid #d8e0e8}}
+        .geometry-entry-sheet{display:none!important}.geometry-template-sheet{position:relative;container-type:inline-size;max-width:1024px;margin:0 auto 18px;background:#fff;box-shadow:0 12px 30px #0f172a20}.geometry-template-bg{position:relative;z-index:1;display:block;width:100%;height:auto}
+        .geometry-official-logo{position:absolute;z-index:5;left:2.2%;top:.6%;width:36%;height:7.5%;overflow:hidden;background:#080b0e;text-align:center}.geometry-official-logo img{display:block;width:100%;height:78%;object-fit:cover;object-position:center center;filter:brightness(0) invert(1)}.geometry-official-logo span{display:block;margin-top:-.25cqw;color:#fff;font:600 1.05cqw/1 Arial,sans-serif;letter-spacing:.34cqw}
+        .geometry-dynamic-guides{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none}.geometry-template-overlay{position:absolute;z-index:4;inset:0;font-family:Arial,sans-serif;color:#111;pointer-events:none}.geometry-template-overlay>b{position:absolute;max-width:27%;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-size:1.18cqw;line-height:1.1;white-space:nowrap}.geometry-template-overlay .header-value{width:20%;padding:0 .35cqw .32cqw;background:#fff;overflow:hidden}.geometry-template-overlay .header-value.right{width:18%}.geometry-template-overlay .header-value.date{width:8.2%}.geometry-template-overlay .header-value.time{width:7%}
+        .geometry-template-overlay .measure{font-size:9px;font-size:.85cqw;transform:translateX(-50%);padding:.08cqw .2cqw;background:#fffffff5;border-radius:3px;box-shadow:0 0 0 1px #ffffff80}.geometry-template-overlay .diagram-mask{display:none!important}.geometry-template-overlay .ok{color:#07883e}.geometry-template-overlay .bad{color:#df171f}.geometry-template-overlay .pending{color:#111}.geometry-template-overlay .cell-value{width:8%;text-align:center;transform:translateX(-50%);font-size:13px;font-size:1.2cqw;padding:.15% 0;background:#fffffff5}.geometry-template-overlay .cell-spec{width:13%;text-align:center;transform:translateX(-50%);font-size:10px;font-size:.94cqw;font-weight:700;padding:.2% 0;background:#fffffff5}
+        .editable-report-field{position:absolute;z-index:7;box-sizing:border-box;pointer-events:auto!important;border:0;border-bottom:1px solid #7c8793;background:#fffdf2;padding:0 .25cqw;color:#111;font:700 1cqw/1.2 Arial,sans-serif;text-align:center;outline:none}.editable-report-field:focus{background:#fff1a8;box-shadow:0 0 0 2px #d91d2a}.chassis-a{left:35.7%;top:76.05%;width:8%}.chassis-b{left:35.7%;top:78.02%;width:8%}.chassis-difference{left:35.7%;top:79.95%;width:8%}.wheelbase-front{left:35.7%;top:82.05%;width:8%}.wheelbase-rear{left:35.7%;top:84.02%;width:8%}.track-front{left:35.7%;top:85.98%;width:8%}.track-rear{left:35.7%;top:87.92%;width:8%}.tire-front-left{left:54.8%;top:78.2%;width:7.6%}.tire-front-right{left:69.8%;top:78.2%;width:7.6%}.tire-rear-left{left:54.8%;top:84.55%;width:7.6%}.tire-rear-right{left:69.8%;top:84.55%;width:7.6%}.steering-angle{left:84.2%;top:75.8%;width:10%}.next-review-date{left:82.6%;top:93.2%;width:14%}.next-review-km{left:82.6%;top:95.1%;width:14%}.template-notes{left:3.4%;top:93.65%;width:70%;height:3.65%;resize:none;text-align:left;line-height:1.45;border:0;background:#ffffffee;padding:.15cqw .4cqw;font-size:9px;font-size:.82cqw;overflow:hidden}.print-geometry-button{pointer-events:auto!important;cursor:pointer!important;opacity:1!important}
+        .geometry-official-logo{left:2.2%;top:.5%;width:34.5%;height:7.6%;display:flex;align-items:center;justify-content:center;background:#fff}.geometry-official-logo img{width:96%;height:92%;object-fit:contain;object-position:center;filter:none}.geometry-official-logo span{display:none}
+        .geometry-template-overlay{pointer-events:auto}.geometry-template-overlay>b{pointer-events:none}.geometry-template-overlay .header-value{display:flex;align-items:center;width:21%;height:1.55%;min-height:0;padding:0 .45cqw;background:#fff;overflow:hidden}.geometry-template-overlay .header-value.right{width:19%}.geometry-template-overlay .header-value.date{width:9.2%}.geometry-template-overlay .header-value.time{width:8%}
+        .editable-report-field{z-index:12;height:1.65%;pointer-events:auto!important;cursor:text;border:1px solid #e7c95b;border-radius:2px;background:#fff9d8;padding:0 .3cqw}.editable-report-field::placeholder{color:#78691e;opacity:1}.template-notes{left:3.4%;top:93.55%;width:70%;height:4.05%;padding:.34cqw .45cqw 0;border:0;border-radius:0;background:repeating-linear-gradient(to bottom,#fff 0,#fff 1.22cqw,#aeb5bd 1.27cqw,#fff 1.33cqw);font-size:.82cqw;line-height:1.33cqw;overflow:hidden}
         @media print{body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:absolute;left:0;top:0;width:100%;max-width:none;margin:0;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
     </div>
