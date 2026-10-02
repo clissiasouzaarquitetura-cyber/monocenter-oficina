@@ -8171,7 +8171,6 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   const [pendingValues, setPendingValues] = useState<any>(null);
   const [measureEditing, setMeasureEditing] = useState(false);
   const [adminUnlockOpen, setAdminUnlockOpen] = useState(false);
-  const [adminUsername, setAdminUsername] = useState(currentUser?.username || "");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminUnlockError, setAdminUnlockError] = useState("");
   const [checkingAdmin, setCheckingAdmin] = useState(false);
@@ -8431,28 +8430,21 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     setAdminPassword("");
     setAdminUnlockOpen(true);
   };
-  const unlockMeasureEditing = async (event: any) => {
+  const unlockMeasureEditing = (event: any) => {
     event.preventDefault();
     if (checkingAdmin) return;
     setCheckingAdmin(true);
     setAdminUnlockError("");
-    try {
-      const response = await fetch("/api/admin-verify", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: adminUsername, password: adminPassword }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Senha administrativa incorreta");
-      setMeasureEditing(true);
-      setAdminUnlockOpen(false);
-      setAdminPassword("");
-      setReadMessage(`Edição das medidas liberada por ${result.displayName || "administrador"}. Revise e salve o laudo ao concluir.`);
-    } catch (error: any) {
-      setAdminUnlockError(error?.message || "Não foi possível liberar a edição.");
-    } finally {
+    if (adminPassword !== "3010") {
+      setAdminUnlockError("Senha de edição incorreta.");
       setCheckingAdmin(false);
+      return;
     }
+    setMeasureEditing(true);
+    setAdminUnlockOpen(false);
+    setAdminPassword("");
+    setCheckingAdmin(false);
+    setReadMessage("Edição das medidas liberada. Revise os valores e salve o laudo ao concluir.");
   };
   const renderMeasureRow = ([label, defaultMin, defaultMax, single]: any, index: number) => {
     const row = values[index] || {};
@@ -8482,7 +8474,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V22</span>
+        <span className="geometry-version">Laudo A4 V23</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
@@ -8547,9 +8539,8 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
               <div><small>EDIÇÃO PROTEGIDA</small><h2 id="admin-unlock-title">Liberar alteração das medidas</h2></div>
               <button type="button" onClick={() => setAdminUnlockOpen(false)} aria-label="Fechar">×</button>
             </header>
-            <p>Informe um acesso de administrador. A senha será apenas validada e não ficará gravada no laudo.</p>
-            <label>Usuário administrador<input value={adminUsername} onChange={(e)=>setAdminUsername(e.target.value)} autoComplete="username" autoCapitalize="none" required autoFocus/></label>
-            <label>Senha<input type="password" value={adminPassword} onChange={(e)=>setAdminPassword(e.target.value)} autoComplete="current-password" required/></label>
+            <p>Digite a senha exclusiva para liberar a alteração das medidas.</p>
+            <label>Senha de edição<input type="password" inputMode="numeric" maxLength={4} value={adminPassword} onChange={(e)=>setAdminPassword(e.target.value.replace(/\D/g,""))} autoComplete="off" required autoFocus/></label>
             {adminUnlockError && <p className="geometry-admin-error" role="alert">{adminUnlockError}</p>}
             <footer><button type="button" onClick={() => setAdminUnlockOpen(false)}>Cancelar</button><button type="submit" className="primary" disabled={checkingAdmin}>{checkingAdmin ? "Conferindo..." : "Liberar edição"}</button></footer>
           </form>
