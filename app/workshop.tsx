@@ -3796,6 +3796,25 @@ export default function App({ initialState, user, onLogout }: any) {
             appointment={activeAppointment}
             roundStep={roundStep}
             onBack={() => go("agenda")}
+            onSaveGeometry={(geometryReport: any) => {
+              const updated: Appt = {
+                ...activeAppointment,
+                geometryReport: {
+                  ...geometryReport,
+                  savedAt: new Date().toISOString(),
+                  savedBy: user.displayName,
+                },
+                lastEditedBy: user.displayName,
+                lastEditedAt: new Date().toISOString(),
+                _updatedAt: Date.now(),
+              };
+              DISPLAY_APPT = updated;
+              setActiveAppointment(updated);
+              setAppointments((list) =>
+                list.map((item) => item.id === updated.id ? updated : item),
+              );
+              setSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+            }}
             onEditConference={() => {
               setChecks(activeAppointment.conference?.checks ?? {});
               setGeometry(activeAppointment.conference?.geometry ?? {});
@@ -7762,6 +7781,7 @@ function AttendanceSummary({
   roundStep,
   onBack,
   onEditConference,
+  onSaveGeometry,
 }: any) {
   const [summaryView, setSummaryView] = useState<"summary" | "geometry">("summary");
   const budget = appointment.budget ?? {
@@ -7846,6 +7866,7 @@ function AttendanceSummary({
       <GeometryTechnicalReport
         appointment={appointment}
         onBack={() => setSummaryView("summary")}
+        onSave={onSaveGeometry}
       />
     );
   }
@@ -8299,16 +8320,22 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     if (!report) { setReadMessage("Não foi possível localizar o laudo para impressão."); return; }
     setReadMessage("Abrindo a impressão do laudo...");
     document.body.classList.add("print-geometry-report");
-    const finishPrint = () => document.body.classList.remove("print-geometry-report");
+    const finishPrint = () => {
+      document.body.classList.remove("print-geometry-report");
+      window.removeEventListener("afterprint", finishPrint);
+    };
     window.addEventListener("afterprint", finishPrint, { once: true });
-    try {
-      window.print();
-      setReadMessage("Escolha imprimir ou salvar como PDF.");
-      window.setTimeout(finishPrint, 3000);
-    } catch {
-      finishPrint();
-      setReadMessage("Não foi possível abrir a impressão neste navegador.");
-    }
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      try {
+        window.focus();
+        window.print();
+        setReadMessage("Na janela aberta, escolha a impressora ou Salvar como PDF.");
+      } catch {
+        finishPrint();
+        setReadMessage("Não foi possível abrir a impressão neste navegador.");
+      }
+    }));
+    window.setTimeout(finishPrint, 15000);
   };
   const saveGeometry = () => {
     onSave?.({ schemaVersion: 2, values, technician, notes, sourceName, extraFields });
@@ -8342,7 +8369,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V16</span>
+        <span className="geometry-version">Laudo A4 V17</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry}>Salvar laudo</button>
@@ -8435,8 +8462,8 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                   {afterLeftOf(values[1]) && <line className="angle-measure" x1="197" y1="174" x2="163" y2="75" stroke={guideColor(1,afterLeftOf(values[1]))} transform={`rotate(${clampAngle(afterLeftOf(values[1]),-1.4)} 197 174)`}/>} 
                   {afterRightOf(values[1]) && <line className="angle-measure" x1="403" y1="174" x2="437" y2="75" stroke={guideColor(1,afterRightOf(values[1]))} transform={`rotate(${clampAngle(afterRightOf(values[1]),1.4)} 403 174)`}/>} 
                   {afterLeftOf(values[0]) && <text className="guide-label" x="42" y="92" fill={guideColor(0,afterLeftOf(values[0]))}>CAMBER E.</text>}
-                  {afterLeftOf(values[1]) && <text className="guide-label" x="128" y="72" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
-                  {afterRightOf(values[1]) && <text className="guide-label" x="472" y="72" textAnchor="end" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
+                  {afterLeftOf(values[1]) && <text className="guide-label caster-label" x="163" y="61" textAnchor="middle" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
+                  {afterRightOf(values[1]) && <text className="guide-label caster-label" x="437" y="61" textAnchor="middle" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
                   {afterRightOf(values[0]) && <text className="guide-label" x="558" y="92" textAnchor="end" fill={guideColor(0,afterRightOf(values[0]))}>CAMBER D.</text>}
                   {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="226" x2="137" y2="226" stroke={guideColor(2,afterLeftOf(values[2]))} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
                   {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="226" x2="463" y2="226" stroke={guideColor(2,afterRightOf(values[2]))} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
@@ -8460,11 +8487,11 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                 <img src="/eixo-traseiro-laudo.png" alt="Conjunto técnico do eixo traseiro"/>
                 <svg viewBox="0 0 600 230" preserveAspectRatio="none" aria-hidden="true">
                   <defs><marker id="a4rg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4rr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
-                  <g className="angle-reference"><line x1="155" y1="204" x2="155" y2="66"/><line x1="445" y1="204" x2="445" y2="66"/></g>
-                  {afterLeftOf(values[7]) && <line className="angle-measure" x1="155" y1="204" x2="155" y2="66" stroke={guideColor(7,afterLeftOf(values[7]))} transform={`rotate(${clampAngle(afterLeftOf(values[7]),-4)} 155 204)`}/>} 
-                  {afterRightOf(values[7]) && <line className="angle-measure" x1="445" y1="204" x2="445" y2="66" stroke={guideColor(7,afterRightOf(values[7]))} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 445 204)`}/>} 
-                  {afterLeftOf(values[7]) && <text className="guide-label" x="112" y="78" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
-                  {afterRightOf(values[7]) && <text className="guide-label" x="488" y="78" textAnchor="end" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
+                  <g className="angle-reference"><line x1="88" y1="204" x2="88" y2="66"/><line x1="512" y1="204" x2="512" y2="66"/></g>
+                  {afterLeftOf(values[7]) && <line className="angle-measure" x1="88" y1="204" x2="88" y2="66" stroke={guideColor(7,afterLeftOf(values[7]))} transform={`rotate(${clampAngle(afterLeftOf(values[7]),-4)} 88 204)`}/>} 
+                  {afterRightOf(values[7]) && <line className="angle-measure" x1="512" y1="204" x2="512" y2="66" stroke={guideColor(7,afterRightOf(values[7]))} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 512 204)`}/>} 
+                  {afterLeftOf(values[7]) && <text className="guide-label" x="42" y="78" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
+                  {afterRightOf(values[7]) && <text className="guide-label" x="558" y="78" textAnchor="end" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
                   {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="211" x2="175" y2="211" stroke={guideColor(8,afterLeftOf(values[8]))} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
                   {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="211" x2="425" y2="211" stroke={guideColor(8,afterRightOf(values[8]))} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
                 </svg>
@@ -8617,6 +8644,11 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;height:17mm!important;grid-template-columns:52mm 1fr!important;padding:0!important}.a4-brand{padding:2.5mm 7mm!important}.a4-brand img{width:100%!important;height:10.5mm!important;object-fit:contain!important}.a4-title{padding-left:6mm!important;background:#fff!important;border-left:.3mm solid #d8e0e8!important}.a4-title b{color:#111!important;font-size:15pt!important}.a4-title span{color:#e31b23!important;font-size:8pt!important}
         .a4-customer-data{height:24mm!important}.a4-axis-section{height:82mm!important}.a4-axis-section.rear{height:70mm!important}.a4-extra-data{height:30mm!important;grid-template-columns:1fr 1fr!important}.a4-report-footer{height:39mm!important}.a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}.a4-toe-values .ok{color:#07883e!important}.a4-toe-values .bad{color:#cf121b!important}.a4-toe-values .pending{color:#4d5968!important}.a4-measure-row>b{line-height:1.2!important}.a4-measure-head>*{line-height:1.15!important}
         .a4-axis-grid{grid-template-columns:46% 54%!important}.a4-measure-table{grid-template-rows:10mm repeat(7,1fr)!important}.a4-measure-table.rear-table{grid-template-rows:10mm repeat(5,1fr)!important}.a4-measure-head{display:grid!important;grid-template-columns:1.3fr 1.12fr 1fr 1.12fr!important;background:#fff!important;color:#111!important;border-bottom:.45mm solid #e31b23!important}.a4-measure-head>b,.a4-measure-head>span{min-width:0;border-right:.25mm solid #cfd7e1!important}.a4-measure-head>b{display:flex;align-items:center;justify-content:center;padding:.7mm;font-size:5.3pt!important;text-align:center}.a4-measure-head>span{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;align-items:center;text-align:center}.a4-measure-head>span strong{grid-column:1/-1;padding:.45mm .2mm;border-bottom:.25mm solid #cfd7e1;font-size:4.8pt;line-height:1}.a4-measure-head>span i{font-size:4.7pt;font-style:normal}.a4-measure-row{grid-template-columns:1.3fr .56fr .56fr 1fr .56fr .56fr!important}.a4-measure-row.single>input:nth-of-type(1){grid-column:2/4}.a4-measure-row.single>span{grid-column:4}.a4-measure-row.single>input:nth-of-type(2){grid-column:5/7}.a4-measure-row>b{font-size:5.45pt!important;padding:.7mm 1mm!important}.a4-measure-row>input{font-size:6.2pt!important;padding:.25mm!important}.a4-measure-row>span{gap:.2mm!important;padding:.2mm!important;font-size:4.7pt!important}.a4-measure-row>span input{width:43%!important;font-size:5pt!important}.a4-axis-section h2,.a4-extra-card h3{background:#fff!important;color:#111!important;border-top:0!important;border-bottom:.45mm solid #e31b23!important}.a4-axis-section h2{border-left:2.4mm solid #e31b23!important}.a4-extra-card h3{border-left:1.5mm solid #e31b23!important}.a4-address{background:#fff!important;color:#111!important;border-top:.55mm solid #e31b23!important}.a4-unit-note{display:flex;align-items:center;height:8mm;margin:0;padding:0 2mm;border:.3mm solid #cfd7e1;border-bottom:0;background:#fff;color:#4b5563;font-size:6.1pt}.a4-unit-note b{margin-right:1.2mm;color:#111}.a4-extra-card label{height:5.5mm!important}.a4-extra-card.steering label{height:11mm!important}.steering-status{margin:2mm 3mm!important;padding:2mm 1mm!important}
+        /* V17: mantém todos os títulos legíveis e as guias junto às rodas. */
+        .a4-customer-data small{display:block!important;min-height:2.6mm!important;line-height:1.25!important;overflow:visible!important}.a4-customer-data b,.a4-customer-data input{margin-top:.45mm!important;line-height:1.2!important}.a4-customer-data input{height:4.3mm!important}.a4-customer-data>label{justify-content:flex-start!important;padding-top:1.35mm!important;overflow:visible!important}
+        .a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif!important;font-size:9.5px!important;font-weight:800!important;letter-spacing:.15px!important;paint-order:stroke!important;stroke:#fff!important;stroke-width:2.2px!important;stroke-linejoin:round!important}.a4-mechanical-image .guide-label.caster-label{font-size:9px!important;stroke-width:2px!important}
+        .a4-measure-table{grid-template-rows:12mm repeat(7,1fr)!important}.a4-measure-table.rear-table{grid-template-rows:12mm repeat(5,1fr)!important}.a4-measure-head{overflow:visible!important}.a4-measure-head>*{line-height:1.25!important;overflow:visible!important}.a4-measure-head>b{padding:1mm .7mm!important;line-height:1.25!important;white-space:normal!important}.a4-measure-head>span{grid-template-rows:minmax(5.8mm,auto) 1fr!important;align-items:stretch!important;overflow:visible!important}.a4-measure-head>span strong{display:flex!important;align-items:center!important;justify-content:center!important;min-height:5.8mm!important;padding:.8mm .3mm!important;line-height:1.25!important;white-space:normal!important;overflow:visible!important}.a4-measure-head>span i{display:flex!important;align-items:center!important;justify-content:center!important;padding:.45mm!important;line-height:1.2!important}
+        .a4-axis-section h2,.a4-extra-card h3{display:flex!important;align-items:center!important;line-height:1.2!important;overflow:visible!important}.a4-extra-card h3{height:7mm!important;margin:0!important;padding:1mm 2.2mm!important;font-size:7.4pt!important;white-space:nowrap!important}
         .import-measure-row{grid-template-columns:1.45fr .7fr .7fr 1.15fr .7fr .7fr!important}.import-measure-row.single>input:nth-of-type(1){grid-column:2/4}.import-measure-row.single>span{grid-column:4}.import-measure-row.single>input:nth-of-type(2){grid-column:5/7}.import-measure-row.heading{background:#fff!important;color:#111!important;border-bottom:3px solid #e31b23}.import-measure-row.heading>*{display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px}
         @media print{html,body{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-report-page{position:static!important;inset:auto!important;margin:0!important;padding:0!important;transform:none!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:fixed!important;left:0!important;top:0!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;padding:0!important}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
