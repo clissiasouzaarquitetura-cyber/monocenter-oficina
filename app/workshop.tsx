@@ -8137,10 +8137,30 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       ? (currentKm + 10000).toLocaleString("pt-BR")
       : "";
   })();
-  const withRecommendedReviewKm = (saved: any) => ({
-    ...(saved || {}),
-    nextReviewKm: saved?.nextReviewKm || recommendedReviewKm,
-  });
+  const sixMonthsAfter = (raw: any) => {
+    const value = String(raw ?? "").trim();
+    const br = value.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const iso = value.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const day = Number(br?.[1] ?? iso?.[3]);
+    const month = Number(br?.[2] ?? iso?.[2]);
+    const year = Number(br?.[3] ?? iso?.[1]);
+    if (!day || !month || !year) return "";
+    const targetMonth = month - 1 + 6;
+    const targetYear = year + Math.floor(targetMonth / 12);
+    const normalizedMonth = targetMonth % 12;
+    const lastDay = new Date(targetYear, normalizedMonth + 1, 0).getDate();
+    return new Date(targetYear, normalizedMonth, Math.min(day, lastDay)).toLocaleDateString("pt-BR");
+  };
+  const withRecommendedReview = (saved: any) => {
+    const current = saved || {};
+    const reviewDate = current.nextReviewDate || sixMonthsAfter(current.reportDate || appointment.date);
+    return {
+      ...current,
+      nextReviewKm: current.nextReviewKm || recommendedReviewKm,
+      nextReviewDate: reviewDate,
+      nextReviewDateAuto: current.nextReviewDateAuto ?? !current.nextReviewDate,
+    };
+  };
   const normalizeGeometryValues = (stored: any) => {
     if (!stored || typeof stored !== "object") return {};
     const rows = Object.values(stored) as any[];
@@ -8163,7 +8183,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   };
   const [sourcePdf, setSourcePdf] = useState("");
   const [sourceName, setSourceName] = useState(appointment.geometryReport?.sourceName || "");
-  const [technician, setTechnician] = useState(appointment.geometryReport?.technician || appointment.tech || "");
+  const [technician, setTechnician] = useState(appointment.geometryReport?.technician || "");
   const [notes, setNotes] = useState(appointment.geometryReport?.notes || "Realizado alinhamento conforme especificação do fabricante.");
   const [readingPdf, setReadingPdf] = useState(false);
   const [savingGeometry, setSavingGeometry] = useState(false);
@@ -8180,9 +8200,9 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     try { return normalizeGeometryValues(JSON.parse(localStorage.getItem(storageKey) || "{}")); } catch { return {}; }
   });
   const [extraFields, setExtraFields] = useState<any>(() => {
-    if (appointment.geometryReport?.extraFields) return withRecommendedReviewKm(appointment.geometryReport.extraFields);
-    if (typeof window === "undefined") return withRecommendedReviewKm({});
-    try { return withRecommendedReviewKm(JSON.parse(localStorage.getItem(extraStorageKey) || "{}")); } catch { return withRecommendedReviewKm({}); }
+    if (appointment.geometryReport?.extraFields) return withRecommendedReview(appointment.geometryReport.extraFields);
+    if (typeof window === "undefined") return withRecommendedReview({});
+    try { return withRecommendedReview(JSON.parse(localStorage.getItem(extraStorageKey) || "{}")); } catch { return withRecommendedReview({}); }
   });
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(values));
@@ -8227,7 +8247,19 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   const updateValue = (index: number, field: string, value: string) =>
     setValues((current: any) => ({ ...current, [index]: { ...(current[index] || {}), [field]: value } }));
   const updateExtra = (field: string, value: string) =>
-    setExtraFields((current: any) => ({ ...current, [field]: value }));
+    setExtraFields((current: any) => {
+      const recalculatedDate = field === "reportDate" ? sixMonthsAfter(value) : "";
+      return {
+        ...current,
+        [field]: value,
+        ...(field === "nextReviewDate" ? { nextReviewDateAuto: false } : {}),
+        ...(
+          recalculatedDate && current.nextReviewDateAuto !== false
+            ? { nextReviewDate: recalculatedDate, nextReviewDateAuto: true }
+            : {}
+        ),
+      };
+    });
   const formatAngle = (raw: string) => {
     const cleaned = raw.replace(/\s/g, "").replace(",", ".");
     const match = cleaned.match(/([+-]?\d+)[°º](?:(\d+)[\'’′\"”″])?/);
@@ -8299,7 +8331,38 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   const readGeometryMetadata = (text: string) => {
     const normalized = text.replace(/\u00a0/g, " ");
     const rimMatch = normalized.match(/(?:tamanho\s+do\s+aro|\baro\b)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d)?)/i);
-    return rimMatch ? { rim: rimMatch[1].replace(",", ".") } : {};
+    const dateMatch = normalized.match(/\bData\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    const timeMatch = normalized.match(/\bHora\s+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+    const commentsBlock = normalized.match(/coment[áa]rios?\s*:\s*([\s\S]*?)(?=\n\s*oficina\s*:|\n\s*-{3,}|$)/i)?.[1] || "";
+    const comments = commentsBlock
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !/^(oficina|telefone)\s*:/i.test(line))
+      .join("\n")
+      .trim();
+    return {
+      ...(rimMatch ? { rim: rimMatch[1].replace(",", ".") } : {}),
+      ...(dateMatch ? { reportDate: dateMatch[1] } : {}),
+      ...(timeMatch ? { reportTime: timeMatch[1] } : {}),
+      ...(comments ? { importedComments: comments } : {}),
+    };
+  };
+  const applyGeometryMetadata = (metadata: any) => {
+    if (!metadata || !Object.keys(metadata).length) return;
+    const { importedComments, ...reportMetadata } = metadata;
+    if (importedComments) setNotes(importedComments);
+    setExtraFields((current: any) => {
+      const importedReviewDate = sixMonthsAfter(reportMetadata.reportDate);
+      return {
+        ...current,
+        ...reportMetadata,
+        ...(
+          importedReviewDate && (!current.nextReviewDate || current.nextReviewDateAuto !== false)
+            ? { nextReviewDate: importedReviewDate, nextReviewDateAuto: true }
+            : {}
+        ),
+      };
+    });
   };
   const scanPdf = async (file: File) => {
     setReadingPdf(true);
@@ -8330,7 +8393,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       const embeddedReading = readGeometryText(embeddedText);
       if (embeddedReading.recognized >= 4) {
         const metadata = readGeometryMetadata(embeddedText);
-        if (Object.keys(metadata).length) setExtraFields((current:any) => ({ ...current, ...metadata }));
+        applyGeometryMetadata(metadata);
         setPendingValues(embeddedReading.next);
         setReadMessage(`${embeddedReading.recognized} medidas reconhecidas diretamente do PDF. Confira a tela de confirmação antes de importar.`);
         return;
@@ -8349,7 +8412,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       await worker.terminate();
       const { next, recognized } = readGeometryText(result.data.text || "");
       const metadata = readGeometryMetadata(result.data.text || "");
-      if (Object.keys(metadata).length) setExtraFields((current:any) => ({ ...current, ...metadata }));
+      applyGeometryMetadata(metadata);
       setPendingValues(recognized ? next : null);
       setReadMessage(
         recognized
@@ -8406,11 +8469,16 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   };
   const saveGeometry = async () => {
     if (savingGeometry) return false;
+    if (!technician.trim()) {
+      setReadMessage("Preencha o nome do técnico alinhador antes de salvar o laudo.");
+      document.querySelector<HTMLInputElement>(".data-tech input")?.focus();
+      return false;
+    }
     setSavingGeometry(true);
     setReadMessage("Salvando o laudo no sistema compartilhado...");
     try {
       if (!onSave) throw new Error("Não foi possível acessar o salvamento compartilhado.");
-      await onSave({ schemaVersion: 3, values, technician, notes, sourceName, extraFields });
+      await onSave({ schemaVersion: 4, values, technician, notes, sourceName, extraFields });
       setReadMessage("Laudo salvo e confirmado no sistema. Ele já pode ser aberto em outro computador.");
       return true;
     } catch (error: any) {
@@ -8474,7 +8542,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V23</span>
+        <span className="geometry-version">Laudo A4 V24</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
@@ -8484,15 +8552,17 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       <details className="geometry-extra-editor" open>
         <summary>Editar dados complementares do laudo</summary>
         <div className="geometry-extra-grid">
-          <label>Técnico<input value={technician} onChange={(e)=>setTechnician(e.target.value)}/></label>
+          <label className="geometry-technician-required">Técnico alinhador (obrigatório)<input required value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Preencha quem realizou o alinhamento"/></label>
           <label>Aro<input value={extraFields.rim || ""} onChange={(e)=>updateExtra("rim",e.target.value)} placeholder="Ex.: 16"/></label>
+          <label>Data do laudo importado<input value={extraFields.reportDate || ""} onChange={(e)=>updateExtra("reportDate",e.target.value)} placeholder="dd/mm/aaaa"/></label>
+          <label>Horário do laudo importado<input value={extraFields.reportTime || ""} onChange={(e)=>updateExtra("reportTime",e.target.value)} placeholder="hh:mm:ss"/></label>
           <label>Pneu dianteiro esquerdo<input value={extraFields.tireFrontLeft || ""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/></label>
           <label>Pneu dianteiro direito<input value={extraFields.tireFrontRight || ""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/></label>
           <label>Pneu traseiro esquerdo<input value={extraFields.tireRearLeft || ""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/></label>
           <label>Pneu traseiro direito<input value={extraFields.tireRearRight || ""} onChange={(e)=>updateExtra("tireRearRight",e.target.value)}/></label>
           <label>Ângulo do volante<input value={extraFields.steeringAngle || ""} onChange={(e)=>updateExtra("steeringAngle",e.target.value)}/></label>
-          <label>Próxima revisão - data<input value={extraFields.nextReviewDate || ""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label>
-          <label>Próxima revisão - KM<input value={extraFields.nextReviewKm || ""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label>
+          <label>Próximo alinhamento - 6 meses<input value={extraFields.nextReviewDate || ""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label>
+          <label>Próximo alinhamento - 10.000 km<input value={extraFields.nextReviewKm || ""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label>
           <label className="wide">Observações técnicas<textarea value={notes} onChange={(e)=>setNotes(e.target.value)}/></label>
         </div>
         <p>As alterações aparecem automaticamente no laudo abaixo. Clique em <b>Salvar laudo</b> ao terminar.</p>
@@ -8559,8 +8629,8 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
           <div className="data-km"><small>KM</small><b>{appointment.km || "Não informado"}</b></div>
           <div className="data-rim"><small>ARO</small><b>{extraFields.rim || (appointment as any).rim || "Não informado"}</b></div>
           <div className="data-chassis"><small>CHASSI</small><b>{appointment.chassis || "Não informado"}</b></div>
-          <div className="data-date"><small>DATA / HORA</small><b>{new Date().toLocaleDateString("pt-BR")} · {new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b></div>
-          <label className="data-tech"><small>TÉCNICO</small><input value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Nome do técnico"/></label>
+          <div className="data-date"><small>DATA / HORA DO ALINHAMENTO</small><b>{extraFields.reportDate || new Date().toLocaleDateString("pt-BR")} · {extraFields.reportTime || new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b></div>
+          <label className="data-tech"><small>TÉCNICO ALINHADOR *</small><input required value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Preencher"/></label>
         </section>
 
         <section className="a4-axis-section front">
@@ -8633,7 +8703,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
         <p className="a4-unit-note"><b>UNIDADE DAS MEDIDAS:</b> sistema sexagesimal (60 graus): 1 grau (1°) corresponde a 60 minutos (60').</p>
         <section className="a4-report-footer">
           <label><b>OBSERVAÇÕES TÉCNICAS</b><textarea value={notes} onChange={(e)=>setNotes(e.target.value)}/></label>
-          <div><b>PRÓXIMA REVISÃO</b><label>Data<input value={extraFields.nextReviewDate||""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label><label>KM<input value={extraFields.nextReviewKm||""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label></div>
+          <div><b>PRÓXIMO ALINHAMENTO</b><small className="next-alignment-rule">6 meses ou 10.000 km<br/>o que ocorrer primeiro</small><label>Data<input value={extraFields.nextReviewDate||""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label><label>KM<input value={extraFields.nextReviewKm||""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label></div>
         </section>
         <footer className="a4-address">MONOCENTER ALINHAMENTO TÉCNICO · Av. Itavuvu, 5341 · Jd. Santa Cecília · Sorocaba/SP</footer>
       </article>
@@ -8778,7 +8848,9 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
         .import-measure-row{grid-template-columns:1.45fr .7fr .7fr 1.15fr .7fr .7fr!important}.import-measure-row.single>input:nth-of-type(1){grid-column:2/4}.import-measure-row.single>span{grid-column:4}.import-measure-row.single>input:nth-of-type(2){grid-column:5/7}.import-measure-row.heading{background:#fff!important;color:#111!important;border-bottom:3px solid #e31b23}.import-measure-row.heading>*{display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px}
         /* V22: visualização ampliada na tela e tipografia mais legível nos eixos. */
         .a4-axis-section h2{font-size:10.8pt!important}.a4-angle-strip small{font-size:6.1pt!important}.a4-angle-strip b{font-size:8.7pt!important}.a4-toe-values span{font-size:6.1pt!important}.a4-toe-values b{font-size:8pt!important}.a4-measure-head>b{font-size:5.9pt!important}.a4-measure-head>span strong{font-size:5.35pt!important}.a4-measure-head>span i{font-size:5.2pt!important}.a4-measure-row>b{font-size:5.8pt!important}.a4-measure-row>input{font-size:6.75pt!important}.a4-measure-row>span{font-size:5.15pt!important}.a4-measure-row>span input{font-size:5.45pt!important}
+        .next-alignment-rule{grid-column:1/-1;color:#475467;font-size:5.7pt;font-weight:800;line-height:1.2;text-align:center}.a4-report-footer>div{grid-template-rows:auto auto 1fr!important}.a4-report-footer>div label{align-self:end}@media screen{.geometry-technician-required input,.data-tech input{border:2px solid #e31b23!important;background:#fff3a8!important;box-shadow:0 0 0 2px #fff inset}.geometry-technician-required{color:#b42318!important}.data-tech small{color:#b42318!important}}
         @media screen and (min-width:1300px){.geometry-a4-sheet{zoom:1.3}}
+        @media screen and (min-width:1600px){.geometry-a4-sheet{zoom:1.42}}
         @media print{.geometry-a4-sheet{zoom:1!important}}
         @media print{html,body{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-report-page{position:static!important;inset:auto!important;margin:0!important;padding:0!important;transform:none!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:fixed!important;left:0!important;top:0!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;padding:0!important}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
