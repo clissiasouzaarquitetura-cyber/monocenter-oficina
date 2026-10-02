@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { CarFront } from "lucide-react";
 const ITEMS = [
   "Amortecedor Dianteiro Direito",
   "Amortecedor Dianteiro Esquerdo",
@@ -106,10 +107,78 @@ const FRONT = [
     "Torque de bieletas",
     "Torque conforme padrão técnico",
   ];
+
+const VEHICLE_CATALOG = [
+  ["Gol", "Volkswagen", "Hatch"],
+  ["Polo", "Volkswagen", "Hatch"],
+  ["Virtus", "Volkswagen", "Sedã"],
+  ["Voyage", "Volkswagen", "Sedã"],
+  ["T-Cross", "Volkswagen", "SUV"],
+  ["Nivus", "Volkswagen", "SUV"],
+  ["Saveiro", "Volkswagen", "Picape"],
+  ["Onix", "Chevrolet", "Hatch"],
+  ["Onix Plus", "Chevrolet", "Sedã"],
+  ["Celta", "Chevrolet", "Hatch"],
+  ["Corsa", "Chevrolet", "Hatch"],
+  ["Prisma", "Chevrolet", "Sedã"],
+  ["Tracker", "Chevrolet", "SUV"],
+  ["S10", "Chevrolet", "Picape"],
+  ["Uno", "Fiat", "Hatch"],
+  ["Mobi", "Fiat", "Hatch"],
+  ["Argo", "Fiat", "Hatch"],
+  ["Cronos", "Fiat", "Sedã"],
+  ["Pulse", "Fiat", "SUV"],
+  ["Strada", "Fiat", "Picape"],
+  ["Palio", "Fiat", "Hatch"],
+  ["HB20", "Hyundai", "Hatch"],
+  ["HB20S", "Hyundai", "Sedã"],
+  ["Creta", "Hyundai", "SUV"],
+  ["Ka", "Ford", "Hatch"],
+  ["Fiesta", "Ford", "Hatch"],
+  ["EcoSport", "Ford", "SUV"],
+  ["Ranger", "Ford", "Picape"],
+  ["Corolla", "Toyota", "Sedã"],
+  ["Yaris", "Toyota", "Hatch"],
+  ["Hilux", "Toyota", "Picape"],
+  ["Compass", "Jeep", "SUV"],
+  ["Renegade", "Jeep", "SUV"],
+  ["Kwid", "Renault", "Hatch"],
+  ["Sandero", "Renault", "Hatch"],
+  ["Duster", "Renault", "SUV"],
+  ["Civic", "Honda", "Sedã"],
+  ["City", "Honda", "Sedã"],
+  ["Fit", "Honda", "Hatch"],
+] as const;
+const VEHICLE_COLORS: Record<string, string> = {
+  branco: "#ffffff",
+  branca: "#ffffff",
+  preto: "#222831",
+  preta: "#222831",
+  prata: "#aeb7c2",
+  cinza: "#717b87",
+  vermelho: "#d71920",
+  vermelha: "#d71920",
+  azul: "#2877c7",
+  verde: "#3a9363",
+  amarelo: "#eab72f",
+  amarela: "#eab72f",
+  bege: "#c7b693",
+  marrom: "#795548",
+};
+const findVehicle = (value: string) => {
+  const normalized = value.trim().toLocaleLowerCase("pt-BR");
+  return VEHICLE_CATALOG.find(
+    ([model]) =>
+      normalized === model.toLocaleLowerCase("pt-BR") ||
+      normalized.startsWith(model.toLocaleLowerCase("pt-BR") + " "),
+  );
+};
+const vehicleColorHex = (value?: string) =>
+  VEHICLE_COLORS[(value || "").trim().toLocaleLowerCase("pt-BR")] ?? "#d8dde4";
 const SERVICES = [
-  ["Alinhamento de direção - Passeio", 100],
-  ["Alinhamento de direção - SUV", 120],
-  ["Alinhamento de direção - Caminhonete/Van", 150],
+  ["Alinhamento de direção 3D - Passeio", 100],
+  ["Alinhamento de direção 3D - SUV", 120],
+  ["Alinhamento de direção 3D - Caminhonete/Van", 150],
   ["Balanceamento - roda aro 13, 14 ou 15", 20],
   ["Balanceamento - roda aro 16, 17 ou 18", 25],
   ["Balanceamento - roda de caminhonete", 50],
@@ -128,9 +197,9 @@ const SERVICE_GROUPS = [
   { title: "1. Montagem de pneus", indexes: [6, 7, 8] },
   { title: "2. Balanceamento", indexes: [3, 4, 5] },
   { title: "3. Rodízio", indexes: [9] },
-  { title: "4. Alinhamento de direção", indexes: [0, 1, 2] },
+  { title: "4. Alinhamento de direção 3D", indexes: [0, 1, 2] },
   {
-    title: "5. Mãos de obra e alinhamentos técnicos",
+    title: "5. Gabaritagem",
     indexes: [10, 11, 12, 13, 14, 15],
   },
 ];
@@ -138,6 +207,19 @@ const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
 const servicePrice = (index: number, prices?: Record<number, number>) =>
   prices?.[index] ?? SERVICES[index]?.[1] ?? 0;
+const isGabaritagemManualService = (service: any) =>
+  service?.category === "gabaritagem" ||
+  /gabarit|alinhamento técnico|longarina|eixo traseiro|solda/i.test(
+    String(service?.name ?? ""),
+  );
+const encodeBudgetTransfer = (value: unknown) => {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return `MCOS1.${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")}`;
+};
 const normalizeSearch = (value: string) =>
   value
     .normalize("NFD")
@@ -153,6 +235,7 @@ const REVIEW_ITEMS = [
   "Geometria / alinhamento",
   "Teste de rodagem",
 ];
+const REVIEW_TECHNICIANS = ["Saulo", "Tiago", "Divair", "Vitor"] as const;
 type ReviewState = {
   previousId?: number;
   reference: string;
@@ -171,14 +254,31 @@ type EvaluationState = {
   custom: string[];
   notes?: Record<number, string>;
 };
+type GeometryEntry = {
+  frontLeft: string;
+  frontRight: string;
+  rearLeft: string;
+  rearRight: string;
+  condition: string;
+};
+type GeometryState = Record<string, GeometryEntry>;
+type InternalBudgetReview = {
+  signature: string;
+  totalQuantity: number;
+  checkedItems: string[];
+  confirmedAt: string;
+  confirmedBy: string;
+};
 type BudgetState = {
   parts: any[];
   selectedServices: number[];
   serviceQty: Record<number, number>;
   servicePrices?: Record<number, number>;
   manualServices: any[];
+  proposalPaymentOptions?: { pix: boolean; card: boolean };
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
+  internalReview?: InternalBudgetReview;
 };
 type PurchaseCheck = {
   ordered: boolean;
@@ -188,12 +288,19 @@ type PurchaseCheck = {
   receivedBy?: string;
   updatedAt?: string;
 };
+type PurchaseOrderState = {
+  closed: boolean;
+  closedAt?: string;
+  closedBy?: string;
+};
 type View =
   | "agenda"
+  | "veiculos"
   | "atendimento"
   | "avaliacao"
   | "orcamento"
   | "proposta"
+  | "geometria"
   | "torque"
   | "revisao"
   | "compras"
@@ -205,13 +312,25 @@ type Appt = {
   workOrder?: string;
   date: string;
   time: string;
+  absenceEndTime?: string;
   client: string;
   phone: string;
   vehicle: string;
+  vehicleBrand?: string;
+  vehicleColor?: string;
+  vehicleBody?: string;
   plate: string;
   km: string;
   note: string;
+  internalNote?: string;
   type: "cliente" | "retorno" | "garantia" | "revisao" | "bloqueio";
+  appointmentServiceType?:
+    | "gabaritagem"
+    | "pecas"
+    | "alinhamento_3d"
+    | "alinhamento_balanceamento"
+    | "servicos";
+  partsEvaluationSkipped?: boolean;
   reviewWithService?: boolean;
   status: "agendado" | "avaliou" | "servico" | "faltou";
   tech?: string;
@@ -220,6 +339,7 @@ type Appt = {
   budget?: BudgetState;
   conference?: {
     checks: Record<string, boolean>;
+    geometry?: GeometryState;
     finalizedAt?: string;
     finalizedBy?: string;
     finalization?: {
@@ -234,6 +354,13 @@ type Appt = {
   };
   quoteSentAt?: string;
   quoteSentBy?: string;
+  quoteFollowUpDays?: number;
+  quoteFollowUpDueDate?: string;
+  quoteFollowUpDecision?: "message" | "declined";
+  quoteFollowUpUpdatedBy?: string;
+  quoteFollowUpUpdatedAt?: string;
+  quoteFollowUpPreparedBy?: string;
+  quoteFollowUpPreparedAt?: string;
   serviceScheduled?: boolean;
   serviceScheduledFor?: string;
   serviceScheduledTime?: string;
@@ -249,6 +376,18 @@ type Appt = {
   lastEditedAt?: string;
   startedAt?: string;
   inProgress?: boolean;
+  statusBeforeNoShow?: Appt["status"];
+  inProgressBeforeNoShow?: boolean;
+  geometryReport?: {
+    values: Record<string, any>;
+    technician: string;
+    notes: string;
+    sourceName?: string;
+    savedAt: string;
+    savedBy?: string;
+  };
+  noShowMarkedBy?: string;
+  noShowMarkedAt?: string;
   _updatedAt?: number;
 };
 const iso = (d: Date) =>
@@ -264,6 +403,8 @@ const iso = (d: Date) =>
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }),
+  quantityValue = (n: number) =>
+    Number.isInteger(Number(n)) ? String(Number(n)) : decimalValue(Number(n)),
   parseDecimalValue = (value: string) => {
     const normalized = value.includes(",")
       ? value.replace(/\./g, "").replace(",", ".")
@@ -353,6 +494,9 @@ const renderMessageTemplate = (template: string, appointment: Appt) =>
     .trim();
 const conferenceStarted = (a: Appt) =>
   Object.values(a.conference?.checks ?? {}).some(Boolean) ||
+  Object.values(a.conference?.geometry ?? {}).some((entry) =>
+    Object.values(entry).some((value) => value.trim()),
+  ) ||
   !!a.conference?.finalization?.serviceCompleted ||
   !!a.conference?.finalization?.vehicleReleased ||
   !!a.conference?.finalization?.clientOriented ||
@@ -364,10 +508,52 @@ const completedAttendanceLabel = (a: Appt) => {
     return "Atendimento finalizado (Serviço executado)";
   return "Atendimento finalizado (Avaliação)";
 };
+const inProgressLabel = (a: Appt) => {
+  if (!a.evaluation && a.status === "agendado") return "Aguardando avaliação";
+  if (a.type === "revisao") return "Revisão em andamento";
+  if (a.status === "avaliou") return "Aguardando orçamento";
+  if (conferenceStarted(a)) return "Em conferência";
+  return "Serviço em andamento";
+};
+
+function VehiclePicture({ appointment }: { appointment: Appt }) {
+  const catalog = findVehicle(appointment.vehicle || "");
+  const brand = appointment.vehicleBrand || catalog?.[1] || "Marca não informada";
+  const body = appointment.vehicleBody || catalog?.[2] || "Automóvel";
+  const color = appointment.vehicleColor || "Cor não informada";
+  return (
+    <div className="vehicle-picture" aria-label={`${appointment.vehicle || "Veículo"}, ${color}`}>
+      <CarFront
+        aria-hidden="true"
+        size={68}
+        strokeWidth={1.8}
+        fill={vehicleColorHex(appointment.vehicleColor)}
+      />
+      <small>{body}</small>
+      <b>{brand}</b>
+      <span>{color}</span>
+    </div>
+  );
+}
+const isEmployeeAbsence = (a: Appt) =>
+  a.type === "bloqueio" || normalizeSearch(a.client).includes("ausente");
+const employeeAbsenceName = (a: Appt) => {
+  const name = a.client.split(/\s+ausente\b/i)[0]?.trim();
+  return name || a.client;
+};
+const employeeAbsenceReason = (a: Appt) => {
+  if (a.note?.trim()) return a.note.trim();
+  const legacyReason = a.client.match(/\bausente\b\s*(.*)$/i)?.[1]?.trim();
+  return legacyReason || "";
+};
+const employeeAbsencePeriod = (a: Appt) =>
+  a.absenceEndTime ? `${a.time}–${a.absenceEndTime}` : `${a.time} em diante`;
 const apptClass = (a: Appt) =>
-  a.type === "bloqueio"
+  isEmployeeAbsence(a)
     ? "block"
-    : (a.serviceScheduled && a.status === "agendado") ||
+    : a.status === "faltou"
+      ? "faltou"
+      : (a.serviceScheduled && a.status === "agendado") ||
         !!a.serviceAppointmentId
       ? "scheduled-service"
       : a.type === "retorno"
@@ -382,9 +568,10 @@ const apptClass = (a: Appt) =>
                 ? "inprogress"
                 : a.status;
 const agendaStatusLabel = (a: Appt) => {
-  if (a.type === "bloqueio") return "AUSENTE";
+  if (isEmployeeAbsence(a)) return "AUSENTE";
   if (a.budget?.processStatus === "Finalizado")
     return completedAttendanceLabel(a).toLocaleUpperCase("pt-BR");
+  if (a.status === "faltou") return "FALTOU";
   if (a.type === "retorno") return "RETORNO";
   if (a.type === "garantia") return "GARANTIA";
   if (a.type === "revisao" && !a.review)
@@ -416,6 +603,7 @@ const EMPTY_APPT: Appt = {
   plate: "",
   km: "",
   note: "",
+  internalNote: "",
   type: "cliente",
   status: "agendado",
 };
@@ -435,6 +623,7 @@ export default function App({ initialState, user, onLogout }: any) {
     ),
     [modal, setModal] = useState<Appt | boolean>(false),
     [evaluationEntry, setEvaluationEntry] = useState<Appt | null>(null),
+    [attendancePreview, setAttendancePreview] = useState<Appt | null>(null),
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
@@ -455,6 +644,7 @@ export default function App({ initialState, user, onLogout }: any) {
     [checks, setChecks] = useState<Record<string, boolean>>(
       shared.checks ?? {},
     ),
+    [geometry, setGeometry] = useState<GeometryState>({}),
     [finalization, setFinalization] = useState({
       serviceCompleted: false,
       vehicleReleased: false,
@@ -502,7 +692,6 @@ export default function App({ initialState, user, onLogout }: any) {
   }, [custom, evaluationSearch]);
   const [evaluator, setEvaluator] = useState(shared.evaluator ?? "Saulo"),
     [started, setStarted] = useState(shared.started ?? ""),
-    [geometryOpen, setGeometryOpen] = useState(false),
     [checkOpen, setCheckOpen] = useState(false),
     [partsOpen, setPartsOpen] = useState(false),
     [servicesOpen, setServicesOpen] = useState(false),
@@ -540,13 +729,25 @@ export default function App({ initialState, user, onLogout }: any) {
       shared.servicePrices ?? {},
     ),
     [manualServices, setManualServices] = useState(shared.manualServices ?? []),
+    [proposalPaymentOptions, setProposalPaymentOptions] = useState<{
+      pix: boolean;
+      card: boolean;
+    }>(shared.proposalPaymentOptions ?? { pix: true, card: true }),
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
       shared.processStatus ?? "Em andamento",
     ),
     [purchaseChecks, setPurchaseChecks] = useState<
       Record<string, PurchaseCheck>
-    >(shared.purchaseChecks ?? {});
+    >(shared.purchaseChecks ?? {}),
+    [purchaseOrderStates, setPurchaseOrderStates] = useState<
+      Record<string, PurchaseOrderState>
+    >(shared.purchaseOrderStates ?? {}),
+    [budgetReviewOpen, setBudgetReviewOpen] = useState(false),
+    [budgetReviewChecks, setBudgetReviewChecks] = useState<
+      Record<number, boolean>
+    >({}),
+    [budgetReviewCopied, setBudgetReviewCopied] = useState(false);
   const firstSave = useRef(true),
     skipSave = useRef(false),
     syncBlockedUntil = useRef(0),
@@ -581,9 +782,11 @@ export default function App({ initialState, user, onLogout }: any) {
         serviceQty,
         servicePrices,
         manualServices,
+        proposalPaymentOptions,
         patioNotes,
         processStatus,
         purchaseChecks,
+        purchaseOrderStates,
       };
       fetch("/api/state", {
         method: "POST",
@@ -624,9 +827,11 @@ export default function App({ initialState, user, onLogout }: any) {
     serviceQty,
     servicePrices,
     manualServices,
+    proposalPaymentOptions,
     patioNotes,
     processStatus,
     purchaseChecks,
+    purchaseOrderStates,
   ]);
   useEffect(() => {
     let alive = true;
@@ -659,6 +864,11 @@ export default function App({ initialState, user, onLogout }: any) {
           apply(setHolidays, holidays, s.holidays);
           apply(setTemplates, templates, s.templates);
           apply(setPurchaseChecks, purchaseChecks, s.purchaseChecks);
+          apply(
+            setPurchaseOrderStates,
+            purchaseOrderStates,
+            s.purchaseOrderStates,
+          );
           if (s.footerSize !== undefined && s.footerSize !== footerSize) {
             changed = true;
             setFooterSize(s.footerSize);
@@ -684,6 +894,7 @@ export default function App({ initialState, user, onLogout }: any) {
     holidays,
     templates,
     purchaseChecks,
+    purchaseOrderStates,
     footerSize,
     roundStep,
     onLogout,
@@ -719,7 +930,73 @@ export default function App({ initialState, user, onLogout }: any) {
       ) + manualServices.reduce((s: number, x: any) => s + x.qty * x.value, 0),
     total = pieces + serviceTotal,
     totalCash = piecesCash + serviceTotal,
-    totalInstallment = piecesInstallment + serviceTotal;
+    totalInstallment = piecesInstallment + serviceTotal,
+    tireTotal = tireParts.reduce(
+      (sum: number, part: any) => sum + part.qty * saleOf(part, roundStep),
+      0,
+    ),
+    pixDiscountBase = Math.max(0, total - tireTotal),
+    pixTotal = pixDiscountBase * 0.95 + tireTotal;
+  const reviewParts = parts
+      .map((part: any, index: number) => ({ part, index }))
+      .filter(
+        ({ part }: any) =>
+          String(part.item ?? "").trim() && Number(part.qty) > 0,
+      ),
+    totalPartQuantity = reviewParts.reduce(
+      (sum: number, { part }: any) => sum + (Number(part.qty) || 0),
+      0,
+    ),
+    allReviewPartsChecked = reviewParts.every(
+      ({ index }: any) => !!budgetReviewChecks[index],
+    ),
+    reviewServices = [
+      ...selectedServices.map(
+        (index: number) =>
+          `☐ ${quantityValue(serviceQty[index] ?? 0)}x ${SERVICES[index]?.[0] ?? "Serviço"}`,
+      ),
+      ...manualServices
+        .filter((service: any) => service.name?.trim())
+        .map(
+          (service: any) =>
+            `☐ ${quantityValue(Number(service.qty) || 0)}x ${service.name}`,
+        ),
+    ],
+    budgetReviewSignature = JSON.stringify({
+      parts: reviewParts.map(({ part }: any) => [
+        part.item,
+        part.brand,
+        part.supplier,
+        part.code,
+        Number(part.qty) || 0,
+      ]),
+      services: reviewServices,
+    }),
+    internalReviewMessage = [
+      "*CONFERÊNCIA INTERNA DO ORÇAMENTO*",
+      `Cliente: ${activeAppointment?.client || "Não informado"}`,
+      `Veículo: ${activeAppointment?.vehicle || "Não informado"} · Placa: ${activeAppointment?.plate || "Não informada"}`,
+      "",
+      "*PEÇAS*",
+      ...(reviewParts.length
+        ? reviewParts.map(({ part }: any) => {
+            const details = [
+              part.brand && `Marca: ${part.brand}`,
+              part.supplier && `Fornecedor: ${part.supplier}`,
+              part.code && `Código: ${part.code}`,
+            ].filter(Boolean);
+            return `☐ ${quantityValue(Number(part.qty) || 0)}x ${part.item}${details.length ? ` — ${details.join(" · ")}` : ""}`;
+          })
+        : ["Nenhuma peça incluída."]),
+      `*Quantidade total: ${quantityValue(totalPartQuantity)} peça(s)*`,
+      "",
+      "*SERVIÇOS*",
+      ...(reviewServices.length
+        ? reviewServices
+        : ["Nenhum serviço incluído."]),
+      "",
+      "Conferir os itens antes de liberar o orçamento ao cliente.",
+    ].join("\n");
   const updateRequiredVehicleField = (
     field: "vehicle" | "plate" | "km",
     value: string,
@@ -740,8 +1017,136 @@ export default function App({ initialState, user, onLogout }: any) {
       ),
     );
   };
+  const updateGeometryField = (
+    item: string,
+    field: keyof GeometryEntry,
+    value: string,
+  ) =>
+    setGeometry((current) => {
+      const previous = current[item];
+      return {
+        ...current,
+        [item]: previous
+          ? { ...previous, [field]: value }
+          : {
+              frontLeft: "",
+              frontRight: "",
+              rearLeft: "",
+              rearRight: "",
+              condition: "",
+              [field]: value,
+            },
+      };
+    });
+  const reverseEvaluation = () => {
+    if (!activeAppointment) return;
+    const source = activeAppointment.sourceAppointmentId
+        ? appointments.find(
+            (appointment) =>
+              appointment.id === activeAppointment.sourceAppointmentId,
+          ) ?? activeAppointment
+        : activeAppointment,
+      linkedServiceId = source.serviceAppointmentId;
+    if (
+      !confirm(
+        `ATENÇÃO: deseja estornar a avaliação de ${source.client}?\n\nA avaliação, o orçamento e uma eventual agenda de serviço vinculada serão apagados. O cliente permanecerá na agenda para uma nova avaliação.`,
+      )
+    )
+      return;
+    syncBlockedUntil.current = Date.now() + 4000;
+    const now = new Date().toISOString(),
+      reset: Appt = {
+        ...source,
+        status: "agendado",
+        evaluation: undefined,
+        budget: undefined,
+        conference: undefined,
+        quoteSentAt: undefined,
+        quoteSentBy: undefined,
+        serviceScheduled: false,
+        serviceScheduledFor: undefined,
+        serviceScheduledTime: undefined,
+        sourceAppointmentId: undefined,
+        serviceAppointmentId: undefined,
+        startedAt: undefined,
+        inProgress: true,
+        evaluationRecordedBy: undefined,
+        evaluationRecordedAt: undefined,
+        budgetEditedBy: undefined,
+        budgetEditedAt: undefined,
+        lastEditedBy: user.displayName,
+        lastEditedAt: now,
+        _updatedAt: Date.now(),
+      };
+    DISPLAY_APPT = reset;
+    setActiveAppointment(reset);
+    if (linkedServiceId)
+      setDeletedAppointmentIds((ids) => [
+        ...new Set([...ids, linkedServiceId]),
+      ]);
+    setAppointments((list) =>
+      list
+        .filter(
+          (appointment) =>
+            !linkedServiceId || appointment.id !== linkedServiceId,
+        )
+        .map((appointment) =>
+          appointment.id === reset.id ? reset : appointment,
+        ),
+    );
+    setStatus({});
+    setQuoteItems({});
+    setCustom([]);
+    setEvaluationNotes({});
+    setParts([]);
+    setSelectedServices([]);
+    setServiceQty({});
+    setServicePrices({});
+    setManualServices([]);
+    setProposalPaymentOptions({ pix: true, card: true });
+    setPatioNotes("");
+    setChecks({});
+    setGeometry({});
+    setStarted("");
+    setProcessStatus("Em andamento");
+    setSavedAt("");
+    setCheckOpen(true);
+    setView("avaliacao");
+    scrollTo(0, 0);
+    alert("Avaliação estornada. O preenchimento foi reiniciado.");
+  };
+  const sanitizeBudgetParts = (savedParts: any[] = []) => {
+    const credentialValues = [user?.username, user?.displayName]
+        .filter(Boolean)
+        .map((value) => String(value).trim().toLocaleUpperCase("pt-BR")),
+      cleanText = (value: unknown) => {
+        const text = String(value ?? "").trim();
+        return credentialValues.includes(text.toLocaleUpperCase("pt-BR"))
+          ? ""
+          : text;
+      },
+      cleanNumber = (value: unknown) => {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
+      };
+    return savedParts.map((part) => ({
+      ...part,
+      brand: cleanText(part.brand),
+      supplier: cleanText(part.supplier),
+      code: cleanText(part.code),
+      cost: cleanNumber(part.cost),
+      margin: cleanNumber(part.margin),
+      saleOverride:
+        part.saleOverride === null || part.saleOverride === undefined
+          ? null
+          : Number.isFinite(Number(part.saleOverride))
+            ? Number(part.saleOverride)
+            : null,
+    }));
+  };
   const nav: [View, string, string][] = [
     ["agenda", "Agenda", "▦"],
+    ["veiculos", "Veículos na oficina", "▣"],
     ["avaliacao", "Avaliação", "✓"],
     ["orcamento", "Orçamento", "$"],
     ["proposta", "Proposta", "▤"],
@@ -759,8 +1164,25 @@ export default function App({ initialState, user, onLogout }: any) {
         setView("agenda");
         return;
       }
+      if (
+        v === "proposta" &&
+        view === "orcamento" &&
+        !budgetReviewOpen &&
+        activeAppointment?.budget?.internalReview?.signature !==
+          budgetReviewSignature
+      ) {
+        if (!reviewParts.length && !reviewServices.length) {
+          alert(
+            "Inclua ao menos uma peça ou serviço antes de gerar o orçamento.",
+          );
+          return;
+        }
+        setBudgetReviewChecks({});
+        setBudgetReviewCopied(false);
+        setBudgetReviewOpen(true);
+        return;
+      }
       if (v === "avaliacao") {
-        setGeometryOpen(false);
         setCheckOpen(false);
       }
       if (v === "orcamento") {
@@ -831,8 +1253,34 @@ export default function App({ initialState, user, onLogout }: any) {
         : "Nenhum serviço"
     }\n\n${
       tireParts.length
-        ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)`
-        : `TOTAL: ${brl(total)}\n\nPagamento:\n• Pix com 5% de desconto: ${brl(total * 0.95)}\n• Cartão: até 5x sem juros de ${brl(total / 5)}`
+        ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)${
+            proposalPaymentOptions.pix || proposalPaymentOptions.card
+              ? `\n\nPagamento:\n${[
+                  proposalPaymentOptions.pix
+                    ? `• Pix com 5% de desconto em peças e serviços (pneus sem desconto): ${brl(pixTotal)}`
+                    : "",
+                  proposalPaymentOptions.card
+                    ? `• Cartão: total parcelado ${brl(totalInstallment)} em até 5x sem juros de ${brl(totalInstallment / 5)}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join("\n")}`
+              : ""
+          }`
+        : `TOTAL: ${brl(total)}${
+            proposalPaymentOptions.pix || proposalPaymentOptions.card
+              ? `\n\nPagamento:\n${[
+                  proposalPaymentOptions.pix
+                    ? `• Pix com 5% de desconto: ${brl(pixTotal)}`
+                    : "",
+                  proposalPaymentOptions.card
+                    ? `• Cartão: até 5x sem juros de ${brl(total / 5)}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join("\n")}`
+              : ""
+          }`
     }`;
   return (
     <div className={darkMode ? "app dark" : "app"}>
@@ -936,6 +1384,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(a.evaluation?.custom ?? []);
               setEvaluationNotes(a.evaluation?.notes ?? {});
               setChecks(a.conference?.checks ?? {});
+              setGeometry(a.conference?.geometry ?? {});
               setFinalization(
                 a.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -947,7 +1396,6 @@ export default function App({ initialState, user, onLogout }: any) {
                   checker: "",
                 },
               );
-              setGeometryOpen(false);
               setCheckOpen(false);
               setPartsOpen(false);
               setServicesOpen(false);
@@ -959,11 +1407,14 @@ export default function App({ initialState, user, onLogout }: any) {
                 final: false,
               });
               if (a.budget) {
-                setParts(a.budget.parts ?? []);
+                setParts(sanitizeBudgetParts(a.budget.parts));
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  a.budget.proposalPaymentOptions ?? { pix: true, card: true },
+                );
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else if (
@@ -975,6 +1426,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
@@ -992,6 +1444,45 @@ export default function App({ initialState, user, onLogout }: any) {
               scrollTo(0, 0);
             }}
             edit={(a: Appt) => setModal(a)}
+            preview={(a: Appt) => setAttendancePreview(a)}
+            markNoShow={(a: Appt) => {
+              const markAsNoShow = a.status !== "faltou";
+              if (
+                markAsNoShow &&
+                !confirm(`Confirmar que ${a.client} faltou ao agendamento?`)
+              )
+                return;
+              const now = new Date().toISOString();
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((item) =>
+                  item.id === a.id
+                    ? {
+                        ...item,
+                        status: markAsNoShow
+                          ? "faltou"
+                          : item.statusBeforeNoShow ?? "agendado",
+                        inProgress: markAsNoShow
+                          ? false
+                          : item.inProgressBeforeNoShow ?? false,
+                        statusBeforeNoShow: markAsNoShow
+                          ? item.status
+                          : undefined,
+                        inProgressBeforeNoShow: markAsNoShow
+                          ? item.inProgress
+                          : undefined,
+                        noShowMarkedBy: markAsNoShow
+                          ? user.displayName
+                          : undefined,
+                        noShowMarkedAt: markAsNoShow ? now : undefined,
+                        lastEditedBy: user.displayName,
+                        lastEditedAt: now,
+                        _updatedAt: Date.now(),
+                      }
+                    : item,
+                ),
+              );
+            }}
             remove={(a: Appt) => {
               if (
                 confirm(
@@ -1037,8 +1528,15 @@ export default function App({ initialState, user, onLogout }: any) {
                       activeAppointment.budget?.servicePrices ?? {},
                     manualServices:
                       activeAppointment.budget?.manualServices ?? [],
+                    proposalPaymentOptions:
+                      activeAppointment.budget?.proposalPaymentOptions ?? {
+                        pix: true,
+                        card: true,
+                      },
                     patioNotes: activeAppointment.budget?.patioNotes ?? "",
                     processStatus: "Finalizado",
+                    internalReview:
+                      activeAppointment.budget?.internalReview,
                   };
                 const updated: Appt = {
                   ...activeAppointment,
@@ -1061,6 +1559,7 @@ export default function App({ initialState, user, onLogout }: any) {
                     ? activeAppointment.conference
                     : {
                         checks: activeAppointment.conference?.checks ?? {},
+                        geometry: activeAppointment.conference?.geometry ?? {},
                         finalizedAt: finishedAt,
                         finalizedBy: user.displayName,
                         finalization: {
@@ -1104,7 +1603,7 @@ export default function App({ initialState, user, onLogout }: any) {
           view !== "compras" && (
             <section className="page">
               <Vehicle />
-              <Steps view={view} />
+              <Steps view={view} go={go} />
               <StageActions
                 view={view}
                 status={processStatus}
@@ -1147,8 +1646,11 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus,
+                            internalReview:
+                              activeAppointment.budget?.internalReview,
                           };
                     const updated: Appt = {
                       ...activeAppointment,
@@ -1181,6 +1683,7 @@ export default function App({ initialState, user, onLogout }: any) {
                         view === "torque"
                           ? {
                               checks,
+                              geometry,
                               finalization,
                               finalizedBy:
                                 processStatus === "Finalizado"
@@ -1211,6 +1714,21 @@ export default function App({ initialState, user, onLogout }: any) {
               />
               {view === "avaliacao" && (
                 <>
+                  {(activeAppointment?.evaluation ||
+                    activeAppointment?.budget) && (
+                    <div className="reverse-evaluation-bar">
+                      <span>
+                        <b>Precisa refazer esta avaliação?</b>
+                        <small>
+                          Estorne para apagar a avaliação e o orçamento antigos
+                          e começar um novo preenchimento.
+                        </small>
+                      </span>
+                      <button onClick={reverseEvaluation}>
+                        ↺ Estornar avaliação
+                      </button>
+                    </div>
+                  )}
                   <div className="startbox">
                     <label>
                       Quem está avaliando
@@ -1247,35 +1765,6 @@ export default function App({ initialState, user, onLogout }: any) {
                       Usar horário atual
                     </button>
                   </div>
-                  <Collapse
-                    title="⌖ Geometria / Alinhamento"
-                    subtitle="Medições de camber, caster e convergência"
-                    open={geometryOpen}
-                    set={() => setGeometryOpen(!geometryOpen)}
-                  >
-                    <div className="geometry bare">
-                      {[
-                        "Camber",
-                        "Caster",
-                        "Alinhamento (convergência)",
-                        "Posição do volante",
-                      ].map((x) => (
-                        <div key={x}>
-                          <b>{x}</b>
-                          <input placeholder="Diant. Esq." />
-                          <input placeholder="Diant. Dir." />
-                          <input placeholder="Tras. Esq." />
-                          <input placeholder="Tras. Dir." />
-                          <select>
-                            <option>Situação</option>
-                            <option>OK</option>
-                            <option>Atenção</option>
-                            <option>Não OK</option>
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-                  </Collapse>
                   <Collapse
                     title="⚙ Suspensão e peças do veículo"
                     subtitle="Checklist de avaliação e itens para orçamento"
@@ -1355,12 +1844,18 @@ export default function App({ initialState, user, onLogout }: any) {
                             <input
                               type="checkbox"
                               checked={!!quoteItems[i + 1]}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const checked = e.target.checked;
                                 setQuoteItems({
                                   ...quoteItems,
-                                  [i + 1]: e.target.checked,
-                                })
-                              }
+                                  [i + 1]: checked,
+                                });
+                                if (checked)
+                                  setStatus({
+                                    ...status,
+                                    [i + 1]: "r",
+                                  });
+                              }}
                             />{" "}
                             Orçar
                           </label>
@@ -1484,6 +1979,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           serviceQty,
                           servicePrices,
                           manualServices,
+                          proposalPaymentOptions,
                           patioNotes,
                           processStatus,
                         };
@@ -1626,6 +2122,9 @@ export default function App({ initialState, user, onLogout }: any) {
                             <label>
                               <input
                                 value={p.item}
+                                name={`budget-item-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].item = titleCase(e.target.value);
@@ -1635,6 +2134,10 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.brand}
                                 placeholder="Marca"
+                                name={`budget-brand-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
+                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].brand = titleCase(e.target.value);
@@ -1649,6 +2152,9 @@ export default function App({ initialState, user, onLogout }: any) {
                               inputMode="numeric"
                               placeholder="0"
                               aria-label={`Quantidade de ${p.item || "peça"}`}
+                              name={`budget-quantity-${activeAppointment?.id ?? "novo"}-${i}`}
+                              autoComplete="off"
+                              data-form-type="other"
                               value={p.qty || ""}
                               onChange={(e) => {
                                 const a = [...parts];
@@ -1660,6 +2166,10 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.supplier}
                                 placeholder="Fornecedor"
+                                name={`budget-supplier-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
+                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].supplier = titleCase(e.target.value);
@@ -1669,6 +2179,10 @@ export default function App({ initialState, user, onLogout }: any) {
                               <input
                                 value={p.code}
                                 placeholder="Código"
+                                name={`budget-code-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
+                                data-lpignore="true"
                                 onChange={(e) => {
                                   const a = [...parts];
                                   a[i].code =
@@ -1678,12 +2192,18 @@ export default function App({ initialState, user, onLogout }: any) {
                               />
                             </label>
                             <input
-                              type={costs ? "number" : "password"}
+                              type="number"
+                              className={!costs ? "masked-budget-input" : ""}
+                              readOnly={!costs}
                               min="0"
                               step="0.01"
                               inputMode="decimal"
                               placeholder={costs ? "0,00" : ""}
                               aria-label={`Custo de ${p.item || "peça"} em reais`}
+                              name={`budget-cost-${activeAppointment?.id ?? "novo"}-${i}`}
+                              autoComplete="off"
+                              data-form-type="other"
+                              data-lpignore="true"
                               value={p.cost || ""}
                               onChange={(e) => {
                                 const a = [...parts];
@@ -1693,12 +2213,18 @@ export default function App({ initialState, user, onLogout }: any) {
                             />
                             <label>
                               <input
-                                type={costs ? "number" : "password"}
+                                type="number"
+                                className={!costs ? "masked-budget-input" : ""}
+                                readOnly={!costs}
                                 min="0"
                                 step="1"
                                 inputMode="numeric"
                                 placeholder={costs ? "0" : ""}
                                 aria-label={`Margem de ${p.item || "peça"} em porcentagem`}
+                                name={`budget-margin-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
+                                data-lpignore="true"
                                 value={p.margin || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
@@ -1720,6 +2246,9 @@ export default function App({ initialState, user, onLogout }: any) {
                                 inputMode="decimal"
                                 placeholder="0,00"
                                 aria-label={`Venda unitária de ${p.item || "peça"} em reais`}
+                                name={`budget-sale-${activeAppointment?.id ?? "novo"}-${i}`}
+                                autoComplete="off"
+                                data-form-type="other"
                                 value={cashSaleOf(p, roundStep) || ""}
                                 onChange={(e) => {
                                   const a = [...parts];
@@ -1791,7 +2320,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           onClick={() =>
                             setManualServices([
                               ...manualServices,
-                              { name: "", qty: 0, value: 0 },
+                              { name: "", qty: 0, value: 0, category: "labor" },
                             ])
                           }
                         >
@@ -1809,7 +2338,30 @@ export default function App({ initialState, user, onLogout }: any) {
                       <div className="servicegrid">
                         {SERVICE_GROUPS.map((group) => (
                           <section className="service-group" key={group.title}>
-                            <h3>{group.title}</h3>
+                            <div
+                              className="service-group-heading"
+                              style={{ gridColumn: "1 / -1" }}
+                            >
+                              <h3>{group.title}</h3>
+                              {group.title === "5. Gabaritagem" && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setManualServices([
+                                      ...manualServices,
+                                      {
+                                        name: "",
+                                        qty: 1,
+                                        value: 0,
+                                        category: "gabaritagem",
+                                      },
+                                    ])
+                                  }
+                                >
+                                  + Adicionar serviço
+                                </button>
+                              )}
+                            </div>
                             {group.indexes.map((i) => {
                               const x = SERVICES[i];
                               return (
@@ -1940,11 +2492,125 @@ export default function App({ initialState, user, onLogout }: any) {
                                 </div>
                               );
                             })}
+                            {group.title === "5. Gabaritagem" && (
+                              <div className="manualservices gabaritagem-manual-services">
+                                {manualServices
+                                .map((x, i) => ({ x, i }))
+                                .filter(({ x }) =>
+                                  isGabaritagemManualService(x),
+                                )
+                                .map(({ x, i }) => (
+                                  <div
+                                    className="manual-service-in-category"
+                                    key={`gabaritagem-${i}`}
+                                  >
+                                    <input
+                                      placeholder="Nome do serviço de gabaritagem"
+                                      value={x.name}
+                                      onChange={(e) => {
+                                        const a = [...manualServices];
+                                        a[i] = {
+                                          ...a[i],
+                                          name: e.target.value,
+                                          category: "gabaritagem",
+                                        };
+                                        setManualServices(a);
+                                      }}
+                                    />
+                                    <label>
+                                      Qtd.
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={x.qty || ""}
+                                        onChange={(e) => {
+                                          const a = [...manualServices];
+                                          a[i] = {
+                                            ...a[i],
+                                            qty: +e.target.value,
+                                            category: "gabaritagem",
+                                          };
+                                          setManualServices(a);
+                                        }}
+                                      />
+                                    </label>
+                                    <label>
+                                      Valor unitário R$
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={
+                                          serviceValueDrafts[`manual-${i}`] ??
+                                          decimalValue(x.value)
+                                        }
+                                        onFocus={(event) => {
+                                          setServiceValueDrafts((current) => ({
+                                            ...current,
+                                            [`manual-${i}`]: decimalValue(
+                                              x.value,
+                                            ),
+                                          }));
+                                          event.currentTarget.select();
+                                        }}
+                                        onChange={(e) => {
+                                          const typed = e.target.value;
+                                          setServiceValueDrafts((current) => ({
+                                            ...current,
+                                            [`manual-${i}`]: typed,
+                                          }));
+                                          const a = [...manualServices];
+                                          a[i] = {
+                                            ...a[i],
+                                            value: parseDecimalValue(typed),
+                                            category: "gabaritagem",
+                                          };
+                                          setManualServices(a);
+                                        }}
+                                        onBlur={() =>
+                                          setServiceValueDrafts((current) => {
+                                            const next = { ...current };
+                                            delete next[`manual-${i}`];
+                                            return next;
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                    <b>{brl(x.qty * x.value)}</b>
+                                    <button
+                                      type="button"
+                                      className="manual-service-delete"
+                                      aria-label={`Excluir serviço ${x.name || "sem nome"}`}
+                                      title="Excluir este serviço"
+                                      onClick={() => {
+                                        if (
+                                          confirm(
+                                            `Excluir o serviço “${x.name || "sem nome"}”?`,
+                                          )
+                                        ) {
+                                          setManualServices((current) =>
+                                            current.filter(
+                                              (_: any, index: number) =>
+                                                index !== i,
+                                            ),
+                                          );
+                                          setServiceValueDrafts({});
+                                        }
+                                      }}
+                                    >
+                                      🗑
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </section>
                         ))}
                       </div>
                       <div className="manualservices">
-                        {manualServices.map((x, i) => (
+                        {manualServices
+                          .map((x, i) => ({ x, i }))
+                          .filter(({ x }) => !isGabaritagemManualService(x))
+                          .map(({ x, i }) => (
                           <div key={i}>
                             <input
                               placeholder="Nome do serviço"
@@ -2004,8 +2670,30 @@ export default function App({ initialState, user, onLogout }: any) {
                               />
                             </label>
                             <b>{brl(x.qty * x.value)}</b>
+                            <button
+                              type="button"
+                              className="manual-service-delete"
+                              aria-label={`Excluir serviço ${x.name || "sem nome"}`}
+                              title="Excluir este serviço"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Excluir o serviço “${x.name || "sem nome"}”?`,
+                                  )
+                                ) {
+                                  setManualServices((current) =>
+                                    current.filter(
+                                      (_: any, index: number) => index !== i,
+                                    ),
+                                  );
+                                  setServiceValueDrafts({});
+                                }
+                              }}
+                            >
+                              🗑
+                            </button>
                           </div>
-                        ))}
+                          ))}
                       </div>
                     </div>
                   </Collapse>
@@ -2058,10 +2746,215 @@ export default function App({ initialState, user, onLogout }: any) {
                       }
                       go("avaliacao");
                     }}
-                    next={() => go("proposta")}
+                    next={() => {
+                      if (!reviewParts.length && !reviewServices.length) {
+                        alert(
+                          "Inclua ao menos uma peça ou serviço antes de gerar o orçamento.",
+                        );
+                        return;
+                      }
+                      setBudgetReviewChecks({});
+                      setBudgetReviewCopied(false);
+                      setBudgetReviewOpen(true);
+                    }}
                     b="Voltar à avaliação"
-                    n="Gerar orçamento"
+                    n="Conferir e gerar orçamento"
                   />
+                  {budgetReviewOpen && (
+                    <div className="backdrop" role="dialog" aria-modal="true">
+                      <div className="modal budget-review-modal">
+                        <div>
+                          <span>
+                            <h2>Conferência interna</h2>
+                            <p>
+                              Confira as quantidades antes de gerar o orçamento
+                              do cliente.
+                            </p>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setBudgetReviewOpen(false)}
+                            aria-label="Fechar conferência"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="budget-review-client">
+                          <span>
+                            <b>{activeAppointment?.client}</b>
+                            <small>
+                              {activeAppointment?.vehicle || "Veículo não informado"}
+                              {activeAppointment?.plate
+                                ? ` · ${activeAppointment.plate}`
+                                : ""}
+                            </small>
+                          </span>
+                          <strong>
+                            {quantityValue(totalPartQuantity)} peça(s)
+                          </strong>
+                        </div>
+                        <div className="budget-review-heading">
+                          <b>Peças para conferir</b>
+                          <small>
+                            Marque cada linha depois de conferir a quantidade.
+                          </small>
+                        </div>
+                        <section className="budget-review-list">
+                          {reviewParts.length ? (
+                            reviewParts.map(({ part, index }: any) => (
+                              <label
+                                className={
+                                  budgetReviewChecks[index] ? "checked" : ""
+                                }
+                                key={`${index}-${part.item}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!budgetReviewChecks[index]}
+                                  onChange={(event) =>
+                                    setBudgetReviewChecks({
+                                      ...budgetReviewChecks,
+                                      [index]: event.target.checked,
+                                    })
+                                  }
+                                />
+                                <strong>
+                                  {quantityValue(Number(part.qty) || 0)}x
+                                </strong>
+                                <span>
+                                  <b>{part.item}</b>
+                                  <small>
+                                    {[
+                                      part.brand,
+                                      part.supplier,
+                                      part.code,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ") || "Sem detalhes adicionais"}
+                                  </small>
+                                </span>
+                              </label>
+                            ))
+                          ) : (
+                            <p className="budget-review-empty">
+                              Nenhuma peça incluída. Confira os serviços abaixo.
+                            </p>
+                          )}
+                        </section>
+                        {reviewServices.length > 0 && (
+                          <div className="budget-review-services">
+                            <b>Serviços incluídos</b>
+                            {reviewServices.map((service: string, index: number) => (
+                              <span key={`${index}-${service}`}>
+                                {service.replace(/^☐\s*/, "")}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="budget-review-progress">
+                          <b>
+                            {reviewParts.filter(({ index }: any) =>
+                              budgetReviewChecks[index],
+                            ).length}
+                            /{reviewParts.length} peças conferidas
+                          </b>
+                          <small>
+                            O orçamento será liberado quando todas estiverem
+                            marcadas.
+                          </small>
+                        </div>
+                        <footer>
+                          <button
+                            type="button"
+                            onClick={() => setBudgetReviewOpen(false)}
+                          >
+                            Voltar e corrigir
+                          </button>
+                          <button
+                            type="button"
+                            className="wa budget-review-copy"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(
+                                  internalReviewMessage,
+                                );
+                                setBudgetReviewCopied(true);
+                              } catch {
+                                alert(
+                                  "Não foi possível copiar automaticamente. Tente novamente pelo navegador.",
+                                );
+                              }
+                            }}
+                          >
+                            {budgetReviewCopied
+                              ? "Lista copiada ✓"
+                              : "Copiar para WhatsApp"}
+                          </button>
+                          <button
+                            type="button"
+                            className="primary"
+                            disabled={!allReviewPartsChecked}
+                            onClick={() => {
+                              if (!activeAppointment || !allReviewPartsChecked)
+                                return;
+                              const now = new Date().toISOString(),
+                                internalReview: InternalBudgetReview = {
+                                  signature: budgetReviewSignature,
+                                  totalQuantity: totalPartQuantity,
+                                  checkedItems: reviewParts.map(
+                                    ({ part }: any) =>
+                                      `${quantityValue(Number(part.qty) || 0)}x ${part.item}`,
+                                  ),
+                                  confirmedAt: now,
+                                  confirmedBy: user.displayName,
+                                },
+                                budget: BudgetState = {
+                                  parts,
+                                  selectedServices,
+                                  serviceQty,
+                                  servicePrices,
+                                  manualServices,
+                                  proposalPaymentOptions,
+                                  patioNotes,
+                                  processStatus,
+                                  internalReview,
+                                },
+                                updated: Appt = {
+                                  ...activeAppointment,
+                                  budget,
+                                  budgetEditedBy: user.displayName,
+                                  budgetEditedAt: now,
+                                  lastEditedBy: user.displayName,
+                                  lastEditedAt: now,
+                                  _updatedAt: Date.now(),
+                                };
+                              syncBlockedUntil.current = Date.now() + 4000;
+                              DISPLAY_APPT = updated;
+                              setActiveAppointment(updated);
+                              setAppointments((list) =>
+                                list.map((appointment) =>
+                                  appointment.id === updated.id
+                                    ? updated
+                                    : appointment,
+                                ),
+                              );
+                              setSavedAt(
+                                new Date().toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }),
+                              );
+                              setBudgetReviewOpen(false);
+                              setView("proposta");
+                              scrollTo(0, 0);
+                            }}
+                          >
+                            Salvar e gerar orçamento
+                          </button>
+                        </footer>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
               {view === "proposta" && (
@@ -2151,16 +3044,73 @@ export default function App({ initialState, user, onLogout }: any) {
                     <div className="grand">
                       Total do orçamento <b>{brl(total)}</b>
                     </div>
-                    <div className="payments">
+                    <div className="payment-options no-print">
+                      <strong>Formas de pagamento exibidas na proposta</strong>
                       <label>
-                        <input type="radio" name="pay" defaultChecked /> Pix -
-                        5% de desconto <b>{brl(total * 0.95)}</b>
+                        <input
+                          type="checkbox"
+                          checked={proposalPaymentOptions.pix}
+                          onChange={(e) =>
+                            setProposalPaymentOptions({
+                              ...proposalPaymentOptions,
+                              pix: e.target.checked,
+                            })
+                          }
+                        />
+                        Pix com 5% de desconto
                       </label>
                       <label>
-                        <input type="radio" name="pay" /> Cartão - até 5x sem
-                        juros <b>5x de {brl(total / 5)}</b>
+                        <input
+                          type="checkbox"
+                          checked={proposalPaymentOptions.card}
+                          onChange={(e) =>
+                            setProposalPaymentOptions({
+                              ...proposalPaymentOptions,
+                              card: e.target.checked,
+                            })
+                          }
+                        />
+                        Cartão em até 5x sem juros
                       </label>
+                      {!proposalPaymentOptions.pix &&
+                        !proposalPaymentOptions.card && (
+                          <small>Nenhuma forma de pagamento será enviada.</small>
+                        )}
                     </div>
+                    {(proposalPaymentOptions.pix ||
+                      proposalPaymentOptions.card) && (
+                      <div className="payments">
+                        {proposalPaymentOptions.pix && (
+                          <label>
+                            Pix - 5% de desconto <b>{brl(pixTotal)}</b>
+                            {tireParts.length > 0 && (
+                              <small>
+                                Desconto aplicado somente em peças e serviços.
+                                Pneus permanecem sem desconto.
+                              </small>
+                            )}
+                          </label>
+                        )}
+                        {proposalPaymentOptions.card && (
+                          <label>
+                            Cartão - até 5x sem juros
+                            {tireParts.length > 0 && (
+                              <small>
+                                Total parcelado: {brl(totalInstallment)}
+                              </small>
+                            )}
+                            <b>
+                              5x de{" "}
+                              {brl(
+                                (tireParts.length > 0
+                                  ? totalInstallment
+                                  : total) / 5,
+                              )}
+                            </b>
+                          </label>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="schedule-service-box">
                     <span>
@@ -2203,8 +3153,11 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
+                            internalReview:
+                              activeAppointment.budget?.internalReview,
                           },
                           source: Appt = {
                             ...activeAppointment,
@@ -2287,8 +3240,11 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
+                            internalReview:
+                              activeAppointment.budget?.internalReview,
                           };
                           const updated: Appt = {
                             ...activeAppointment,
@@ -2322,6 +3278,75 @@ export default function App({ initialState, user, onLogout }: any) {
                       Salvar e preparar mensagem
                     </button>
                     <button
+                      onClick={async () => {
+                        if (!activeAppointment) {
+                          alert("Selecione um atendimento antes de enviar o orçamento.");
+                          return;
+                        }
+                        const transferCode = encodeBudgetTransfer({
+                          version: 1,
+                          transferId: `${activeAppointment.id}-${Date.now()}`,
+                          serviceDate: activeAppointment.date,
+                          customerName: activeAppointment.client,
+                          phone: activeAppointment.phone,
+                          vehicle: activeAppointment.vehicle,
+                          plate: activeAppointment.plate,
+                          items: [
+                            ...parts
+                              .filter(
+                                (part: any) =>
+                                  String(part.item ?? "").trim() &&
+                                  Number(part.qty) > 0,
+                              )
+                              .map((part: any) => ({
+                                category: isTirePart(part) ? "tires" : "parts",
+                                description: [part.item, part.brand]
+                                  .filter(Boolean)
+                                  .join(" • "),
+                                quantity: Number(part.qty) || 1,
+                                unitPrice: saleOf(part, roundStep),
+                                unitCost: Number(part.cost) || 0,
+                                supplierName: String(part.supplier ?? ""),
+                              })),
+                            ...selectedServices.map((index: number) => ({
+                              category: SERVICE_GROUPS[4].indexes.includes(
+                                index,
+                              )
+                                ? "gabaritagem"
+                                : "labor",
+                              description:
+                                SERVICES[index]?.[0] ?? "Serviço",
+                              quantity: Number(serviceQty[index]) || 1,
+                              unitPrice: servicePrice(index, servicePrices),
+                            })),
+                            ...manualServices
+                              .filter((service: any) => service.name?.trim())
+                              .map((service: any) => ({
+                                category: isGabaritagemManualService(service)
+                                  ? "gabaritagem"
+                                  : "labor",
+                                description: service.name.trim(),
+                                quantity: Number(service.qty) || 1,
+                                unitPrice: Number(service.value) || 0,
+                              })),
+                          ],
+                        });
+                        try {
+                          await navigator.clipboard.writeText(transferCode);
+                          alert(
+                            "Orçamento copiado. Vá para o Pós/OS e clique em ‘Importar orçamento’ e depois em ‘Colar orçamento’.",
+                          );
+                        } catch {
+                          window.prompt(
+                            "Copie este código e cole no sistema de OS:",
+                            transferCode,
+                          );
+                        }
+                      }}
+                    >
+                      Enviar para Pós/OS
+                    </button>
+                    <button
                       className="primary"
                       onClick={() => {
                         if (activeAppointment) {
@@ -2331,8 +3356,11 @@ export default function App({ initialState, user, onLogout }: any) {
                             serviceQty,
                             servicePrices,
                             manualServices,
+                            proposalPaymentOptions,
                             patioNotes,
                             processStatus: "Em andamento",
+                            internalReview:
+                              activeAppointment.budget?.internalReview,
                           };
                           const updated: Appt = {
                             ...activeAppointment,
@@ -2387,6 +3415,98 @@ export default function App({ initialState, user, onLogout }: any) {
                     {savedAt && <small>Salvo às {savedAt}</small>}
                   </div>
                   <div className="printable">
+                    <Collapse
+                      title="⌖ Geometria / Alinhamento"
+                      subtitle="Medições de camber, caster e convergência"
+                      open={!!torqueOpen.geometry}
+                      set={() =>
+                        setTorqueOpen({
+                          ...torqueOpen,
+                          geometry: !torqueOpen.geometry,
+                        })
+                      }
+                    >
+                      <div className="geometry bare">
+                        {[
+                          "Camber",
+                          "Caster",
+                          "Alinhamento (convergência)",
+                          "Posição do volante",
+                        ].map((item) => {
+                          const values = geometry[item] ?? {
+                            frontLeft: "",
+                            frontRight: "",
+                            rearLeft: "",
+                            rearRight: "",
+                            condition: "",
+                          };
+                          return (
+                            <div key={item}>
+                              <b>{item}</b>
+                              <input
+                                placeholder="Diant. Esq."
+                                value={values.frontLeft}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "frontLeft",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <input
+                                placeholder="Diant. Dir."
+                                value={values.frontRight}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "frontRight",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <input
+                                placeholder="Tras. Esq."
+                                value={values.rearLeft}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "rearLeft",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <input
+                                placeholder="Tras. Dir."
+                                value={values.rearRight}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "rearRight",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <select
+                                value={values.condition}
+                                onChange={(event) =>
+                                  updateGeometryField(
+                                    item,
+                                    "condition",
+                                    event.target.value,
+                                  )
+                                }
+                              >
+                                <option value="">Situação</option>
+                                <option>OK</option>
+                                <option>Atenção</option>
+                                <option>Não OK</option>
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Collapse>
                     {[
                       ["front", "Suspensão dianteira", FRONT, true],
                       ["rear", "Suspensão traseira", REAR, true],
@@ -2613,11 +3733,15 @@ export default function App({ initialState, user, onLogout }: any) {
                           serviceQty,
                           servicePrices,
                           manualServices,
+                          proposalPaymentOptions,
                           patioNotes,
                           processStatus: "Finalizado",
+                          internalReview:
+                            activeAppointment.budget?.internalReview,
                         },
                         conference: {
                           checks,
+                          geometry,
                           finalization,
                           finalizedBy: user.displayName,
                           finalizedAt: new Date().toISOString(),
@@ -2639,6 +3763,32 @@ export default function App({ initialState, user, onLogout }: any) {
                   />
                 </>
               )}
+              {view === "geometria" && activeAppointment && (
+                <GeometryTechnicalReport
+                  appointment={activeAppointment}
+                  onBack={() => go("proposta")}
+                  onContinue={() => go("torque")}
+                  onSave={(geometryReport: any) => {
+                    const updated: Appt = {
+                      ...activeAppointment,
+                      geometryReport: {
+                        ...geometryReport,
+                        savedAt: new Date().toISOString(),
+                        savedBy: user.displayName,
+                      },
+                      lastEditedBy: user.displayName,
+                      lastEditedAt: new Date().toISOString(),
+                      _updatedAt: Date.now(),
+                    };
+                    DISPLAY_APPT = updated;
+                    setActiveAppointment(updated);
+                    setAppointments((list) =>
+                      list.map((item) => item.id === updated.id ? updated : item),
+                    );
+                    setSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+                  }}
+                />
+              )}
             </section>
           )}
         {view === "atendimento" && activeAppointment && (
@@ -2648,6 +3798,7 @@ export default function App({ initialState, user, onLogout }: any) {
             onBack={() => go("agenda")}
             onEditConference={() => {
               setChecks(activeAppointment.conference?.checks ?? {});
+              setGeometry(activeAppointment.conference?.geometry ?? {});
               setFinalization(
                 activeAppointment.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -2672,11 +3823,11 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
-        {view === "relatorios" && (
+        {(view === "relatorios" || view === "veiculos") && (
           <Reports
             data={appointments}
             user={user}
-            initialMode={reportStartMode}
+            initialMode={view === "veiculos" ? "andamento" : reportStartMode}
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
@@ -2686,6 +3837,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(a.evaluation?.custom ?? []);
               setEvaluationNotes(a.evaluation?.notes ?? {});
               setChecks(a.conference?.checks ?? {});
+              setGeometry(a.conference?.geometry ?? {});
               setFinalization(
                 a.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -2698,11 +3850,14 @@ export default function App({ initialState, user, onLogout }: any) {
                 },
               );
               if (a.budget) {
-                setParts(a.budget.parts ?? []);
+                setParts(sanitizeBudgetParts(a.budget.parts));
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  a.budget.proposalPaymentOptions ?? { pix: true, card: true },
+                );
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else {
@@ -2711,6 +3866,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
@@ -2739,6 +3895,25 @@ export default function App({ initialState, user, onLogout }: any) {
                 setAppointments((list) => list.filter((x) => x.id !== a.id));
               }
             }}
+            updateQuoteFollowUp={(id: number, changes: Partial<Appt>) => {
+              const now = new Date().toISOString();
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((appointment) =>
+                  appointment.id === id
+                    ? {
+                        ...appointment,
+                        ...changes,
+                        quoteFollowUpUpdatedBy: user.displayName,
+                        quoteFollowUpUpdatedAt: now,
+                        lastEditedBy: user.displayName,
+                        lastEditedAt: now,
+                        _updatedAt: Date.now(),
+                      }
+                    : appointment,
+                ),
+              );
+            }}
             message={setMessage}
           />
         )}{" "}
@@ -2746,10 +3921,15 @@ export default function App({ initialState, user, onLogout }: any) {
           <PurchaseOrders
             appointments={appointments}
             checks={purchaseChecks}
+            orderStates={purchaseOrderStates}
             currentUser={user.displayName}
             setChecks={(updater: any) => {
               syncBlockedUntil.current = Date.now() + 4000;
               setPurchaseChecks(updater);
+            }}
+            setOrderStates={(updater: any) => {
+              syncBlockedUntil.current = Date.now() + 4000;
+              setPurchaseOrderStates(updater);
             }}
             setWorkOrder={(ownerId: number, workOrder: string) => {
               syncBlockedUntil.current = Date.now() + 4000;
@@ -2838,6 +4018,16 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
+        {attendancePreview && (
+          <AttendancePreviewModal
+            appointment={
+              appointments.find((item) => item.id === attendancePreview.id) ??
+              attendancePreview
+            }
+            roundStep={roundStep}
+            close={() => setAttendancePreview(null)}
+          />
+        )}
         {evaluationEntry && (
           <EvaluationStartModal
             appointment={evaluationEntry}
@@ -2849,14 +4039,20 @@ export default function App({ initialState, user, onLogout }: any) {
               startedAt,
               vehicle,
               plate,
+              evaluateParts,
             }: any) => {
               syncBlockedUntil.current = Date.now() + 4000;
+              const skipPartsEvaluation = evaluateParts === "nao";
               const opened: Appt = {
                 ...evaluationEntry,
                 vehicle: vehicle.trim(),
                 plate: plate.trim().toLocaleUpperCase("pt-BR"),
                 tech: selectedEvaluator,
                 startedAt,
+                status: skipPartsEvaluation
+                  ? "avaliou"
+                  : evaluationEntry.status,
+                partsEvaluationSkipped: skipPartsEvaluation,
                 inProgress: true,
                 lastEditedBy: user.displayName,
                 lastEditedAt: new Date().toISOString(),
@@ -2874,6 +4070,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setCustom(opened.evaluation?.custom ?? []);
               setEvaluationNotes(opened.evaluation?.notes ?? {});
               setChecks(opened.conference?.checks ?? {});
+              setGeometry(opened.conference?.geometry ?? {});
               setFinalization(
                 opened.conference?.finalization ?? {
                   serviceCompleted: false,
@@ -2886,11 +4083,17 @@ export default function App({ initialState, user, onLogout }: any) {
                 },
               );
               if (opened.budget) {
-                setParts(opened.budget.parts ?? []);
+                setParts(sanitizeBudgetParts(opened.budget.parts));
                 setSelectedServices(opened.budget.selectedServices ?? []);
                 setServiceQty(opened.budget.serviceQty ?? {});
                 setServicePrices(opened.budget.servicePrices ?? {});
                 setManualServices(opened.budget.manualServices ?? []);
+                setProposalPaymentOptions(
+                  opened.budget.proposalPaymentOptions ?? {
+                    pix: true,
+                    card: true,
+                  },
+                );
                 setPatioNotes(opened.budget.patioNotes ?? "");
                 setProcessStatus(opened.budget.processStatus ?? "Em andamento");
               } else {
@@ -2899,15 +4102,15 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
+                setProposalPaymentOptions({ pix: true, card: true });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
-              setGeometryOpen(false);
               setCheckOpen(false);
               setPartsOpen(false);
-              setServicesOpen(false);
+              setServicesOpen(skipPartsEvaluation);
               setEvaluationEntry(null);
-              setView("avaliacao");
+              setView(skipPartsEvaluation ? "orcamento" : "avaliacao");
               scrollTo(0, 0);
             }}
           />
@@ -3025,14 +4228,25 @@ function Vehicle() {
     </>
   );
 }
-function Steps({ view }: { view: View }) {
-  const n = { avaliacao: 1, orcamento: 2, proposta: 3, torque: 4 }[view] ?? 1;
+function Steps({ view, go }: { view: View; go: (view: View) => void }) {
+  const n = (
+    { avaliacao: 1, orcamento: 2, proposta: 3, geometria: 4, torque: 5 } as Partial<
+      Record<View, number>
+    >
+  )[view] ?? 1;
+  const stages: Array<[string, View]> = [
+    ["Avaliação", "avaliacao"],
+    ["Orçamento", "orcamento"],
+    ["Proposta", "proposta"],
+    ["Laudo 3D", "geometria"],
+    ["Conferência", "torque"],
+  ];
   return (
     <div className="steps">
-      {["Avaliação", "Orçamento", "Proposta", "Conferência"].map((x, i) => (
-        <span className={i < n ? "done" : ""} key={x}>
+      {stages.map(([label, target], i) => (
+        <span role="button" tabIndex={0} className={i < n ? "done" : ""} key={label} onClick={() => go(target)} onKeyDown={(event) => event.key === "Enter" && go(target)}>
           <i>{i + 1}</i>
-          {x}
+          {label}
         </span>
       ))}
     </div>
@@ -3070,7 +4284,7 @@ function StageActions({
     avaliacao: "Etapa 1 - Avaliação",
     orcamento: "Etapa 2 - Orçamento",
     proposta: "Etapa 3 - Proposta",
-    torque: "Etapa 4 - Conferência",
+    torque: "Etapa 5 - Conferência",
   }[view as string];
   return (
     <div className="stageactions">
@@ -3171,8 +4385,33 @@ function Check({ title, items, vals, set, tri }: any) {
           )}
         </span>
       </div>
-      {items.map((x: string) => (
-        <div key={x}>
+      {items.map((x: string) => {
+        const checked = tri ? !!vals[x + "-ok"] : !!vals[x],
+          notApplicable = tri ? !!vals[x + "-na"] : false;
+        return (
+        <div
+          key={x}
+          className={
+            checked
+              ? "conference-row-selected conference-row-checked"
+              : notApplicable
+                ? "conference-row-selected conference-row-na"
+                : ""
+          }
+          style={
+            checked
+              ? {
+                  background: "#e7f7ee",
+                  boxShadow: "inset 5px 0 #159957",
+                }
+              : notApplicable
+                ? {
+                    background: "#fff6dd",
+                    boxShadow: "inset 5px 0 #e0a11a",
+                  }
+                : undefined
+          }
+        >
           <span>{x}</span>
           {tri ? (
             <>
@@ -3210,7 +4449,8 @@ function Check({ title, items, vals, set, tri }: any) {
             </button>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -3222,6 +4462,8 @@ function Agenda({
   showInProgress,
   start,
   edit,
+  preview,
+  markNoShow,
   remove,
   message,
 }: any) {
@@ -3231,9 +4473,34 @@ function Agenda({
     [cursor, setCursor] = useState(
       new Date(today.getFullYear(), today.getMonth(), 1),
     ),
-    [mode, setMode] = useState<"dia" | "semana" | "mes">("mes"),
+    [mode, setMode] = useState<"dia" | "semana" | "mes">(() => {
+      if (typeof window === "undefined") return "mes";
+      const savedMode = localStorage.getItem("monocenter-calendar-mode");
+      return savedMode === "dia" ||
+        savedMode === "semana" ||
+        savedMode === "mes"
+        ? savedMode
+        : "mes";
+    }),
     [openCal, setOpenCal] = useState(true),
+    [showSaturday, setShowSaturday] = useState(false),
+    [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
+  useEffect(() => {
+    localStorage.setItem("monocenter-calendar-mode", mode);
+  }, [mode]);
+  const editCalendarAbsence = (appointment: Appt) =>
+    edit(
+      appointment.type === "bloqueio"
+        ? appointment
+        : {
+            ...appointment,
+            type: "bloqueio",
+            client: employeeAbsenceName(appointment),
+            note: employeeAbsenceReason(appointment),
+            appointmentServiceType: undefined,
+          },
+    );
   const carryLimitIso = todayIso,
     isBusinessDay = (targetDate: string) => {
       const weekday = new Date(`${targetDate}T12:00:00`).getDay();
@@ -3244,7 +4511,7 @@ function Agenda({
       );
     },
     isCarriedInto = (appointment: Appt, targetDate: string) =>
-      appointment.type !== "bloqueio" &&
+      !isEmployeeAbsence(appointment) &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado" &&
       appointment.date < targetDate &&
@@ -3278,18 +4545,54 @@ function Agenda({
         return d;
       });
     }, [cursor, date, mode]);
-  const list = appointmentsForDate(date),
+  const isOngoingVehicle = (appointment: Appt) =>
+      !isEmployeeAbsence(appointment) &&
+      !!appointment.inProgress &&
+      appointment.budget?.processStatus !== "Finalizado",
+    selectedDayAppointments =
+      mode === "semana"
+        ? (data as Appt[]).filter((appointment) => appointment.date === date)
+        : appointmentsForDate(date),
+    visibleSelectedDayAppointments = selectedDayAppointments.filter(
+      (appointment) => !isEmployeeAbsence(appointment),
+    ),
+    ongoingVehicles = (data as Appt[]).filter(isOngoingVehicle),
+    dayAppointments = Array.from(
+      new Map(
+        [
+          ...visibleSelectedDayAppointments.filter(
+            (appointment) => !isOngoingVehicle(appointment),
+          ),
+          ...ongoingVehicles,
+        ].map((appointment) => [appointment.id, appointment]),
+      ).values(),
+    ),
+    list = [...dayAppointments].sort((first, second) => {
+      const groupDifference =
+        Number(isOngoingVehicle(first)) - Number(isOngoingVehicle(second));
+      if (groupDifference !== 0) return groupDifference;
+      if (isOngoingVehicle(first) && isOngoingVehicle(second)) {
+        const dateDifference = second.date.localeCompare(first.date);
+        if (dateDifference !== 0) return dateDifference;
+      }
+      return (
+        first.time.localeCompare(second.time, "pt-BR", { numeric: true }) ||
+        first.client.localeCompare(second.client, "pt-BR")
+      );
+    }),
+    ongoingVehicleCount = ongoingVehicles.length,
     openQuotesCount = (data as Appt[]).filter(
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        a.quoteFollowUpDecision !== "declined" &&
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     inProgressCount = (data as Appt[]).filter(
       (a) =>
         (a.inProgress || a.status === "servico") &&
-        a.type !== "bloqueio" &&
+        !isEmployeeAbsence(a) &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
     weekLabels =
@@ -3302,6 +4605,152 @@ function Agenda({
         : mode === "semana"
           ? `${calendarDays[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${calendarDays[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
           : fmt(date);
+  const weekStartHour = 7,
+    weekEndHour = 20,
+    weekHourHeight = 116,
+    weekHours = Array.from(
+      { length: weekEndHour - weekStartHour + 1 },
+      (_, index) => weekStartHour + index,
+    ),
+    appointmentMinute = (time?: string) => {
+      const [hour, minute] = String(time || "").split(":").map(Number);
+      return Number.isFinite(hour) && Number.isFinite(minute)
+        ? hour * 60 + minute
+        : weekStartHour * 60;
+    },
+    visibleWeekDays = calendarDays.filter(
+      (day) => day.getDay() !== 0 && (showSaturday || day.getDay() !== 6),
+    ),
+    appointmentKindLabel = (appointment: Appt) => {
+      if (isEmployeeAbsence(appointment)) return "Ausente";
+      if (appointment.type === "revisao") return "Revisão 30 dias";
+      if (appointment.type === "retorno") return "Retorno";
+      if (appointment.type === "garantia") return "Garantia";
+      if (appointment.serviceScheduled) return "Serviço agendado";
+      if (appointment.status === "avaliou") return "Orçamento";
+      if (appointment.status === "servico") return "Serviço aprovado";
+      return "Agendamento";
+    };
+  const weeklyProgressLabel = (appointment: Appt) => {
+      if (appointment.budget?.processStatus === "Finalizado")
+        return "Finalizado";
+      if (appointment.status === "faltou") return "Faltou";
+      if (appointment.inProgress || appointment.status === "servico")
+        return "Em andamento";
+      return "";
+    },
+    weeklyBudgetTypeLabel = (appointment: Appt) => {
+      if (
+        appointment.type === "revisao" ||
+        appointment.type === "retorno" ||
+        appointment.type === "garantia"
+      )
+        return "";
+      const scheduledTypeLabels: Record<string, string> = {
+        gabaritagem: "Orçamento: gabaritagem",
+        pecas: "Orçamento: peças",
+        alinhamento_3d: "Alinhamento 3D",
+        alinhamento_balanceamento: "Alinhamento e balanceamento",
+        servicos: "Orçamento: serviços",
+      };
+      if (appointment.appointmentServiceType)
+        return scheduledTypeLabels[appointment.appointmentServiceType] ?? "";
+      const budget = appointment.budget;
+      if (!budget) return "";
+      const selectedNames = (budget.selectedServices ?? [])
+          .map((index) => SERVICES[index]?.[0] ?? "")
+          .filter(Boolean),
+        manualServices = budget.manualServices ?? [],
+        manualNames = manualServices
+          .map((service: any) => String(service?.name ?? "").trim())
+          .filter(Boolean),
+        serviceNames = [...selectedNames, ...manualNames],
+        hasGabaritagem =
+          (budget.selectedServices ?? []).some((index) => index >= 10) ||
+          manualServices.some(isGabaritagemManualService),
+        hasParts = (budget.parts ?? []).some(
+          (part: any) =>
+            String(part?.item ?? part?.name ?? "").trim() &&
+            Number(part?.qty ?? 1) > 0,
+        ),
+        onlyAlignmentAndBalance =
+          serviceNames.length > 0 &&
+          serviceNames.every((name) =>
+            /alinhamento de direção|balanceamento/i.test(name),
+          );
+      if (hasGabaritagem) return "Orçamento: gabaritagem";
+      if (hasParts) return "Orçamento: peças";
+      if (onlyAlignmentAndBalance) return "Alinhamento e balanceamento";
+      if (serviceNames.length) return "Orçamento: serviços";
+      return "";
+    },
+    teamAgendaDate = (() => {
+      const next = new Date(today);
+      if (next.getDay() === 5) {
+        const saturday = new Date(next);
+        saturday.setDate(next.getDate() + 1);
+        const hasSaturdayAppointments = (data as Appt[]).some(
+          (appointment) =>
+            !isEmployeeAbsence(appointment) &&
+            appointment.date === iso(saturday),
+        );
+        next.setDate(next.getDate() + (hasSaturdayAppointments ? 1 : 3));
+      } else if (next.getDay() === 6) {
+        next.setDate(next.getDate() + 2);
+      } else if (next.getDay() === 0) {
+        next.setDate(next.getDate() + 1);
+      } else {
+        next.setDate(next.getDate() + 1);
+      }
+      return next;
+    })(),
+    teamAgendaRows = (data as Appt[])
+      .filter(
+        (appointment) =>
+          !isEmployeeAbsence(appointment) &&
+          appointment.date === iso(teamAgendaDate),
+      )
+      .sort(
+        (first, second) =>
+          first.time.localeCompare(second.time) ||
+          first.client.localeCompare(second.client, "pt-BR"),
+      ),
+    teamAgendaLabel = teamAgendaDate.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+    }),
+    teamAgendaMessage = [
+      `*AGENDA MONOCENTER - ${teamAgendaDate
+        .toLocaleDateString("pt-BR", {
+          weekday: "long",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+        .toLocaleUpperCase("pt-BR")}*`,
+      "",
+      ...(teamAgendaRows.length
+        ? teamAgendaRows.map((appointment) =>
+            [
+              `*${appointment.time} - ${appointment.client}*`,
+              `${appointment.vehicle || "Veículo não informado"}${appointment.plate ? ` - ${appointment.plate}` : ""}`,
+              `Situação: ${weeklyProgressLabel(appointment) || appointmentKindLabel(appointment)}`,
+              weeklyBudgetTypeLabel(appointment)
+                ? `Tipo: ${weeklyBudgetTypeLabel(appointment)}`
+                : "",
+              appointment.note
+                ? `Relato do cliente: ${appointment.note}`
+                : "",
+              appointment.internalNote
+                ? `Observação interna: ${appointment.internalNote}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          )
+        : ["Nenhum agendamento para este dia."]),
+    ].join("\n\n");
   const move = (n: number) => {
       if (mode === "mes") {
         const next = new Date(cursor.getFullYear(), cursor.getMonth() + n, 1);
@@ -3321,6 +4770,50 @@ function Agenda({
     };
   return (
     <section className="agenda">
+      <style>{`
+        .agenda-grid-semana{grid-template-columns:minmax(0,1fr) 430px!important;align-items:stretch}
+        .agenda-grid-semana>.calendar,.agenda-grid-semana>.day{align-self:stretch;margin-top:0}
+        .agenda-grid-semana>.day{position:relative;top:auto;height:auto;max-height:none;overflow-y:visible}
+        .calendar-semana{overflow-x:auto!important;padding:0!important}
+        .week-timeline{min-width:760px;overflow:hidden;border-radius:11px}
+        .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
+        .week-time-zone{display:flex;align-items:flex-end;justify-content:center;padding:0 4px 9px;color:#64748b;font-size:9px;font-weight:800}
+        .week-timeline-head button{display:flex!important;min-width:0;border:0!important;border-left:1px solid #e1e7ee!important;border-radius:0!important;background:#fff!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#172033!important}
+        .week-timeline-head button small{text-transform:uppercase;font-size:9px;font-weight:800}
+        .week-timeline-head button b{display:grid;width:34px;height:34px;place-items:center;border-radius:50%;font-size:20px}
+        .week-timeline-head button.today b{background:#2563eb;color:#fff}
+        .week-timeline-head button.selected:not(.today){background:#fff6f6!important}
+        .week-timeline-head button em{max-width:100%;overflow:hidden;color:#c51d25;font-size:8px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
+        .week-timeline-body{position:relative!important;min-width:760px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 115px,#dbe3ec 115px,#dbe3ec 116px)}
+        .week-time-column{position:absolute!important;inset:0 auto 0 0;width:54px;background:#fff}
+        .week-time-column span{position:absolute!important;right:8px;z-index:2;padding:0 2px;transform:translateY(-50%);background:#fff;color:#475569;font-size:10px;line-height:1}
+        .week-day-columns{display:grid!important;height:100%;margin-left:54px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}
+        .week-day-column{position:relative!important;min-width:0;border-left:1px solid #dbe3ec;cursor:pointer}
+        .week-day-column.selected{background:rgba(227,27,35,.025);box-shadow:inset 0 0 0 2px rgba(227,27,35,.45)}
+        .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:64px;max-height:66px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 5px;color:#172033;font-size:9px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+        .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:9px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
+        .week-appointment>.week-appointment-status{color:#334155;font-size:8px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}.week-appointment>.status-finalizado{color:#087d47}.week-appointment>.status-faltou{color:#c51d25}.week-appointment>.status-em-andamento{color:#1d4ed8}
+        .week-appointment>.week-budget-type{color:#7c2d12;font-size:8px;font-weight:900;text-transform:uppercase}
+        .week-appointment>.week-internal-note-indicator{position:absolute;right:3px;bottom:2px;z-index:2;width:auto;max-width:calc(100% - 8px);padding:1px 3px;border-radius:3px;background:#fff4cc;color:#7a4b00;font-size:8px;font-weight:900;line-height:1.1;text-transform:uppercase;white-space:nowrap}
+        .app.dark .week-appointment>.week-internal-note-indicator{background:#493713;color:#ffe29a}
+        .week-appointment.block,.days span.block,.day article.absence{border-color:#d18a00!important;border-left:5px solid #d18a00!important;background:rgb(255,232,124)!important;color:#4a3300!important;box-shadow:inset 0 0 0 1px #e1a900,0 2px 7px rgba(122,75,0,.22)!important}
+        .week-appointment.block>small,.day article.absence p,.day article.absence span>small,.day article.absence time>small{color:#704600!important}.day article.absence time>small{font-weight:900}
+        .week-appointment.block,.days span.block{cursor:pointer!important}.week-appointment.block>.absence-label{grid-column:1/-1;color:#704600!important;font-size:8px;font-weight:900;text-transform:uppercase}.week-appointment.block>.absence-person{grid-column:1/-1;padding-right:16px;color:#3f2c00;font-size:11px}.week-appointment.block>.absence-details{grid-column:1/-1;color:#704600!important;font-size:8px}.week-appointment.block>.absence-edit-icon{position:absolute;top:4px;right:5px;color:#704600;font-size:12px;font-style:normal}
+        .app.dark .week-appointment.block,.app.dark .days span.block,.app.dark .day article.absence{background:rgb(255,232,124)!important;color:#3f2c00!important}
+        .day article .appointment-service-type{display:block;margin-top:3px;color:#7c2d12;font-size:10px;font-weight:900;text-transform:uppercase}
+        .day article .appointment-internal-note{display:block;margin-top:6px;padding:6px 7px;border-left:3px solid #d98b00;border-radius:5px;background:#fff4cc;color:#5d3b00!important;font-size:10px!important;line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
+        .day article .appointment-internal-note b{font-weight:900}
+        .day article .appointment-customer-note{display:block;white-space:pre-wrap}
+        .app.dark .day article .appointment-internal-note{background:#493713;color:#ffe29a!important}
+        .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}
+        .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:#4d171b!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
+        .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
+        .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
+        @media(min-width:1600px){.agenda{max-width:1600px!important}.agenda-grid-semana{grid-template-columns:minmax(0,1fr) 460px!important}.week-time-zone,.week-timeline-head button small{font-size:10px}.week-timeline-head button b{font-size:22px}.week-appointment{font-size:10px}.week-appointment>b{font-size:10px}.week-appointment>strong{font-size:12px}.week-appointment>small{font-size:10px}.week-appointment>.week-appointment-status,.week-appointment>.week-budget-type{font-size:9px}.week-time-column span{font-size:11px}.agenda-grid-semana .day article time>b{font-size:12px}.agenda-grid-semana .day article h3{font-size:13px}.agenda-grid-semana .day article p,.agenda-grid-semana .day article span>small{font-size:10px}.agenda-grid-semana .day article .appointment-toggle{font-size:11px!important}}
+        @media(max-width:1500px){.agenda-grid-semana .agenda-finalization.compact{padding:6px 7px}.agenda-grid-semana .agenda-finalization.compact>b{display:block;font-size:11px!important;line-height:1.2;letter-spacing:-.04em;white-space:nowrap!important}}
+        @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
+      `}</style>
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
         <span>
@@ -3403,6 +4896,14 @@ function Agenda({
             <option value="semana">Semana</option>
             <option value="mes">Mês</option>
           </select>
+          {mode === "semana" && (
+            <button
+              type="button"
+              onClick={() => setShowSaturday((current) => !current)}
+            >
+              {showSaturday ? "Ocultar sábado" : "Mostrar sábado"}
+            </button>
+          )}
           <button onClick={() => setOpenCal(!openCal)}>
             {openCal ? "Ocultar calendário ⌃" : "Mostrar calendário ⌄"}
           </button>
@@ -3411,47 +4912,234 @@ function Agenda({
           </button>
         </div>
       </div>
-      <div className={openCal ? "aggrid" : "aggrid calendar-closed"}>
+      <div
+        className={`${openCal ? "aggrid" : "aggrid calendar-closed"} agenda-grid-${mode}`}
+      >
         {openCal && (
           <div className={"calendar calendar-" + mode}>
-            <div className="week">
-              {weekLabels.map((x) => (
-                <b key={x}>{x}</b>
-              ))}
-            </div>
-            <div className="days">
-              {calendarDays.map((d) => {
-                const ds = iso(d),
-                  apps = appointmentsForDate(ds),
-                  holiday = holidays.find((h: any) => h.date === ds);
-                return (
-                  <button
-                    onClick={() => setDate(ds)}
-                    className={
-                      (ds === date ? "selected " : "") +
-                      (mode === "mes" && d.getMonth() !== cursor.getMonth()
-                        ? "muted"
-                        : "") +
-                      (holiday ? " holiday" : "")
-                    }
-                    key={ds}
-                  >
-                    <b>{mode === "dia" ? fmt(ds) : d.getDate()}</b>
-                    {holiday && <em title={holiday.name}>● {holiday.name}</em>}
-                    {apps.map((a: Appt) => (
-                      <span
-                        className={`${apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
-                        key={a.id}
+            {mode === "semana" ? (
+              <div
+                className="week-timeline"
+                style={{ "--week-days": visibleWeekDays.length } as any}
+              >
+                <div className="week-timeline-head">
+                  <span className="week-time-zone">Horário</span>
+                  {visibleWeekDays.map((d) => {
+                    const ds = iso(d),
+                      holiday = holidays.find((h: any) => h.date === ds);
+                    return (
+                      <button
+                        type="button"
+                        key={ds}
+                        className={`${ds === date ? "selected" : ""}${ds === todayIso ? " today" : ""}`}
+                        onClick={() => setDate(ds)}
                       >
-                        {isCarriedInto(a, ds) ? "↳ " : `${a.time} `}
-                        {a.client.split(" ")[0]}
-                        {a.quoteSentAt ? " ✓" : ""}
+                        <small>
+                          {d
+                            .toLocaleDateString("pt-BR", { weekday: "short" })
+                            .replace(".", "")}
+                        </small>
+                        <b>{d.getDate()}</b>
+                        {holiday && <em title={holiday.name}>{holiday.name}</em>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  className="week-timeline-body"
+                  style={{
+                    height: `${(weekEndHour - weekStartHour) * weekHourHeight}px`,
+                  }}
+                >
+                  <div className="week-time-column">
+                    {weekHours.map((hour) => (
+                      <span
+                        key={hour}
+                        style={{ top: `${(hour - weekStartHour) * weekHourHeight}px` }}
+                      >
+                        {String(hour).padStart(2, "0")}:00
                       </span>
                     ))}
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                  <div className="week-day-columns">
+                    {visibleWeekDays.map((d) => {
+                      const ds = iso(d),
+                        apps = (data as Appt[]).filter(
+                          (appointment) => appointment.date === ds,
+                        );
+                      return (
+                        <div
+                          className={`week-day-column${ds === date ? " selected" : ""}`}
+                          key={ds}
+                          onClick={() => setDate(ds)}
+                        >
+                          {[...apps]
+                            .sort(
+                              (first, second) =>
+                                first.time.localeCompare(second.time) ||
+                                first.client.localeCompare(second.client),
+                            )
+                            .map((a: Appt, appointmentIndex, sortedApps) => {
+                            const stackedTops = sortedApps
+                                .slice(0, appointmentIndex + 1)
+                                .reduce<number[]>((tops, appointment, index) => {
+                                  const minutes = appointmentMinute(
+                                      appointment.time,
+                                    ),
+                                    naturalTop = Math.max(
+                                      0,
+                                      ((minutes - weekStartHour * 60) / 60) *
+                                        weekHourHeight,
+                                    ),
+                                    previousTop = tops[index - 1];
+                                  tops.push(
+                                    index === 0
+                                      ? naturalTop
+                                      : Math.max(naturalTop, previousTop + 70),
+                                  );
+                                  return tops;
+                                }, []),
+                              top = stackedTops[stackedTops.length - 1] ?? 0;
+                            return (
+                              <span
+                                className={`week-appointment ${apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
+                                key={a.id}
+                                role={isEmployeeAbsence(a) ? "button" : undefined}
+                                tabIndex={isEmployeeAbsence(a) ? 0 : undefined}
+                                onClick={(event) => {
+                                  if (!isEmployeeAbsence(a)) return;
+                                  event.stopPropagation();
+                                  editCalendarAbsence(a);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (
+                                    isEmployeeAbsence(a) &&
+                                    (event.key === "Enter" || event.key === " ")
+                                  ) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    editCalendarAbsence(a);
+                                  }
+                                }}
+                                style={{
+                                  top: `${top}px`,
+                                }}
+                                title={
+                                  isEmployeeAbsence(a)
+                                    ? `${employeeAbsenceName(a)} · ${employeeAbsencePeriod(a)}${employeeAbsenceReason(a) ? ` · ${employeeAbsenceReason(a)}` : ""}`
+                                    : `${a.time} · ${a.client}${a.vehicle ? ` · ${a.vehicle}` : ""}`
+                                }
+                              >
+                                {isEmployeeAbsence(a) ? (
+                                  <>
+                                    <small className="absence-label">
+                                      Funcionário ausente
+                                    </small>
+                                    <strong className="absence-person">
+                                      {employeeAbsenceName(a)}
+                                    </strong>
+                                    <i className="absence-edit-icon" aria-hidden="true">
+                                      ✎
+                                    </i>
+                                    <small className="absence-details">
+                                      {employeeAbsencePeriod(a)}
+                                      {employeeAbsenceReason(a)
+                                        ? ` · ${employeeAbsenceReason(a)}`
+                                        : ""}
+                                    </small>
+                                  </>
+                                ) : (
+                                  <>
+                                    <b>{isCarriedInto(a, ds) ? "↳" : a.time}</b>
+                                    <strong>{a.client}</strong>
+                                    {a.quoteSentAt && <i>✓</i>}
+                                    <small>
+                                      {a.vehicle || "Veículo não informado"} ·{" "}
+                                      {appointmentKindLabel(a)}
+                                    </small>
+                                    {weeklyProgressLabel(a) && (
+                                      <small
+                                        className={`week-appointment-status status-${weeklyProgressLabel(a).toLocaleLowerCase("pt-BR").replaceAll(" ", "-")}`}
+                                      >
+                                        {weeklyProgressLabel(a)}
+                                      </small>
+                                    )}
+                                    {weeklyBudgetTypeLabel(a) && (
+                                      <small className="week-budget-type">
+                                        {weeklyBudgetTypeLabel(a)}
+                                      </small>
+                                    )}
+                                    {a.internalNote?.trim() && (
+                                      <small
+                                        className="week-internal-note-indicator"
+                                        title="Há uma observação interna registrada"
+                                      >
+                                        * Observação interna
+                                      </small>
+                                    )}
+                                  </>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="week">
+                  {weekLabels.map((x) => (
+                    <b key={x}>{x}</b>
+                  ))}
+                </div>
+                <div className="days">
+                  {calendarDays.map((d) => {
+                    const ds = iso(d),
+                      apps = appointmentsForDate(ds),
+                      holiday = holidays.find((h: any) => h.date === ds);
+                    return (
+                      <button
+                        onClick={() => setDate(ds)}
+                        className={
+                          (ds === date ? "selected " : "") +
+                          (mode === "mes" && d.getMonth() !== cursor.getMonth()
+                            ? "muted"
+                            : "") +
+                          (holiday ? " holiday" : "")
+                        }
+                        key={ds}
+                      >
+                        <b>{mode === "dia" ? fmt(ds) : d.getDate()}</b>
+                        {holiday && <em title={holiday.name}>● {holiday.name}</em>}
+                        {apps.map((a: Appt) => (
+                          <span
+                            className={`${apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, ds) ? " carried-over" : ""}`}
+                            key={a.id}
+                            onClick={(event) => {
+                              if (!isEmployeeAbsence(a)) return;
+                              event.stopPropagation();
+                              editCalendarAbsence(a);
+                            }}
+                            title={
+                              isEmployeeAbsence(a)
+                                ? "Clique para editar ou excluir esta ausência"
+                                : undefined
+                            }
+                          >
+                            {isEmployeeAbsence(a)
+                              ? `FUNCIONÁRIO AUSENTE · ${employeeAbsenceName(a)} · ${employeeAbsencePeriod(a)}${employeeAbsenceReason(a) ? ` · ${employeeAbsenceReason(a)}` : ""}`
+                              : `${isCarriedInto(a, ds) ? "↳ " : `${a.time} `}${a.client.split(" ")[0]}${a.quoteSentAt ? " ✓" : ""}`}
+                          </span>
+                        ))}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
         <div className="day">
@@ -3464,18 +5152,60 @@ function Agenda({
               {list.length} {list.length === 1 ? "registro" : "registros"}
             </b>
           </div>
+          {date === todayIso && (
+            <div className="team-agenda-reminder">
+              <span>
+                <small>Lembrete para a equipe</small>
+                <b>{teamAgendaLabel}</b>
+                <em>
+                  {teamAgendaRows.length}{" "}
+                  {teamAgendaRows.length === 1
+                    ? "agendamento"
+                    : "agendamentos"}
+                </em>
+              </span>
+              <button type="button" onClick={() => message(teamAgendaMessage)}>
+                Preparar WhatsApp
+              </button>
+            </div>
+          )}
           {list.length === 0 && (
             <div className="emptyday">
               Nenhum agendamento. Clique em “Novo agendamento” para incluir.
             </div>
           )}
-          {list.map((a: Appt) => {
+          {list.map((a: Appt, index: number) => {
             const expanded = expandedAppointments.includes(a.id);
             return (
-              <article
-                className={`${a.type === "bloqueio" ? "absence" : apptClass(a)}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
-                key={a.id}
-              >
+              <Fragment key={a.id}>
+                {isOngoingVehicle(a) &&
+                  (index === 0 || !isOngoingVehicle(list[index - 1])) && (
+                    <button
+                      type="button"
+                      className="day-group-heading ongoing"
+                      onClick={() =>
+                        setShowOngoingVehicles((current) => !current)
+                      }
+                      aria-expanded={showOngoingVehicles}
+                    >
+                      <span>
+                        Veículos em andamento
+                        <small>
+                          {ongoingVehicleCount}{" "}
+                          {ongoingVehicleCount === 1 ? "veículo" : "veículos"}
+                        </small>
+                      </span>
+                      <strong>
+                        {showOngoingVehicles
+                          ? "Recolher ▲"
+                          : "Mostrar veículos ▼"}
+                      </strong>
+                    </button>
+                  )}
+                {(!isOngoingVehicle(a) || showOngoingVehicles) && (
+                  <article
+                    className={`${isEmployeeAbsence(a) ? "absence" : apptClass(a)}${a.type === "revisao" && !a.reviewWithService ? " review-30-days" : ""}${a.inProgress ? " vehicle-in-shop" : ""}${a.budget?.processStatus === "Finalizado" ? " completed" : ""}${isCarriedInto(a, date) ? " carried-over" : ""}`}
+                  >
                 <time>
                   <b>{a.time}</b>
                   <small>
@@ -3485,13 +5215,13 @@ function Agenda({
                         ? "FINALIZADO"
                         : agendaStatusLabel(a)}
                   </small>
-                  {expanded && a.type !== "bloqueio" && a.tech && (
+                  {expanded && !isEmployeeAbsence(a) && a.tech && (
                     <small className="card-tech">
                       {a.status === "avaliou" ? "Avaliado por" : "Téc."}{" "}
                       {a.tech}
                     </small>
                   )}
-                  {expanded && a.type !== "bloqueio" && a.startedAt && (
+                  {expanded && !isEmployeeAbsence(a) && a.startedAt && (
                     <small className="card-start">Início: {a.startedAt}</small>
                   )}
                 </time>
@@ -3515,11 +5245,11 @@ function Agenda({
                       }
                       title={expanded ? "Recolher" : "Ver atendimento completo"}
                     >
-                      {expanded ? "⌃" : "⌄"}
+                      {expanded ? "Recolher ▲" : "Ver detalhes ▼"}
                     </button>
                   </div>
                   <p>
-                    {a.type === "bloqueio"
+                    {isEmployeeAbsence(a)
                       ? "Ausência de funcionário"
                       : a.vehicle}
                     {a.plate && (
@@ -3529,6 +5259,11 @@ function Agenda({
                       </>
                     )}
                   </p>
+                  {!isEmployeeAbsence(a) && weeklyBudgetTypeLabel(a) && (
+                    <small className="appointment-service-type">
+                      {weeklyBudgetTypeLabel(a)}
+                    </small>
+                  )}
                   {isCarriedInto(a, date) && (
                     <small className="carry-over-notice">
                       ↳ Na oficina desde{" "}
@@ -3539,11 +5274,22 @@ function Agenda({
                   )}
                   {a.budget?.processStatus === "Finalizado" ? (
                     <div className="agenda-finalization compact">
-                      <b>✓ {completedAttendanceLabel(a)}</b>
+                      <b
+                        style={{
+                          display: "block",
+                          fontSize: "clamp(8.5px, 0.72vw, 14px)",
+                          letterSpacing: "-0.035em",
+                          lineHeight: 1.2,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        ✓ {completedAttendanceLabel(a)}
+                      </b>
                     </div>
                   ) : null}
                   {a.type === "cliente" &&
                     a.status === "avaliou" &&
+                    a.quoteFollowUpDecision !== "declined" &&
                     !a.quoteSentAt &&
                     !a.serviceAppointmentId &&
                     a.budget?.processStatus !== "Finalizado" && (
@@ -3551,6 +5297,11 @@ function Agenda({
                         {quoteWaitingLabel(a)}
                       </small>
                     )}
+                  {a.quoteFollowUpDecision === "declined" && (
+                    <small className="quote-waiting">
+                      Cliente desistiu do serviço
+                    </small>
+                  )}
                   {a.quoteSentAt &&
                     a.budget?.processStatus !== "Finalizado" && (
                       <small className="quote-sent">
@@ -3568,7 +5319,16 @@ function Agenda({
                     )}
                   {expanded && (
                     <div className="appointment-details">
-                      {a.note && <small>{a.note}</small>}
+                      {a.internalNote?.trim() && (
+                        <small className="appointment-internal-note">
+                          <b>OBSERVAÇÃO INTERNA:</b> {a.internalNote.trim()}
+                        </small>
+                      )}
+                      {a.note?.trim() && (
+                        <small className="appointment-customer-note">
+                          <b>Relato do cliente:</b> {a.note.trim()}
+                        </small>
+                      )}
                       {a.scheduledBy && a.createdAt && (
                         <small className="schedule-meta">
                           Agendado por {a.scheduledBy} em{" "}
@@ -3618,6 +5378,22 @@ function Agenda({
                           Última edição por {a.lastEditedBy}
                         </small>
                       )}
+                      {a.status === "faltou" && a.noShowMarkedBy && (
+                        <small className="schedule-meta no-show-meta">
+                          Falta registrada por {a.noShowMarkedBy}
+                          {a.noShowMarkedAt
+                            ? ` em ${new Date(a.noShowMarkedAt).toLocaleString(
+                                "pt-BR",
+                                {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}`
+                            : ""}
+                        </small>
+                      )}
                       {a.quoteSentAt && (
                         <small className="schedule-meta">
                           Enviado em{" "}
@@ -3635,7 +5411,7 @@ function Agenda({
                 </span>
                 {expanded && (
                   <div className="appointment-actions">
-                    {a.type !== "bloqueio" && (
+                    {!isEmployeeAbsence(a) && (
                       <button
                         onClick={() =>
                           message(
@@ -3646,11 +5422,31 @@ function Agenda({
                         Mensagem
                       </button>
                     )}
+                    {!isEmployeeAbsence(a) && (
+                      <button
+                        className="summary-button"
+                        onClick={() => preview(a)}
+                      >
+                        Visualizar resumo
+                      </button>
+                    )}
+                    {!isEmployeeAbsence(a) &&
+                      a.budget?.processStatus !== "Finalizado" &&
+                      (a.status === "agendado" || a.status === "faltou") && (
+                        <button
+                          className={`no-show-action${a.status === "faltou" ? " undo" : ""}`}
+                          onClick={() => markNoShow(a)}
+                        >
+                          {a.status === "faltou"
+                            ? "Desfazer falta"
+                            : "Cliente faltou"}
+                        </button>
+                      )}
                     <button onClick={() => edit(a)}>Editar</button>
                     <button className="danger" onClick={() => remove(a)}>
                       Excluir
                     </button>
-                    {a.type !== "bloqueio" && (
+                    {!isEmployeeAbsence(a) && a.status !== "faltou" && (
                       <button onClick={() => start(a)}>
                         {a.type === "revisao" && !a.review
                           ? "Abrir revisão →"
@@ -3667,12 +5463,14 @@ function Agenda({
                                     ? "Iniciar serviço →"
                                     : a.status === "avaliou"
                                       ? "Abrir orçamento →"
-                                      : "Abrir avaliação →"}
+                                      : "Abrir atendimento →"}
                       </button>
                     )}
                   </div>
                 )}
-              </article>
+                  </article>
+                )}
+              </Fragment>
             );
           })}
         </div>
@@ -3688,11 +5486,11 @@ function Agenda({
         </button>
         <button className="in-progress-alert" onClick={showInProgress}>
           <span>
-            <b>Atendimentos em andamento</b>
-            <small>Veículos em execução aguardando conclusão</small>
+            <b>Veículos na oficina</b>
+            <small>Aguardando avaliação, revisão ou conclusão</small>
           </span>
           <strong>{inProgressCount}</strong>
-          <i>Ver atendimentos →</i>
+          <i>Ver veículos →</i>
         </button>
       </div>
     </section>
@@ -3702,14 +5500,13 @@ function Agenda({
 function ReviewScreen({
   appointment,
   appointments,
-  techs,
   onBack,
   onSave,
 }: any) {
   const previous = appointments.filter(
     (a: Appt) =>
       a.id !== appointment.id &&
-      a.type !== "bloqueio" &&
+      !isEmployeeAbsence(a) &&
       a.status === "servico" &&
       (!appointment.plate || a.plate === appointment.plate),
   );
@@ -3727,7 +5524,13 @@ function ReviewScreen({
     saved?.result ?? "Revisão concluída",
   );
   const [notes, setNotes] = useState(saved?.notes ?? "");
-  const [reviewer, setReviewer] = useState(saved?.reviewer ?? techs[0] ?? "");
+  const savedReviewer =
+    saved?.reviewer === "Victor" ? "Vitor" : saved?.reviewer ?? "";
+  const [reviewer, setReviewer] = useState(
+    REVIEW_TECHNICIANS.includes(savedReviewer as (typeof REVIEW_TECHNICIANS)[number])
+      ? savedReviewer
+      : "",
+  );
   const selected = previous.find((a: Appt) => a.id === previousId);
   const review: ReviewState = {
     previousId,
@@ -3780,12 +5583,14 @@ function ReviewScreen({
             </select>
           </label>
           <label>
-            Responsável
+            Quem fez a revisão? *
             <select
               value={reviewer}
               onChange={(e) => setReviewer(e.target.value)}
+              required
             >
-              {techs.map((x: string) => (
+              <option value="">Selecione o responsável</option>
+              {REVIEW_TECHNICIANS.map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>
@@ -3849,7 +5654,18 @@ function ReviewScreen({
         <div className="review-actions">
           <button onClick={onBack}>← Voltar à agenda</button>
           <button onClick={print}>Imprimir revisão</button>
-          <button className="primary" onClick={() => onSave(review)}>
+          <button
+            className="primary"
+            onClick={() => {
+              if (!reviewer.trim()) {
+                alert(
+                  "Selecione quem fez a revisão de 30 dias antes de finalizar.",
+                );
+                return;
+              }
+              onSave({ ...review, reviewer: reviewer.trim() });
+            }}
+          >
             {appointment.reviewWithService
               ? "Salvar revisão e continuar para avaliação →"
               : "Salvar e concluir revisão"}
@@ -3930,6 +5746,260 @@ function ReviewScreen({
     </>
   );
 }
+function AttendancePreviewModal({ appointment, roundStep, close }: any) {
+  const budget = appointment.budget as BudgetState | undefined,
+    evaluationStates = Object.values(
+      appointment.evaluation?.status ?? {},
+    ) as string[],
+    evaluatedCount = evaluationStates.filter(
+      (state) => state && state !== "na",
+    ).length,
+    attentionCount = evaluationStates.filter(
+      (state) => state === "y" || state === "r",
+    ).length,
+    partRows = (budget?.parts ?? []).filter(
+      (part: any) => String(part?.item ?? part?.name ?? "").trim(),
+    ),
+    selectedServiceRows = (budget?.selectedServices ?? [])
+      .map((index: number) => ({
+        name: SERVICES[index]?.[0] ?? "Serviço",
+        quantity: Number(budget?.serviceQty?.[index] ?? 1),
+        value: servicePrice(index, budget?.servicePrices),
+        courtesy: serviceIsCourtesy(index),
+      }))
+      .filter((service: any) => service.quantity > 0),
+    manualServiceRows = (budget?.manualServices ?? [])
+      .filter((service: any) => String(service?.name ?? "").trim())
+      .map((service: any) => ({
+        name: service.name,
+        quantity: Number(service.qty ?? 1),
+        value: Number(service.value ?? 0),
+        courtesy: false,
+      })),
+    serviceRows = [...selectedServiceRows, ...manualServiceRows],
+    partsTotal = partRows.reduce(
+      (total: number, part: any) =>
+        total + Number(part.qty ?? 1) * saleOf(part, roundStep),
+      0,
+    ),
+    servicesTotal = serviceRows.reduce(
+      (total: number, service: any) =>
+        total +
+        (service.courtesy ? 0 : service.quantity * Number(service.value ?? 0)),
+      0,
+    ),
+    conferenceChecks = Object.values(
+      appointment.conference?.checks ?? {},
+    ).filter(Boolean).length,
+    serviceTypeLabels: Record<string, string> = {
+      gabaritagem: "Orçamento: gabaritagem",
+      pecas: "Orçamento: peças",
+      alinhamento_3d: "Alinhamento 3D",
+      alinhamento_balanceamento: "Alinhamento e balanceamento",
+      servicos: "Orçamento: serviços",
+    },
+    attendanceType =
+      appointment.type === "revisao"
+        ? "Revisão de 30 dias"
+        : appointment.type === "retorno"
+          ? "Retorno"
+          : appointment.type === "garantia"
+            ? "Garantia"
+            : (appointment.appointmentServiceType
+                ? serviceTypeLabels[appointment.appointmentServiceType]
+                : "") ||
+              "Atendimento comum",
+    statusLabel =
+      appointment.budget?.processStatus === "Finalizado"
+        ? completedAttendanceLabel(appointment)
+        : agendaStatusLabel(appointment),
+    dateTime = (value?: string) =>
+      value
+        ? new Date(value).toLocaleString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "Não registrado";
+
+  return (
+    <div className="backdrop attendance-preview-backdrop" role="presentation">
+      <section
+        className="modal attendance-preview-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="attendance-preview-title"
+      >
+        <header className="attendance-preview-header">
+          <span>
+            <small>VISUALIZAÇÃO RÁPIDA</small>
+            <h2 id="attendance-preview-title">Resumo do atendimento</h2>
+            <p>
+              {appointment.client} · {appointment.vehicle || "Veículo não informado"}
+              {appointment.plate ? ` · ${appointment.plate}` : ""}
+            </p>
+          </span>
+          <button className="attendance-preview-close" onClick={close} aria-label="Fechar">
+            ×
+          </button>
+        </header>
+
+        <div className="attendance-preview-badges">
+          <b>{statusLabel}</b>
+          <span>{attendanceType}</span>
+          {appointment.workOrder && <span>OS {appointment.workOrder}</span>}
+        </div>
+
+        <div className="attendance-preview-grid">
+          <section>
+            <h3>Agendamento</h3>
+            <p><b>Data e horário</b>{fmt(appointment.date)}, às {appointment.time}</p>
+            <p><b>Contato</b>{appointment.phone || "Não informado"}</p>
+            <p><b>Quilometragem</b>{appointment.km ? `${appointment.km} km` : "Não informada"}</p>
+            <p><b>Agendado por</b>{appointment.scheduledBy || "Não informado"}</p>
+            <p><b>Registro</b>{dateTime(appointment.createdAt)}</p>
+          </section>
+          <section>
+            <h3>Abertura e avaliação</h3>
+            <p><b>Início</b>{appointment.startedAt || "Não iniciado"}</p>
+            <p><b>Técnico</b>{appointment.tech || "Não informado"}</p>
+            <p>
+              <b>Avaliação de peças</b>
+              {appointment.partsEvaluationSkipped
+                ? "Não realizada por opção do atendimento"
+                : evaluatedCount
+                  ? `${evaluatedCount} itens avaliados${attentionCount ? ` · ${attentionCount} com atenção` : ""}`
+                  : "Ainda sem itens registrados"}
+            </p>
+            <p><b>Registrada por</b>{appointment.evaluationRecordedBy || "Não informado"}</p>
+            <p><b>Data do registro</b>{dateTime(appointment.evaluationRecordedAt)}</p>
+          </section>
+        </div>
+
+        <section className="attendance-preview-section">
+          <div className="attendance-preview-section-title">
+            <h3>Orçamento e serviços</h3>
+            <strong>{brl(partsTotal + servicesTotal)}</strong>
+          </div>
+          {!partRows.length && !serviceRows.length ? (
+            <p className="attendance-preview-empty">Nenhum item de orçamento foi preenchido.</p>
+          ) : (
+            <div className="attendance-preview-items">
+              {partRows.map((part: any, index: number) => (
+                <div key={`part-${index}`}>
+                  <span><b>{Number(part.qty ?? 1)}x</b> {part.item ?? part.name}</span>
+                  <strong>{brl(Number(part.qty ?? 1) * saleOf(part, roundStep))}</strong>
+                </div>
+              ))}
+              {serviceRows.map((service: any, index: number) => (
+                <div key={`service-${index}`}>
+                  <span><b>{service.quantity}x</b> {service.name}</span>
+                  <strong>
+                    {service.courtesy
+                      ? "Cortesia"
+                      : brl(service.quantity * service.value)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="attendance-preview-meta">
+            <span>
+              <b>Orçamento preenchido por</b>
+              {appointment.budgetEditedBy || "Não informado"}
+              {appointment.budgetEditedAt ? ` · ${dateTime(appointment.budgetEditedAt)}` : ""}
+            </span>
+            <span>
+              <b>Envio ao cliente</b>
+              {appointment.quoteSentAt
+                ? `${dateTime(appointment.quoteSentAt)}${appointment.quoteSentBy ? ` por ${appointment.quoteSentBy}` : ""}`
+                : "Ainda não registrado"}
+            </span>
+          </div>
+        </section>
+
+        <div className="attendance-preview-grid">
+          <section>
+            <h3>Conferência</h3>
+            <p><b>Marcações registradas</b>{conferenceChecks}</p>
+            <p><b>Situação</b>{appointment.conference?.finalizedAt ? "Finalizada" : "Em aberto"}</p>
+            <p><b>Finalizada por</b>{appointment.conference?.finalizedBy || "Não informado"}</p>
+            <p><b>Data</b>{dateTime(appointment.conference?.finalizedAt)}</p>
+          </section>
+          <section>
+            <h3>Observações</h3>
+            <p className="attendance-preview-note">
+              <b>Relato do cliente</b>
+              {appointment.note?.trim() || "Não informado."}
+            </p>
+            <p className="attendance-preview-note attendance-preview-internal-note">
+              <b>Observação interna da equipe</b>
+              {appointment.internalNote?.trim() || "Nenhuma observação interna."}
+            </p>
+            {budget?.patioNotes?.trim() && (
+              <p className="attendance-preview-note"><b>Orientações para o pátio</b>{budget.patioNotes}</p>
+            )}
+            <p><b>Última edição</b>{appointment.lastEditedBy || "Não informado"}</p>
+            <p><b>Data</b>{dateTime(appointment.lastEditedAt)}</p>
+          </section>
+        </div>
+
+        <footer className="attendance-preview-footer">
+          <small>Consulta rápida — nenhuma informação é alterada nesta janela.</small>
+          <button className="primary" onClick={close}>Fechar resumo</button>
+        </footer>
+      </section>
+      <style>{`
+        .attendance-preview-backdrop{z-index:1200;padding:20px;overflow:auto}
+        .attendance-preview-modal{width:min(900px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:0;border-radius:18px;background:var(--card,#fff)}
+        .attendance-preview-header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;gap:20px;padding:22px 24px 16px;background:var(--card,#fff);border-bottom:1px solid var(--line,#dce2ea)}
+        .attendance-preview-header small{color:#df1823;font-weight:900;letter-spacing:.08em}
+        .attendance-preview-header h2{margin:3px 0;font-size:24px}
+        .attendance-preview-header p{margin:0;color:var(--muted,#5d6878)}
+        .attendance-preview-close{flex:0 0 42px;height:42px;font-size:27px;line-height:1}
+        .attendance-preview-badges{display:flex;flex-wrap:wrap;gap:8px;padding:16px 24px 0}
+        .attendance-preview-badges>*{padding:7px 11px;border-radius:999px;background:#edf2f7;font-size:12px;text-transform:uppercase}
+        .attendance-preview-badges b{background:#dff7e9;color:#08723c}
+        .attendance-preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 24px 0}
+        .attendance-preview-grid>section,.attendance-preview-section{border:1px solid var(--line,#dce2ea);border-radius:13px;padding:16px;background:var(--card,#fff)}
+        .attendance-preview-grid h3,.attendance-preview-section h3{margin:0 0 12px;font-size:16px}
+        .attendance-preview-grid p{display:grid;grid-template-columns:145px 1fr;gap:8px;margin:7px 0;font-size:13px;line-height:1.4}
+        .attendance-preview-grid p b{color:var(--muted,#5d6878)}
+        .attendance-preview-section{margin:14px 24px 0}
+        .attendance-preview-section-title{display:flex;align-items:center;justify-content:space-between;gap:15px}
+        .attendance-preview-section-title strong{font-size:19px;color:#df1823}
+        .attendance-preview-items{display:grid;gap:6px;margin-top:8px}
+        .attendance-preview-items>div{display:flex;justify-content:space-between;gap:20px;padding:8px 10px;border-radius:8px;background:#f4f7fa;font-size:13px}
+        .attendance-preview-items span{min-width:0;overflow-wrap:anywhere}
+        .attendance-preview-items span b{margin-right:5px}
+        .attendance-preview-items strong{white-space:nowrap}
+        .attendance-preview-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line,#dce2ea)}
+        .attendance-preview-meta span{font-size:12px;line-height:1.4}
+        .attendance-preview-meta b{display:block;color:var(--muted,#5d6878)}
+        .attendance-preview-empty{margin:6px 0;color:var(--muted,#5d6878)}
+        .attendance-preview-note{display:block!important;padding:10px;border-radius:8px;background:#f4f7fa;white-space:pre-wrap}
+        .attendance-preview-note b{display:block;margin-bottom:4px}
+        .attendance-preview-internal-note{background:#fff4cc!important;border-left:4px solid #d98b00;color:#5d3b00}
+        .attendance-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 24px 24px}
+        .attendance-preview-footer small{color:var(--muted,#5d6878)}
+        .attendance-preview-footer button{white-space:nowrap}
+        .dark .attendance-preview-items>div,.dark .attendance-preview-note,.dark .attendance-preview-badges>*{background:#1c2938}
+        .dark .attendance-preview-internal-note{background:#493713!important;color:#ffe29a}
+        @media(max-width:720px){
+          .attendance-preview-backdrop{padding:8px}
+          .attendance-preview-modal{max-height:calc(100vh - 16px)}
+          .attendance-preview-header,.attendance-preview-badges,.attendance-preview-grid,.attendance-preview-footer{padding-left:14px;padding-right:14px}
+          .attendance-preview-grid,.attendance-preview-meta{grid-template-columns:1fr}
+          .attendance-preview-section{margin-left:14px;margin-right:14px}
+          .attendance-preview-grid p{grid-template-columns:125px 1fr}
+          .attendance-preview-footer{align-items:stretch;flex-direction:column}
+        }
+      `}</style>
+    </div>
+  );
+}
 function EvaluationStartModal({
   appointment,
   techs,
@@ -3942,6 +6012,7 @@ function EvaluationStartModal({
       minute: "2-digit",
     }),
     [form, setForm] = useState({
+      evaluateParts: "",
       evaluator: appointment.tech || techs[0] || "",
       startedAt: appointment.startedAt || now,
       vehicle: appointment.vehicle || "",
@@ -3958,8 +6029,8 @@ function EvaluationStartModal({
       >
         <div>
           <span>
-            <h2>Iniciar avaliação</h2>
-            <p>Confirme os dados antes de abrir a ficha de avaliação.</p>
+            <h2>Iniciar atendimento</h2>
+            <p>Confirme os dados e escolha se haverá avaliação de peças.</p>
           </span>
           <button type="button" onClick={close} aria-label="Fechar">
             ×
@@ -3972,8 +6043,26 @@ function EvaluationStartModal({
           </small>
         </div>
         <section>
+          <label className="wide">
+            Será feita avaliação de peças?
+            <select
+              required
+              value={form.evaluateParts}
+              onChange={(event) =>
+                setForm({ ...form, evaluateParts: event.target.value })
+              }
+            >
+              <option value="">Selecione uma opção</option>
+              <option value="sim">Sim — abrir avaliação de peças</option>
+              <option value="nao">
+                Não — ir direto para orçamento de serviços
+              </option>
+            </select>
+          </label>
           <label>
-            Quem está avaliando
+            {form.evaluateParts === "nao"
+              ? "Responsável pelo atendimento"
+              : "Quem está avaliando"}
             <select
               required
               value={form.evaluator}
@@ -4026,15 +6115,18 @@ function EvaluationStartModal({
           </label>
         </section>
         <p className="evaluation-start-help">
-          O avaliador ficará registrado separadamente do usuário que está
-          preenchendo o sistema.
+          {form.evaluateParts === "nao"
+            ? "A dispensa da avaliação ficará registrada e o orçamento abrirá diretamente na parte de serviços."
+            : "O avaliador ficará registrado separadamente do usuário que está preenchendo o sistema."}
         </p>
         <footer>
           <button type="button" onClick={close}>
             Cancelar
           </button>
           <button type="submit" className="primary">
-            Confirmar e abrir avaliação →
+            {form.evaluateParts === "nao"
+              ? "Confirmar e abrir orçamento →"
+              : "Confirmar e abrir avaliação →"}
           </button>
         </footer>
       </form>
@@ -4052,12 +6144,17 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         id: Date.now(),
         date: iso(new Date()),
         time: "08:00",
+        absenceEndTime: "",
         client: "",
         phone: "",
         vehicle: "",
+        vehicleBrand: "",
+        vehicleColor: "",
+        vehicleBody: "",
         plate: "",
         km: "",
         note: "",
+        internalNote: "",
         type: "cliente",
         status: "agendado",
         tech: "",
@@ -4068,12 +6165,52 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
   return (
     <div className="backdrop">
       <form
-        className="modal"
+        className="modal appointment-modal"
         onSubmit={(e) => {
           e.preventDefault();
+          if (
+            f.type === "bloqueio" &&
+            (!f.absenceEndTime || f.absenceEndTime <= f.time)
+          ) {
+            alert("Informe um horário final posterior ao início da ausência.");
+            return;
+          }
           save(f);
         }}
       >
+        <style>{`
+          .appointment-modal{display:flex;flex-direction:column;width:min(1120px,calc(100vw - 40px))!important;max-width:1120px!important;max-height:calc(100vh - 30px)!important;overflow:hidden!important}
+          .appointment-modal>div:first-of-type{flex:0 0 auto}
+          .appointment-modal>section{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:11px 12px!important;min-height:0;overflow-y:auto;padding-right:5px}
+          .appointment-modal>section>label{min-width:0;margin:0!important}
+          .appointment-modal>section>label.wide{grid-column:span 2}
+          .appointment-modal input,.appointment-modal select{min-width:0}
+          .appointment-modal textarea{min-height:82px;resize:vertical}
+          .appointment-customer-note-field{grid-column:1/span 2!important}
+          .appointment-internal-note-field{grid-column:3/span 2!important}
+          .appointment-modal .appointment-progress-toggle{grid-column:1/-1!important}
+          .appointment-modal>.toggle{flex:0 0 auto;margin:10px 0 0!important}
+          .appointment-modal>footer{position:sticky;bottom:0;z-index:3;flex:0 0 auto;margin-top:8px;padding-top:10px;background:var(--card,#fff);box-shadow:0 -8px 16px rgba(255,255,255,.88)}
+          .appointment-internal-note-field{padding:10px;border:1px solid #efd58b;border-radius:9px;background:#fffaf0}
+          .appointment-internal-note-field textarea{background:#fffef9}
+          .appointment-internal-note-field>small{display:block;margin-top:5px;color:#7a5a13;font-size:11px}
+          .app.dark .appointment-internal-note-field{border-color:#735c25;background:#302816}
+          .app.dark .appointment-internal-note-field textarea{background:#17202c}
+          .app.dark .appointment-internal-note-field>small{color:#ffe29a}
+          .app.dark .appointment-modal>footer{background:#111c29;box-shadow:0 -8px 16px rgba(17,28,41,.9)}
+          @media(max-width:900px){
+            .appointment-modal{width:min(650px,calc(100vw - 24px))!important;max-height:calc(100vh - 20px)!important}
+            .appointment-modal>section{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+            .appointment-customer-note-field,.appointment-internal-note-field{grid-column:1/-1!important}
+          }
+          @media(max-width:580px){
+            .appointment-modal{width:calc(100vw - 12px)!important}
+            .appointment-modal>section{grid-template-columns:1fr!important}
+            .appointment-modal>section>label.wide,.appointment-customer-note-field,.appointment-internal-note-field,.appointment-modal .appointment-progress-toggle{grid-column:1!important}
+            .appointment-modal>footer{display:grid!important;grid-template-columns:1fr 1fr}
+            .appointment-modal>footer .danger{grid-column:1/-1}
+          }
+        `}</style>
         <div>
           <span>
             <h2>{initial ? "Editar agendamento" : "Novo agendamento"}</h2>
@@ -4092,6 +6229,10 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
                 setF({
                   ...f,
                   type: e.target.value as any,
+                  appointmentServiceType:
+                    e.target.value === "cliente"
+                      ? f.appointmentServiceType
+                      : undefined,
                   reviewWithService:
                     e.target.value === "revisao" ? f.reviewWithService : false,
                 })
@@ -4104,6 +6245,41 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               <option value="bloqueio">Ausência de funcionário</option>
             </select>
           </label>
+          {f.type === "cliente" && (
+            <label className="wide">
+              Tipo do serviço previsto
+              <select
+                required
+                value={f.appointmentServiceType || ""}
+                onChange={(e) =>
+                  setF({
+                    ...f,
+                    appointmentServiceType: e.target.value as
+                      | "gabaritagem"
+                      | "pecas"
+                      | "alinhamento_3d"
+                      | "alinhamento_balanceamento"
+                      | "servicos",
+                  })
+                }
+              >
+                <option value="">Selecione o motivo do agendamento</option>
+                <option value="gabaritagem">Orçamento: gabaritagem</option>
+                <option value="pecas">Orçamento: peças</option>
+                <option value="alinhamento_3d">Alinhamento 3D</option>
+                <option value="alinhamento_balanceamento">
+                  Alinhamento e balanceamento
+                </option>
+                <option value="servicos">
+                  Orçamento: serviços — outro tipo
+                </option>
+              </select>
+              <small>
+                Esta informação aparecerá imediatamente na agenda dos
+                técnicos.
+              </small>
+            </label>
+          )}
           {f.type === "revisao" && (
             <label className="wide appointment-progress-toggle">
               <input
@@ -4143,7 +6319,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             />
           </label>
           <label>
-            Horário
+            {f.type === "bloqueio" ? "Início da ausência" : "Horário"}
             <input
               required
               type="time"
@@ -4151,14 +6327,31 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               onChange={(e) => setF({ ...f, time: e.target.value })}
             />
           </label>
+          {f.type === "bloqueio" && (
+            <label>
+              Final da ausência
+              <input
+                required
+                type="time"
+                value={f.absenceEndTime || ""}
+                onChange={(e) =>
+                  setF({ ...f, absenceEndTime: e.target.value })
+                }
+              />
+            </label>
+          )}
           <label>
-            Nome do cliente / funcionário
+            {f.type === "bloqueio"
+              ? "Nome do funcionário ausente"
+              : "Nome do cliente / funcionário"}
             <input
               required
               value={f.client}
               onChange={(e) => setF({ ...f, client: e.target.value })}
             />
           </label>
+          {f.type !== "bloqueio" && (
+            <>
           <label>
             WhatsApp
             <input
@@ -4167,11 +6360,66 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             />
           </label>
           <label>
-            Veículo
+            Modelo do veículo
             <input
+              list="vehicle-model-list"
               value={f.vehicle}
-              onChange={(e) => setF({ ...f, vehicle: e.target.value })}
+              onChange={(e) => {
+                const vehicle = e.target.value;
+                const found = findVehicle(vehicle);
+                setF({
+                  ...f,
+                  vehicle,
+                  vehicleBrand: found?.[1] ?? f.vehicleBrand,
+                  vehicleBody: found?.[2] ?? f.vehicleBody,
+                });
+              }}
+              placeholder="Digite, por exemplo: Gol"
             />
+            <datalist id="vehicle-model-list">
+              {VEHICLE_CATALOG.map(([model, brand]) => (
+                <option key={`${brand}-${model}`} value={model}>
+                  {brand}
+                </option>
+              ))}
+            </datalist>
+            <small>Ao reconhecer o modelo, o sistema preenche a marca.</small>
+          </label>
+          <label>
+            Marca
+            <input
+              value={f.vehicleBrand || ""}
+              onChange={(e) => setF({ ...f, vehicleBrand: e.target.value })}
+              placeholder="Ex.: Volkswagen"
+            />
+          </label>
+          <label>
+            Cor do veículo
+            <input
+              list="vehicle-color-list"
+              value={f.vehicleColor || ""}
+              onChange={(e) => setF({ ...f, vehicleColor: e.target.value })}
+              placeholder="Ex.: Branco"
+            />
+            <datalist id="vehicle-color-list">
+              {["Branco", "Preto", "Prata", "Cinza", "Vermelho", "Azul", "Verde", "Bege", "Marrom"].map((color) => (
+                <option key={color} value={color} />
+              ))}
+            </datalist>
+          </label>
+          <label>
+            Tipo do veículo
+            <select
+              value={f.vehicleBody || ""}
+              onChange={(e) => setF({ ...f, vehicleBody: e.target.value })}
+            >
+              <option value="">Automóvel</option>
+              <option>Hatch</option>
+              <option>Sedã</option>
+              <option>SUV</option>
+              <option>Picape</option>
+              <option>Van</option>
+            </select>
           </label>
           <label>
             Placa (opcional)
@@ -4193,13 +6441,19 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               onChange={(e) => setF({ ...f, km: e.target.value })}
             />
           </label>
-          <label className="wide">
-            Relato do cliente / observação (opcional)
+            </>
+          )}
+          <label className="wide appointment-customer-note-field">
+            {f.type === "bloqueio"
+              ? "Motivo da ausência (opcional)"
+              : "Relato do cliente (opcional)"}
             <textarea
               value={f.note}
               onChange={(e) => setF({ ...f, note: e.target.value })}
               placeholder={
-                f.type === "revisao"
+                f.type === "bloqueio"
+                  ? "Ex.: consulta médica, compromisso particular ou outro motivo."
+                  : f.type === "revisao"
                   ? "Informe o serviço que será revisado."
                   : f.type === "garantia"
                     ? "Descreva o item ou serviço coberto pela garantia."
@@ -4209,6 +6463,19 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
               }
             />
           </label>
+          {f.type !== "bloqueio" && (
+            <label className="wide appointment-internal-note-field">
+              Observação interna da equipe (opcional)
+              <textarea
+                value={f.internalNote || ""}
+                onChange={(e) => setF({ ...f, internalNote: e.target.value })}
+                placeholder="Anote aqui orientações importantes para a equipe antes de abrir o atendimento."
+              />
+              <small>
+                Visível apenas para a equipe. Não será enviada nas mensagens ao cliente.
+              </small>
+            </label>
+          )}
           {f.type !== "bloqueio" && (
             <label className="wide appointment-progress-toggle">
               <input
@@ -4226,10 +6493,12 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
             </label>
           )}
         </section>
-        <label className="toggle">
-          <input type="checkbox" defaultChecked /> Preparar lembrete um dia
-          antes
-        </label>
+        {f.type !== "bloqueio" && (
+          <label className="toggle">
+            <input type="checkbox" defaultChecked /> Preparar lembrete um dia
+            antes
+          </label>
+        )}
         <footer>
           {initial && (
             <button
@@ -4431,6 +6700,9 @@ function PrintDocuments({
             <b>{p.qty}x</b>
             <span>
               {p.item} - {p.brand}
+              {budgetApproved && (
+                <small className="print-approved">✓ APROVADO</small>
+              )}
             </span>
             <em>{brl(p.qty * saleOf(p, roundStep))}</em>
           </div>
@@ -4488,7 +6760,10 @@ function PrintDocuments({
         </div>
       </section>
       <section className="a4 proposal-a4">
-        <BudgetHead title="PROPOSTA DE ORÇAMENTO" />
+        <BudgetHead
+          title="PROPOSTA DE ORÇAMENTO"
+          approvalBadge={budgetApproved}
+        />
         <div className="a4-client">
           <span>
             <b>Cliente</b>
@@ -4512,6 +6787,9 @@ function PrintDocuments({
             <b>{p.qty}x</b>
             <span>
               {p.item} - {p.brand}
+              {budgetApproved && (
+                <small className="print-approved">✓ APROVADO</small>
+              )}
             </span>
           </div>
         ))}
@@ -4624,7 +6902,13 @@ function PrintHead({ title }: { title: string }) {
     </header>
   );
 }
-function BudgetHead({ title }: { title: string }) {
+function BudgetHead({
+  title,
+  approvalBadge = false,
+}: {
+  title: string;
+  approvalBadge?: boolean;
+}) {
   return (
     <header className="a4-head budget-head">
       <img src="/logo-monocenter.jpg" alt="Monocenter" />
@@ -4634,7 +6918,9 @@ function BudgetHead({ title }: { title: string }) {
         <p>WhatsApp (15) 99657-4741</p>
         <h2>{title}</h2>
       </div>
-      <strong>{DISPLAY_APPT.plate || "SEM PLACA"}</strong>
+      <strong className={approvalBadge ? "approval-head-badge" : ""}>
+        {approvalBadge ? "APROVADO 👍" : DISPLAY_APPT.plate || "SEM PLACA"}
+      </strong>
     </header>
   );
 }
@@ -5016,12 +7302,13 @@ function PurchaseOrders({
   appointments,
   checks,
   setChecks,
+  orderStates,
+  setOrderStates,
   setWorkOrder,
   currentUser,
 }: any) {
-  const [filter, setFilter] = useState<
-    "all" | "pending" | "ordered" | "received"
-  >("all");
+  const [filter, setFilter] = useState<"all" | "open" | "closed">("all"),
+    [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const rows = useMemo(() => {
     const unique = new Map<string, any>();
     for (const appointment of appointments as Appt[]) {
@@ -5061,21 +7348,14 @@ function PurchaseOrders({
       );
     });
   }, [appointments, checks]);
-  const counts = {
+  const itemCounts = {
       pending: rows.filter((row) => !checks[row.key]?.ordered).length,
       ordered: rows.filter(
         (row) => checks[row.key]?.ordered && !checks[row.key]?.received,
       ).length,
       received: rows.filter((row) => checks[row.key]?.received).length,
     },
-    visibleRows = rows.filter((row) => {
-      const state = checks[row.key];
-      if (filter === "pending") return !state?.ordered;
-      if (filter === "ordered") return state?.ordered && !state?.received;
-      if (filter === "received") return state?.received;
-      return true;
-    }),
-    groups = visibleRows.reduce((result: any[], row: any) => {
+    allGroups = rows.reduce((result: any[], row: any) => {
       let group = result.find((item) => item.ownerId === row.ownerId);
       if (!group) {
         group = {
@@ -5089,18 +7369,84 @@ function PurchaseOrders({
       group.rows.push(row);
       return result;
     }, []),
-    update = (key: string, patch: Partial<PurchaseCheck>) =>
-      setChecks((current: Record<string, PurchaseCheck>) => ({
+    groups = allGroups
+      .map((group: any) => {
+        const savedState: PurchaseOrderState = orderStates[group.ownerId] ?? {
+            closed: false,
+          },
+          allReceived =
+            group.rows.length > 0 &&
+            group.rows.every((row: any) => checks[row.key]?.received),
+          totalQuantity = group.rows.reduce(
+            (total: number, row: any) => total + (Number(row.part.qty) || 0),
+            0,
+          );
+        return { ...group, savedState, allReceived, totalQuantity };
+      })
+      .filter((group: any) => {
+        if (filter === "open") return !group.savedState.closed;
+        if (filter === "closed") return group.savedState.closed;
+        return true;
+      })
+      .sort(
+        (a: any, b: any) =>
+          Number(a.savedState.closed) - Number(b.savedState.closed) ||
+          a.serviceDate.localeCompare(b.serviceDate),
+      ),
+    orderCounts = {
+      all: allGroups.length,
+      open: allGroups.filter(
+        (group: any) => !orderStates[group.ownerId]?.closed,
+      ).length,
+      closed: allGroups.filter(
+        (group: any) => orderStates[group.ownerId]?.closed,
+      ).length,
+    },
+    update = (
+      ownerId: number,
+      key: string,
+      patch: Partial<PurchaseCheck>,
+    ) => {
+      setChecks((current: Record<string, PurchaseCheck>) => {
+        const previous = current[key];
+        return {
+          ...current,
+          [key]: {
+            ...previous,
+            ...patch,
+            ordered: patch.ordered ?? previous?.ordered ?? false,
+            received: patch.received ?? previous?.received ?? false,
+            note: patch.note ?? previous?.note ?? "",
+            updatedAt: new Date().toISOString(),
+          },
+        };
+      });
+      if (orderStates[ownerId]?.closed)
+        setOrderStates(
+          (current: Record<string, PurchaseOrderState>) => ({
+            ...current,
+            [ownerId]: { closed: false },
+          }),
+        );
+    },
+    closeOrder = (ownerId: number) => {
+      setOrderStates((current: Record<string, PurchaseOrderState>) => ({
         ...current,
-        [key]: {
-          ordered: false,
-          received: false,
-          note: "",
-          ...current[key],
-          ...patch,
-          updatedAt: new Date().toISOString(),
+        [ownerId]: {
+          closed: true,
+          closedAt: new Date().toISOString(),
+          closedBy: currentUser,
         },
       }));
+      setExpanded((current) => ({ ...current, [ownerId]: false }));
+    },
+    reopenOrder = (ownerId: number) => {
+      setOrderStates((current: Record<string, PurchaseOrderState>) => ({
+        ...current,
+        [ownerId]: { closed: false },
+      }));
+      setExpanded((current) => ({ ...current, [ownerId]: true }));
+    };
   return (
     <section className="page purchase-page">
       <div className="purchase-summary">
@@ -5108,43 +7454,89 @@ function PurchaseOrders({
           className={filter === "all" ? "active" : ""}
           onClick={() => setFilter("all")}
         >
-          Todos <b>{rows.length}</b>
+          Todos os pedidos <b>{orderCounts.all}</b>
         </button>
         <button
-          className={filter === "pending" ? "active pending" : ""}
-          onClick={() => setFilter("pending")}
+          className={filter === "open" ? "active pending" : ""}
+          onClick={() => setFilter("open")}
         >
-          A comprar <b>{counts.pending}</b>
+          Pedidos abertos <b>{orderCounts.open}</b>
         </button>
         <button
-          className={filter === "ordered" ? "active ordered" : ""}
-          onClick={() => setFilter("ordered")}
+          className={filter === "closed" ? "active received" : ""}
+          onClick={() => setFilter("closed")}
         >
-          Comprados <b>{counts.ordered}</b>
-        </button>
-        <button
-          className={filter === "received" ? "active received" : ""}
-          onClick={() => setFilter("received")}
-        >
-          Conferidos <b>{counts.received}</b>
+          Pedidos fechados <b>{orderCounts.closed}</b>
         </button>
       </div>
       <div className="purchase-guidance">
         <b>Conferência do pedido</b>
         <span>
           Primeiro marque “Comprado”. Quando a peça chegar, marque “Recebido e
-          conferido”. As alterações são salvas automaticamente.
+          conferido”. Depois clique em “Salvar e fechar pedido”.
         </span>
+        <small className="purchase-item-totals">
+          Peças: <b>{itemCounts.pending}</b> a comprar · <b>{itemCounts.ordered}</b>{" "}
+          compradas · <b>{itemCounts.received}</b> conferidas
+        </small>
       </div>
-      {visibleRows.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="emptyday">
-          Nenhuma peça encontrada nesta situação. Os itens aparecerão após o
+          Nenhum pedido encontrado nesta situação. Os itens aparecerão após o
           orçamento ser aprovado ou o serviço ser agendado.
         </div>
       ) : (
         <div className="purchase-os-list">
-          {groups.map((group: any) => (
-            <section className="purchase-os-card" key={group.ownerId}>
+          {groups.map((group: any) => {
+            const isClosed = group.savedState.closed,
+              isExpanded = expanded[group.ownerId] ?? !isClosed,
+              pendingToClose = group.rows.filter(
+                (row: any) => !checks[row.key]?.received,
+              ).length;
+            return (
+            <section
+              className={`purchase-os-card ${isClosed ? "closed" : "open"}`}
+              key={group.ownerId}
+            >
+              <button
+                type="button"
+                className="purchase-os-summary"
+                aria-expanded={isExpanded}
+                onClick={() =>
+                  setExpanded((current) => ({
+                    ...current,
+                    [group.ownerId]: !isExpanded,
+                  }))
+                }
+              >
+                <span className="purchase-os-chevron">
+                  {isExpanded ? "▾" : "▸"}
+                </span>
+                <span>
+                  <small>OS</small>
+                  <b>{group.appointment.workOrder || "Sem número"}</b>
+                </span>
+                <span className="purchase-os-customer">
+                  <small>Cliente / veículo</small>
+                  <b>
+                    {group.appointment.client} ·{" "}
+                    {group.appointment.vehicle || "Veículo não informado"} ·{" "}
+                    {group.appointment.plate || "Sem placa"}
+                  </b>
+                </span>
+                <span>
+                  <small>Resumo</small>
+                  <b>
+                    {group.rows.length} {group.rows.length === 1 ? "item" : "itens"}
+                    {" · "}{group.totalQuantity} peças
+                  </b>
+                </span>
+                <strong className={`purchase-order-badge ${isClosed ? "closed" : "open"}`}>
+                  {isClosed ? "FECHADO" : "ABERTO"}
+                </strong>
+              </button>
+              {isExpanded && (
+                <>
               <header className="purchase-os-head">
                 <label>
                   <span>Número da OS</span>
@@ -5220,7 +7612,7 @@ function PurchaseOrders({
                           type="checkbox"
                           checked={state.ordered}
                           onChange={(event) =>
-                            update(key, {
+                            update(group.ownerId, key, {
                               ordered: event.target.checked,
                               received: event.target.checked
                                 ? state.received
@@ -5248,7 +7640,7 @@ function PurchaseOrders({
                           type="checkbox"
                           checked={state.received}
                           onChange={(event) =>
-                            update(key, {
+                            update(group.ownerId, key, {
                               ordered: event.target.checked
                                 ? true
                                 : state.ordered,
@@ -5268,8 +7660,42 @@ function PurchaseOrders({
                   );
                 })}
               </div>
+              <footer className="purchase-order-actions">
+                {isClosed ? (
+                  <>
+                    <span className="purchase-order-saved">
+                      ✓ Pedido fechado
+                      {group.savedState.closedBy
+                        ? ` por ${group.savedState.closedBy}`
+                        : ""}
+                    </span>
+                    <button type="button" onClick={() => reopenOrder(group.ownerId)}>
+                      Reabrir pedido
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className={group.allReceived ? "ready" : "waiting"}>
+                      {group.allReceived
+                        ? "✓ Todas as peças foram conferidas."
+                        : `Falta conferir ${pendingToClose} ${pendingToClose === 1 ? "item" : "itens"}.`}
+                    </span>
+                    <button
+                      type="button"
+                      className="close-order"
+                      disabled={!group.allReceived}
+                      onClick={() => closeOrder(group.ownerId)}
+                    >
+                      Salvar e fechar pedido
+                    </button>
+                  </>
+                )}
+              </footer>
+                </>
+              )}
             </section>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>
@@ -5337,6 +7763,7 @@ function AttendanceSummary({
   onBack,
   onEditConference,
 }: any) {
+  const [summaryView, setSummaryView] = useState<"summary" | "geometry">("summary");
   const budget = appointment.budget ?? {
       parts: [],
       selectedServices: [],
@@ -5390,6 +7817,38 @@ function AttendanceSummary({
       ...SAFE.filter((item) => appointment.conference?.checks?.[item]),
       ...TQ.filter((item) => appointment.conference?.checks?.[item]),
     ];
+  const finalization = appointment.conference?.finalization,
+    performedBy =
+      finalization?.executor?.trim() ||
+      finalization?.technician?.trim() ||
+      appointment.review?.reviewer?.trim() ||
+      appointment.tech?.trim() ||
+      "Não informado",
+    checkedBy =
+      finalization?.checker?.trim() ||
+      appointment.conference?.finalizedBy?.trim() ||
+      "Não informado",
+    finalizedBy =
+      appointment.conference?.finalizedBy?.trim() || checkedBy,
+    finalizedAt = appointment.conference?.finalizedAt
+      ? new Date(appointment.conference.finalizedAt).toLocaleString("pt-BR")
+      : "Data não registrada";
+  const shareAsPdf = () => {
+    document.body.classList.add("print-attendance-summary");
+    const cleanup = () =>
+      document.body.classList.remove("print-attendance-summary");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    setTimeout(() => window.print(), 50);
+    setTimeout(cleanup, 15000);
+  };
+  if (summaryView === "geometry") {
+    return (
+      <GeometryTechnicalReport
+        appointment={appointment}
+        onBack={() => setSummaryView("summary")}
+      />
+    );
+  }
   return (
     <section className="page attendance-summary">
       <Vehicle />
@@ -5515,14 +7974,653 @@ function AttendanceSummary({
             </section>
           ))}
         </div>
+        <section className="attendance-responsibles">
+          <h3>Responsáveis pela execução e conferência</h3>
+          <div>
+            <p>
+              <small>Serviço executado por</small>
+              <b>{performedBy}</b>
+            </p>
+            <p>
+              <small>Serviço conferido por</small>
+              <b>{checkedBy}</b>
+            </p>
+            <p>
+              <small>Finalização registrada por</small>
+              <b>{finalizedBy}</b>
+              <span>{finalizedAt}</span>
+            </p>
+          </div>
+        </section>
       </div>
       <div className="summary-actions">
         <button onClick={onBack}>← Voltar à agenda</button>
+        <button className="geometry-report" onClick={() => setSummaryView("geometry")}>
+          Laudo de geometria técnica
+        </button>
+        <button className="share-pdf" onClick={shareAsPdf}>
+          Compartilhar em PDF
+        </button>
         <button className="primary" onClick={onEditConference}>
           Editar conferência
         </button>
       </div>
+      <style>{`
+        .attendance-responsibles{margin-top:18px;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;background:#f8fafc}
+        .attendance-responsibles>h3{margin:0;padding:12px 15px;background:#111d2b;color:#fff;font-size:16px}
+        .attendance-responsibles>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#d8e0e8}
+        .attendance-responsibles p{display:flex;flex-direction:column;gap:4px;margin:0;padding:14px;background:#fff;min-width:0}
+        .attendance-responsibles small{color:#667085;font-weight:700}
+        .attendance-responsibles b{font-size:16px;overflow-wrap:anywhere}
+        .attendance-responsibles span{font-size:12px;color:#667085}
+        .summary-actions .share-pdf{background:#087f45;color:#fff;border-color:#087f45}
+        .summary-actions .geometry-report{background:#111d2b;color:#fff;border-color:#111d2b}
+        @media(max-width:700px){
+          .attendance-responsibles>div{grid-template-columns:1fr}
+          .attendance-summary .summary-actions{display:grid;grid-template-columns:1fr;gap:10px}
+          .attendance-summary .summary-actions button{width:100%}
+        }
+        @media print{
+          body.print-attendance-summary *{visibility:hidden!important}
+          body.print-attendance-summary .attendance-summary,
+          body.print-attendance-summary .attendance-summary *{visibility:visible!important}
+          body.print-attendance-summary .attendance-summary{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-width:none!important;margin:0!important;padding:12mm!important;background:#fff!important;color:#111!important;overflow:visible!important}
+          body.print-attendance-summary .summary-actions{display:none!important}
+          body.print-attendance-summary .summary-card,
+          body.print-attendance-summary .attendance-responsibles{break-inside:avoid;page-break-inside:avoid}
+          body.print-attendance-summary .printheader{display:block!important}
+          body.print-attendance-summary .attendance-responsibles>h3{background:#111d2b!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+          @page{size:A4;margin:10mm}
+        }
+      `}</style>
     </section>
+  );
+}
+
+const GEOMETRY_FIELDS = [
+  ["Camber dianteiro", "", "", false],
+  ["Caster", "", "", false],
+  ["Convergência dianteira", "", "", false],
+  ["Convergência total dianteira", "", "", true],
+  ["KPI / SAI", "", "", false],
+  ["Ângulo de inclusão", "", "", false],
+  ["Setback dianteira", "", "", true],
+  ["Camber traseiro", "", "", false],
+  ["Convergência traseira", "", "", false],
+  ["Convergência total traseira", "", "", true],
+  ["Ângulo de impulsão", "", "", true],
+  ["Setback traseira", "", "", true],
+];
+
+function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, rightToe, rear = false }: any) {
+  return (
+    <div className="axle-illustration">
+      <h3>{title}</h3>
+      <div className="axle-label left"><b>{leftCamber || "--"}</b><span>CAMBER</span></div>
+      <div className="axle-label right"><b>{rightCamber || "--"}</b><span>CAMBER</span></div>
+      <svg viewBox="0 0 520 250" role="img" aria-label={`Representação técnica do ${title.toLowerCase()}`}>
+        <defs><linearGradient id={rear ? "metalRear" : "metalFront"} x1="0" x2="1"><stop stopColor="#1c2430"/><stop offset=".5" stopColor="#68717b"/><stop offset="1" stopColor="#151b24"/></linearGradient><marker id={rear ? "arrowRear" : "arrowFront"} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#079447"/></marker></defs>
+        <path d="M105 160 L185 120 L260 132 L335 120 L415 160" fill="none" stroke="#28313c" strokeWidth="18" strokeLinecap="round"/>
+        <path d="M180 120 L205 83 M340 120 L315 83" fill="none" stroke="#555f6a" strokeWidth="11"/>
+        <path d="M205 84 l-10 -12 20 -12 -20 -12 20 -12 -12 -13 M315 84 l10 -12-20 -12 20 -12-20 -12 12 -13" fill="none" stroke="#222a33" strokeWidth="7"/>
+        <rect x="80" y="65" width="58" height="142" rx="21" fill={`url(#${rear ? "metalRear" : "metalFront"})`} transform="rotate(-5 109 136)"/>
+        <rect x="382" y="65" width="58" height="142" rx="21" fill={`url(#${rear ? "metalRear" : "metalFront"})`} transform="rotate(5 411 136)"/>
+        <circle cx="260" cy="132" r="23" fill="#151b24" stroke="#78818c" strokeWidth="6"/>
+        <path d="M83 221 H142 M378 221 H437" stroke="#079447" strokeWidth="6" markerEnd={`url(#${rear ? "arrowRear" : "arrowFront"})`}/>
+        <path d="M142 232 H83 M437 232 H378" stroke="#079447" strokeWidth="6"/>
+        <path d="M109 52 L102 215 M411 52 L418 215" stroke="#df171f" strokeWidth="3" strokeDasharray="7 5"/>
+        <text x="260" y="185" textAnchor="middle" fontSize="18" fontWeight="800" fill="#111d2b">{rear ? "TRASEIRA" : "FRENTE"} DO VEÍCULO</text>
+      </svg>
+      <div className="axle-toe left"><b>{leftToe || "--"}</b><span>CONVERGÊNCIA</span></div>
+      <div className="axle-toe right"><b>{rightToe || "--"}</b><span>CONVERGÊNCIA</span></div>
+    </div>
+  );
+}
+
+function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: any) {
+  const storageKey = `geometry-report-${appointment.id ?? appointment.plate ?? appointment.name}`;
+  const extraStorageKey = `${storageKey}-extra-fields`;
+  const normalizeGeometryValues = (stored: any) => {
+    if (!stored || typeof stored !== "object") return {};
+    const rows = Object.values(stored) as any[];
+    if (rows.some((row) => row?.beforeLeft !== undefined || row?.afterLeft !== undefined)) return stored;
+    const migrated: any = {};
+    const oldToNew: Record<number, number> = { 0: 0, 1: 1, 2: 2, 3: 4, 4: 5, 5: 7, 6: 8, 7: 9, 8: 10 };
+    Object.entries(oldToNew).forEach(([oldIndex, newIndex]) => {
+      const row: any = stored[Number(oldIndex)];
+      if (!row) return;
+      migrated[newIndex] = {
+        min: row.min ?? "",
+        max: row.max ?? "",
+        beforeLeft: "",
+        beforeRight: "",
+        afterLeft: row.left ?? "",
+        afterRight: row.right ?? "",
+      };
+    });
+    return migrated;
+  };
+  const [sourcePdf, setSourcePdf] = useState("");
+  const [sourceName, setSourceName] = useState(appointment.geometryReport?.sourceName || "");
+  const [technician, setTechnician] = useState(appointment.geometryReport?.technician || appointment.tech || "");
+  const [notes, setNotes] = useState(appointment.geometryReport?.notes || "Realizado alinhamento conforme especificação do fabricante.");
+  const [readingPdf, setReadingPdf] = useState(false);
+  const [readMessage, setReadMessage] = useState("");
+  const [pendingValues, setPendingValues] = useState<any>(null);
+  const [values, setValues] = useState<any>(() => {
+    if (appointment.geometryReport?.values) return normalizeGeometryValues(appointment.geometryReport.values);
+    if (typeof window === "undefined") return {};
+    try { return normalizeGeometryValues(JSON.parse(localStorage.getItem(storageKey) || "{}")); } catch { return {}; }
+  });
+  const [extraFields, setExtraFields] = useState<any>(() => {
+    if (appointment.geometryReport?.extraFields) return appointment.geometryReport.extraFields;
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem(extraStorageKey) || "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    localStorage.setItem(storageKey, JSON.stringify(values));
+  }, [storageKey, values]);
+  useEffect(() => {
+    localStorage.setItem(extraStorageKey, JSON.stringify(extraFields));
+  }, [extraStorageKey, extraFields]);
+  useEffect(() => () => { if (sourcePdf) URL.revokeObjectURL(sourcePdf); }, [sourcePdf]);
+  const numberOf = (value: any) => {
+    const raw = String(value ?? "").trim().replace(",", ".");
+    const angle = raw.match(/([+-]?\d+)[°º]\s*(\d+)?/);
+    if (angle) {
+      const negative = angle[1].startsWith("-");
+      const decimal = Math.abs(Number(angle[1])) + Number(angle[2] || 0) / 60;
+      return negative ? -decimal : decimal;
+    }
+    const normalized = raw.replace(/[^0-9+-.]/g, "");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const stateOf = (value: any, min: any, max: any) => {
+    const current = numberOf(value), low = numberOf(min), high = numberOf(max);
+    if (current === null || low === null || high === null) return "pending";
+    return current >= low && current <= high ? "ok" : "bad";
+  };
+  const clampAngle = (value: any, scale = 6) => {
+    const parsed = numberOf(value);
+    return parsed === null ? 0 : Math.max(-14, Math.min(14, parsed * scale));
+  };
+  const guideColor = (field: number, value: any) => {
+    const row = values[field] || {};
+    return stateOf(
+      value,
+      row.min ?? GEOMETRY_FIELDS[field][1],
+      row.max ?? GEOMETRY_FIELDS[field][2],
+    ) === "ok" ? "#079447" : "#df171f";
+  };
+  const beforeLeftOf = (row: any) => row?.beforeLeft ?? "";
+  const beforeRightOf = (row: any) => row?.beforeRight ?? "";
+  const afterLeftOf = (row: any) => row?.afterLeft ?? row?.left ?? "";
+  const afterRightOf = (row: any) => row?.afterRight ?? row?.right ?? "";
+  const updateValue = (index: number, field: string, value: string) =>
+    setValues((current: any) => ({ ...current, [index]: { ...(current[index] || {}), [field]: value } }));
+  const updateExtra = (field: string, value: string) =>
+    setExtraFields((current: any) => ({ ...current, [field]: value }));
+  const formatAngle = (raw: string) => {
+    const cleaned = raw.replace(/\s/g, "").replace(",", ".");
+    const match = cleaned.match(/([+-]?\d+)[°º](?:(\d+)[\'’′\"”″])?/);
+    if (!match) return cleaned;
+    const sign = match[1].startsWith("-") ? "-" : "";
+    const degrees = String(Math.abs(Number(match[1])));
+    const minutes = String(Number(match[2] || 0)).padStart(2, "0");
+    return `${sign}${degrees}°${minutes}'`;
+  };
+  const findGeometryLine = (text: string, pattern: RegExp) =>
+    text.split(/\r?\n/).find((line) => pattern.test(line.normalize("NFD").replace(/[\u0300-\u036f]/g, ""))) || "";
+  const readGeometryText = (text: string) => {
+    const definitions: Array<[number, RegExp, boolean]> = [
+      [0, /camber dianteir|cambagem dianteir/i, false],
+      [1, /caster/i, false],
+      [2, /converg.ncia dianteira(?! total)/i, false],
+      [3, /converg.ncia total dianteir/i, true],
+      [4, /\bkpi\b|sai/i, false],
+      [5, /angulo de inclusao/i, false],
+      [6, /setback dianteir/i, true],
+      [7, /camber traseir|cambagem traseir/i, false],
+      [8, /converg.ncia traseira(?! total)/i, false],
+      [9, /converg.ncia total traseir/i, true],
+      [10, /angulo de (impulsao|empurrao)/i, true],
+      [11, /setback traseir/i, true],
+    ];
+    const next: any = {};
+    let recognized = 0;
+    definitions.forEach(([index, pattern, single]) => {
+      const line = findGeometryLine(text, pattern);
+      const angles = line.match(/[+-]?\d+[°º]\s*\d*[\'’′\"”″]?/g) || [];
+      if (!single && angles.length >= 6) {
+        next[index] = {
+          ...(values[index] || {}),
+          min: formatAngle(angles[0]),
+          max: formatAngle(angles[1]),
+          beforeLeft: formatAngle(angles[angles.length - 4]),
+          afterLeft: formatAngle(angles[angles.length - 3]),
+          beforeRight: formatAngle(angles[angles.length - 2]),
+          afterRight: formatAngle(angles[angles.length - 1]),
+        };
+        recognized += 4;
+      } else if (single && angles.length >= 4) {
+        next[index] = {
+          ...(values[index] || {}),
+          min: formatAngle(angles[0]),
+          max: formatAngle(angles[1]),
+          beforeLeft: formatAngle(angles[angles.length - 2]),
+          beforeRight: "",
+          afterLeft: formatAngle(angles[angles.length - 1]),
+          afterRight: "",
+        };
+        recognized += 2;
+      } else if (!single && angles.length >= 4) {
+        next[index] = {
+          ...(values[index] || {}),
+          min: formatAngle(angles[0]),
+          max: formatAngle(angles[1]),
+          beforeLeft: "",
+          beforeRight: "",
+          afterLeft: formatAngle(angles[angles.length - 2]),
+          afterRight: formatAngle(angles[angles.length - 1]),
+        };
+        recognized += 2;
+      }
+    });
+    return { next, recognized };
+  };
+  const scanPdf = async (file: File) => {
+    setReadingPdf(true);
+    setReadMessage("Preparando a página do laudo...");
+    try {
+      const pdfjs: any = await import("pdfjs-dist");
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/build/pdf.worker.min.mjs",
+        import.meta.url,
+      ).toString();
+      const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+      const page = await pdf.getPage(1);
+      const textContent = await page.getTextContent();
+      const textRows: Array<{ y: number; parts: Array<{ x: number; text: string }> }> = [];
+      (textContent.items || []).forEach((item: any) => {
+        const text = String(item.str || "").trim();
+        if (!text) return;
+        const x = Number(item.transform?.[4] || 0);
+        const y = Number(item.transform?.[5] || 0);
+        let row = textRows.find((candidate) => Math.abs(candidate.y - y) < 2.5);
+        if (!row) { row = { y, parts: [] }; textRows.push(row); }
+        row.parts.push({ x, text });
+      });
+      const embeddedText = textRows
+        .sort((a, b) => b.y - a.y)
+        .map((row) => row.parts.sort((a, b) => a.x - b.x).map((part) => part.text).join(" "))
+        .join("\n");
+      const embeddedReading = readGeometryText(embeddedText);
+      if (embeddedReading.recognized >= 4) {
+        setPendingValues(embeddedReading.next);
+        setReadMessage(`${embeddedReading.recognized} medidas reconhecidas diretamente do PDF. Confira a tela de confirmação antes de importar.`);
+        return;
+      }
+      const viewport = page.getViewport({ scale: 2.4 });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Não foi possível preparar a imagem do PDF.");
+      await page.render({ canvasContext: context, viewport }).promise;
+      setReadMessage("Lendo textos e medidas do alinhador...");
+      const { createWorker }: any = await import("tesseract.js");
+      const worker = await createWorker("por");
+      const result = await worker.recognize(canvas);
+      await worker.terminate();
+      const { next, recognized } = readGeometryText(result.data.text || "");
+      setPendingValues(recognized ? next : null);
+      setReadMessage(
+        recognized
+          ? `${recognized} medidas reconhecidas. Confira a tela de confirmação antes de importar.`
+          : "O PDF foi importado, mas as medidas não foram reconhecidas com segurança. Preencha ou corrija os campos abaixo.",
+      );
+    } catch (error: any) {
+      setReadMessage(`Não foi possível concluir a leitura automática: ${error?.message || "erro desconhecido"}. Confira as medidas manualmente.`);
+    } finally {
+      setReadingPdf(false);
+    }
+  };
+  const importPdf = async (event: any) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (sourcePdf) URL.revokeObjectURL(sourcePdf);
+    setSourcePdf(URL.createObjectURL(file));
+    setSourceName(file.name);
+    await scanPdf(file);
+  };
+  const printGeometry = () => {
+    const report = document.querySelector(".geometry-template-sheet") as HTMLElement | null;
+    if (!report) { setReadMessage("Não foi possível localizar o laudo para impressão."); return; }
+    setReadMessage("Abrindo a impressão do laudo...");
+    document.body.classList.add("print-geometry-report");
+    const finishPrint = () => document.body.classList.remove("print-geometry-report");
+    window.addEventListener("afterprint", finishPrint, { once: true });
+    try {
+      window.print();
+      setReadMessage("Escolha imprimir ou salvar como PDF.");
+      window.setTimeout(finishPrint, 3000);
+    } catch {
+      finishPrint();
+      setReadMessage("Não foi possível abrir a impressão neste navegador.");
+    }
+  };
+  const saveGeometry = () => {
+    onSave?.({ schemaVersion: 2, values, technician, notes, sourceName, extraFields });
+    setReadMessage("Laudo salvo no atendimento do cliente.");
+  };
+  const renderMeasureRow = ([label, defaultMin, defaultMax, single]: any, index: number) => {
+    const row = values[index] || {};
+    const min = row.min ?? defaultMin;
+    const max = row.max ?? defaultMax;
+    if (single) return <div className="a4-measure-row single" key={label}>
+      <b>{label}</b>
+      <input className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
+      <span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
+      <input className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
+    </div>;
+    return <div className="a4-measure-row" key={label}>
+      <b>{label}</b>
+      <input className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
+      <input className={stateOf(beforeRightOf(row),min,max)} value={beforeRightOf(row)} onChange={(e)=>updateValue(index,"beforeRight",e.target.value)}/>
+      <span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
+      <input className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
+      <input className={stateOf(afterRightOf(row),min,max)} value={afterRightOf(row)} onChange={(e)=>updateValue(index,"afterRight",e.target.value)}/>
+    </div>;
+  };
+  const measureHead = <div className="a4-measure-head">
+    <b>PARÂMETRO</b>
+    <span><strong>ANTES DO AJUSTE</strong><i>ESQ.</i><i>DIR.</i></span>
+    <b>ESPECIFICAÇÃO</b>
+    <span><strong>APÓS O AJUSTE</strong><i>ESQ.</i><i>DIR.</i></span>
+  </div>;
+  return (
+    <div className="geometry-report-page">
+      <div className="geometry-toolbar">
+        <span className="geometry-version">Laudo A4 V16</span>
+        <button type="button" onClick={onBack}>← Voltar à proposta</button>
+        <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
+        <button type="button" onClick={saveGeometry}>Salvar laudo</button>
+        <button type="button" className="primary print-geometry-button" onClick={printGeometry}>Imprimir / compartilhar PDF</button>
+        {onContinue && <button type="button" className="primary" onClick={() => { saveGeometry(); onContinue(); }}>Ir para conferência →</button>}
+      </div>
+      <details className="geometry-extra-editor" open>
+        <summary>Editar dados complementares do laudo</summary>
+        <div className="geometry-extra-grid">
+          <label>Técnico<input value={technician} onChange={(e)=>setTechnician(e.target.value)}/></label>
+          <label>Pneu dianteiro esquerdo<input value={extraFields.tireFrontLeft || ""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/></label>
+          <label>Pneu dianteiro direito<input value={extraFields.tireFrontRight || ""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/></label>
+          <label>Pneu traseiro esquerdo<input value={extraFields.tireRearLeft || ""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/></label>
+          <label>Pneu traseiro direito<input value={extraFields.tireRearRight || ""} onChange={(e)=>updateExtra("tireRearRight",e.target.value)}/></label>
+          <label>Ângulo do volante<input value={extraFields.steeringAngle || ""} onChange={(e)=>updateExtra("steeringAngle",e.target.value)}/></label>
+          <label>Próxima revisão - data<input value={extraFields.nextReviewDate || ""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label>
+          <label>Próxima revisão - KM<input value={extraFields.nextReviewKm || ""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label>
+          <label className="wide">Observações técnicas<textarea value={notes} onChange={(e)=>setNotes(e.target.value)}/></label>
+        </div>
+        <p>As alterações aparecem automaticamente no laudo abaixo. Clique em <b>Salvar laudo</b> ao terminar.</p>
+      </details>
+      {readMessage && <div className={`ocr-message ${readingPdf ? "reading" : ""}`}>{readMessage}</div>}
+      {pendingValues && (
+        <section className="geometry-import-review" role="dialog" aria-modal="true" aria-label="Confirmar medidas lidas do PDF">
+          <div className="geometry-import-card">
+            <header>
+              <div><small>LEITURA DO PDF</small><h2>Confirme as medidas antes de importar</h2></div>
+              <button onClick={() => setPendingValues(null)} aria-label="Fechar conferência">×</button>
+            </header>
+            <p>Confira os valores lidos no relatório do alinhador. Eles só serão aplicados ao laudo depois da confirmação.</p>
+            <div className="import-measure-table">
+              <div className="import-measure-row heading"><b>Parâmetro</b><b>Antes E.</b><b>Antes D.</b><b>Especificação</b><b>Após E.</b><b>Após D.</b></div>
+              {GEOMETRY_FIELDS.map(([label, defaultMin, defaultMax, single], index) => {
+                const row = pendingValues[index] || {};
+                if (!pendingValues[index]) return null;
+                return <div className={`import-measure-row ${single ? "single" : ""}`} key={label}>
+                  <b>{label}</b>
+                  <input value={row.beforeLeft || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],beforeLeft:e.target.value}}))}/>
+                  {!single && <input value={row.beforeRight || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],beforeRight:e.target.value}}))}/>} 
+                  <span><input value={row.min ?? defaultMin} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],min:e.target.value}}))}/> a <input value={row.max ?? defaultMax} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],max:e.target.value}}))}/></span>
+                  <input value={row.afterLeft || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],afterLeft:e.target.value}}))}/>
+                  {!single && <input value={row.afterRight || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],afterRight:e.target.value}}))}/>} 
+                </div>;
+              })}
+            </div>
+            <footer>
+              <button onClick={() => { setPendingValues(null); setReadMessage("Importação cancelada. Nenhuma medida foi alterada."); }}>Cancelar</button>
+              <button className="primary" onClick={() => {
+                setValues((current:any) => ({...current,...pendingValues}));
+                setPendingValues(null);
+                setReadMessage("Medidas confirmadas e importadas para o laudo. Confira o resultado e salve.");
+              }}>Confirmar e importar medidas</button>
+            </footer>
+          </div>
+        </section>
+      )}
+      <article className="geometry-template-sheet geometry-a4-sheet">
+        <header className="a4-report-header">
+          <div className="a4-brand"><img src="/logo-monocenter.jpg" alt="Monocenter Alinhamento Técnico"/></div>
+          <div className="a4-title"><b>LAUDO TÉCNICO DE GEOMETRIA</b><span>ALINHAMENTO 3D</span></div>
+        </header>
+        <section className="a4-customer-data">
+          <div><small>CLIENTE</small><b>{appointment.client || appointment.name || "Não informado"}</b></div>
+          <div><small>VEÍCULO</small><b>{appointment.vehicle || appointment.model || "Não informado"}</b></div>
+          <div><small>ANO / MODELO</small><b>{appointment.vehicleYear || appointment.year || "Não informado"}</b></div>
+          <div><small>PLACA</small><b>{appointment.plate || "Não informada"}</b></div>
+          <div><small>KM</small><b>{appointment.km || "Não informado"}</b></div>
+          <div><small>CHASSI</small><b>{appointment.chassis || "Não informado"}</b></div>
+          <div><small>DATA / HORA</small><b>{new Date().toLocaleDateString("pt-BR")} · {new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b></div>
+          <label><small>TÉCNICO</small><input value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Nome do técnico"/></label>
+        </section>
+
+        <section className="a4-axis-section front">
+          <h2>EIXO DIANTEIRO</h2>
+          <div className="a4-axis-grid">
+            <div className="a4-axle-visual">
+              <div className="a4-angle-strip four">
+                <span className={stateOf(afterLeftOf(values[0]),values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])}><small>CAMBER E.</small><b>{afterLeftOf(values[0]) || "—"}</b></span>
+                <span className={stateOf(afterLeftOf(values[1]),values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])}><small>CASTER E.</small><b>{afterLeftOf(values[1]) || "—"}</b></span>
+                <span className={stateOf(afterRightOf(values[1]),values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])}><small>CASTER D.</small><b>{afterRightOf(values[1]) || "—"}</b></span>
+                <span className={stateOf(afterRightOf(values[0]),values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])}><small>CAMBER D.</small><b>{afterRightOf(values[0]) || "—"}</b></span>
+              </div>
+              <div className="a4-mechanical-image">
+                <img src="/eixo-dianteiro-laudo.png" alt="Conjunto técnico do eixo dianteiro"/>
+                <svg viewBox="0 0 600 250" preserveAspectRatio="none" aria-hidden="true">
+                  <defs><marker id="a4fg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4fr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
+                  <g className="angle-reference"><line x1="88" y1="219" x2="88" y2="82"/><line x1="512" y1="219" x2="512" y2="82"/><line x1="197" y1="174" x2="163" y2="75"/><line x1="403" y1="174" x2="437" y2="75"/></g>
+                  {afterLeftOf(values[0]) && <line className="angle-measure" x1="88" y1="219" x2="88" y2="82" stroke={guideColor(0,afterLeftOf(values[0]))} transform={`rotate(${clampAngle(afterLeftOf(values[0]),-4)} 88 219)`}/>} 
+                  {afterRightOf(values[0]) && <line className="angle-measure" x1="512" y1="219" x2="512" y2="82" stroke={guideColor(0,afterRightOf(values[0]))} transform={`rotate(${clampAngle(afterRightOf(values[0]),4)} 512 219)`}/>} 
+                  {afterLeftOf(values[1]) && <line className="angle-measure" x1="197" y1="174" x2="163" y2="75" stroke={guideColor(1,afterLeftOf(values[1]))} transform={`rotate(${clampAngle(afterLeftOf(values[1]),-1.4)} 197 174)`}/>} 
+                  {afterRightOf(values[1]) && <line className="angle-measure" x1="403" y1="174" x2="437" y2="75" stroke={guideColor(1,afterRightOf(values[1]))} transform={`rotate(${clampAngle(afterRightOf(values[1]),1.4)} 403 174)`}/>} 
+                  {afterLeftOf(values[0]) && <text className="guide-label" x="42" y="92" fill={guideColor(0,afterLeftOf(values[0]))}>CAMBER E.</text>}
+                  {afterLeftOf(values[1]) && <text className="guide-label" x="128" y="72" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
+                  {afterRightOf(values[1]) && <text className="guide-label" x="472" y="72" textAnchor="end" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
+                  {afterRightOf(values[0]) && <text className="guide-label" x="558" y="92" textAnchor="end" fill={guideColor(0,afterRightOf(values[0]))}>CAMBER D.</text>}
+                  {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="226" x2="137" y2="226" stroke={guideColor(2,afterLeftOf(values[2]))} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="226" x2="463" y2="226" stroke={guideColor(2,afterRightOf(values[2]))} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                </svg>
+              </div>
+              <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[2]) || "—"}</b></span><span className={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[2]) || "—"}</b></span></div>
+            </div>
+            <div className="a4-measure-table">
+              {measureHead}
+              {GEOMETRY_FIELDS.slice(0,7).map((field,index)=>renderMeasureRow(field,index))}
+            </div>
+          </div>
+        </section>
+
+        <section className="a4-axis-section rear">
+          <h2>EIXO TRASEIRO</h2>
+          <div className="a4-axis-grid">
+            <div className="a4-axle-visual">
+              <div className="a4-angle-strip two"><span className={stateOf(afterLeftOf(values[7]),values[7]?.min??GEOMETRY_FIELDS[7][1],values[7]?.max??GEOMETRY_FIELDS[7][2])}><small>CAMBER E.</small><b>{afterLeftOf(values[7]) || "—"}</b></span><span className={stateOf(afterRightOf(values[7]),values[7]?.min??GEOMETRY_FIELDS[7][1],values[7]?.max??GEOMETRY_FIELDS[7][2])}><small>CAMBER D.</small><b>{afterRightOf(values[7]) || "—"}</b></span></div>
+              <div className="a4-mechanical-image rear-image">
+                <img src="/eixo-traseiro-laudo.png" alt="Conjunto técnico do eixo traseiro"/>
+                <svg viewBox="0 0 600 230" preserveAspectRatio="none" aria-hidden="true">
+                  <defs><marker id="a4rg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4rr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
+                  <g className="angle-reference"><line x1="155" y1="204" x2="155" y2="66"/><line x1="445" y1="204" x2="445" y2="66"/></g>
+                  {afterLeftOf(values[7]) && <line className="angle-measure" x1="155" y1="204" x2="155" y2="66" stroke={guideColor(7,afterLeftOf(values[7]))} transform={`rotate(${clampAngle(afterLeftOf(values[7]),-4)} 155 204)`}/>} 
+                  {afterRightOf(values[7]) && <line className="angle-measure" x1="445" y1="204" x2="445" y2="66" stroke={guideColor(7,afterRightOf(values[7]))} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 445 204)`}/>} 
+                  {afterLeftOf(values[7]) && <text className="guide-label" x="112" y="78" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
+                  {afterRightOf(values[7]) && <text className="guide-label" x="488" y="78" textAnchor="end" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
+                  {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="211" x2="175" y2="211" stroke={guideColor(8,afterLeftOf(values[8]))} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="211" x2="425" y2="211" stroke={guideColor(8,afterRightOf(values[8]))} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                </svg>
+              </div>
+              <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[8]) || "—"}</b></span><span className={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[8]) || "—"}</b></span></div>
+            </div>
+            <div className="a4-measure-table rear-table">
+              {measureHead}
+              {GEOMETRY_FIELDS.slice(7).map((field,offset)=>renderMeasureRow(field,offset+7))}
+            </div>
+          </div>
+        </section>
+
+        <section className="a4-extra-data">
+          <div className="a4-extra-card"><h3>CONDIÇÃO DOS PNEUS</h3><label>Dianteiro esquerdo<input value={extraFields.tireFrontLeft||""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/></label><label>Dianteiro direito<input value={extraFields.tireFrontRight||""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/></label><label>Traseiro esquerdo<input value={extraFields.tireRearLeft||""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/></label><label>Traseiro direito<input value={extraFields.tireRearRight||""} onChange={(e)=>updateExtra("tireRearRight",e.target.value)}/></label></div>
+          <div className="a4-extra-card steering"><h3>ÂNGULO DO VOLANTE</h3><label>Posição / medida<input value={extraFields.steeringAngle||""} onChange={(e)=>updateExtra("steeringAngle",e.target.value)}/></label><div className="steering-status">VOLANTE CENTRALIZADO</div></div>
+        </section>
+        <p className="a4-unit-note"><b>UNIDADE DAS MEDIDAS:</b> sistema sexagesimal (60 graus): 1 grau (1°) corresponde a 60 minutos (60').</p>
+        <section className="a4-report-footer">
+          <label><b>OBSERVAÇÕES TÉCNICAS</b><textarea value={notes} onChange={(e)=>setNotes(e.target.value)}/></label>
+          <div><b>PRÓXIMA REVISÃO</b><label>Data<input value={extraFields.nextReviewDate||""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label><label>KM<input value={extraFields.nextReviewKm||""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label></div>
+        </section>
+        <footer className="a4-address">MONOCENTER ALINHAMENTO TÉCNICO · Av. Itavuvu, 5341 · Jd. Santa Cecília · Sorocaba/SP</footer>
+      </article>
+
+      <article className="legacy-geometry-template">
+        <img className="geometry-template-bg" src="/laudo-geometria-template.png" alt="Laudo técnico de geometria Monocenter no modelo oficial"/>
+        <div className="geometry-official-logo" aria-label="Logo oficial Monocenter">
+          <img src="/logo-monocenter.jpg" alt="Monocenter Alinhamento Técnico"/>
+        </div>
+        <div className="geometry-template-overlay">
+          <b className="header-value" style={{left:"14.4%",top:"10.15%"}}>{appointment.client || appointment.name || ""}</b>
+          <b className="header-value" style={{left:"14.4%",top:"12.2%"}}>{appointment.vehicle || appointment.model || ""}</b>
+          <b className="header-value" style={{left:"14.4%",top:"14.25%"}}>{appointment.vehicleYear || appointment.year || ""}</b>
+          <b className="header-value" style={{left:"14.4%",top:"16.3%"}}>{appointment.plate || ""}</b>
+          <b className="header-value right" style={{left:"50.8%",top:"10.15%"}}>{appointment.km || ""}</b>
+          <b className="header-value right" style={{left:"50.8%",top:"12.2%"}}>{appointment.chassis || ""}</b>
+          <b className="header-value date" style={{left:"50.8%",top:"14.25%"}}>{new Date().toLocaleDateString("pt-BR")}</b>
+          <b className="header-value time" style={{left:"65.2%",top:"14.25%"}}>{new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b>
+          <b className="header-value right" style={{left:"50.8%",top:"16.3%"}}>{technician}</b>
+          {[
+            [0,"23.2%"],[1,"26.9%"],[2,"30.7%"],[3,"34.4%"],[4,"37.5%"],
+            [5,"56.8%"],[6,"60.7%"],[7,"63.5%"],[8,"65.4%"],
+          ].flatMap(([field,top]:any)=>{
+            const row=values[field]||{}, min=row.min??GEOMETRY_FIELDS[field][1], max=row.max??GEOMETRY_FIELDS[field][2];
+            return [
+              <b key={`${field}-l`} className={`cell-value ${stateOf(row.left,min,max)}`} style={{left:"70.8%",top}}>{row.left||""}</b>,
+              <b key={`${field}-s`} className="cell-spec" style={{left:"81.7%",top}}>{min} a {max}</b>,
+              <b key={`${field}-r`} className={`cell-value ${stateOf(row.right,min,max)}`} style={{left:"93.0%",top}}>{row.right||""}</b>,
+            ];
+          })}
+          <input className="editable-report-field chassis-a" aria-label="Diagonal esquerda A" placeholder="Editar" value={extraFields.chassisA || ""} onChange={(e)=>updateExtra("chassisA",e.target.value)}/>
+          <input className="editable-report-field chassis-b" aria-label="Diagonal direita B" placeholder="Editar" value={extraFields.chassisB || ""} onChange={(e)=>updateExtra("chassisB",e.target.value)}/>
+          <input className="editable-report-field chassis-difference" aria-label="Diferença A menos B" placeholder="Editar" value={extraFields.chassisDifference || ""} onChange={(e)=>updateExtra("chassisDifference",e.target.value)}/>
+          <input className="editable-report-field wheelbase-front" aria-label="Entre eixos dianteiro" placeholder="Editar" value={extraFields.wheelbaseFront || ""} onChange={(e)=>updateExtra("wheelbaseFront",e.target.value)}/>
+          <input className="editable-report-field wheelbase-rear" aria-label="Entre eixos traseiro" placeholder="Editar" value={extraFields.wheelbaseRear || ""} onChange={(e)=>updateExtra("wheelbaseRear",e.target.value)}/>
+          <input className="editable-report-field track-front" aria-label="Bitola dianteira" placeholder="Editar" value={extraFields.trackFront || ""} onChange={(e)=>updateExtra("trackFront",e.target.value)}/>
+          <input className="editable-report-field track-rear" aria-label="Bitola traseira" placeholder="Editar" value={extraFields.trackRear || ""} onChange={(e)=>updateExtra("trackRear",e.target.value)}/>
+          <input className="editable-report-field tire-front-left" aria-label="Condição pneu dianteiro esquerdo" placeholder="Editar" value={extraFields.tireFrontLeft || ""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/>
+          <input className="editable-report-field tire-front-right" aria-label="Condição pneu dianteiro direito" placeholder="Editar" value={extraFields.tireFrontRight || ""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/>
+          <input className="editable-report-field tire-rear-left" aria-label="Condição pneu traseiro esquerdo" placeholder="Editar" value={extraFields.tireRearLeft || ""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/>
+          <input className="editable-report-field tire-rear-right" aria-label="Condição pneu traseiro direito" placeholder="Editar" value={extraFields.tireRearRight || ""} onChange={(e)=>updateExtra("tireRearRight",e.target.value)}/>
+          <input className="editable-report-field steering-angle" aria-label="Ângulo do volante" placeholder="Editar" value={extraFields.steeringAngle || ""} onChange={(e)=>updateExtra("steeringAngle",e.target.value)}/>
+          <input className="editable-report-field next-review-date" aria-label="Data da próxima revisão" placeholder="Data" value={extraFields.nextReviewDate || ""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/>
+          <input className="editable-report-field next-review-km" aria-label="Quilometragem da próxima revisão" placeholder="KM" value={extraFields.nextReviewKm || ""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/>
+          <textarea className="editable-report-field template-notes" aria-label="Observações técnicas" value={notes} onChange={(e)=>setNotes(e.target.value)}/>
+        </div>
+      </article>
+      <article className="geometry-sheet geometry-entry-sheet" aria-hidden="true">
+        <header className="geometry-header">
+          <div><strong>MONOCENTER</strong><small>ALINHAMENTO TÉCNICO</small></div>
+          <h1>LAUDO TÉCNICO<br/>DE GEOMETRIA <small>ALINHAMENTO 3D</small></h1>
+        </header>
+        <section className="geometry-customer">
+          <p><small>CLIENTE</small><b>{appointment.client || appointment.name || "Não informado"}</b></p>
+          <p><small>VEÍCULO</small><b>{appointment.vehicle || appointment.model || "Não informado"}</b></p>
+          <p><small>PLACA</small><b>{appointment.plate || "Não informada"}</b></p>
+          <p><small>KM</small><b>{appointment.km || "Não informado"}</b></p>
+          <p><small>DATA</small><b>{new Date().toLocaleDateString("pt-BR")}</b></p>
+          <label><small>TÉCNICO</small><input value={technician} onChange={(e) => setTechnician(e.target.value)} placeholder="Nome do técnico"/></label>
+        </section>
+        <div className="geometry-legend"><span className="ok">■ Dentro da especificação</span><span className="bad">■ Fora da especificação</span></div>
+        <section className="geometry-axis">
+          <h2>EIXO DIANTEIRO</h2>
+          <AxleTechnicalIllustration title="EIXO DIANTEIRO" leftCamber={values[0]?.left} rightCamber={values[0]?.right} leftToe={values[2]?.left} rightToe={values[2]?.right}/>
+          <div className="geometry-table">
+            <div className="geometry-row heading"><b>PARÂMETRO</b><b>ESQUERDA</b><b>ESPECIFICAÇÃO</b><b>DIREITA</b></div>
+            {GEOMETRY_FIELDS.slice(0, 4).map(([label, defaultMin, defaultMax], index) => {
+              const row = values[index] || {}, min = row.min ?? defaultMin, max = row.max ?? defaultMax;
+              const leftState = stateOf(row.left, min, max), rightState = stateOf(row.right, min, max);
+              return <div className="geometry-row" key={label}>
+                <b>{label}</b>
+                <input className={leftState} value={row.left || ""} onChange={(e) => updateValue(index,"left",e.target.value)} placeholder="0,00°"/>
+                <span><input value={min} onChange={(e) => updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e) => updateValue(index,"max",e.target.value)}/></span>
+                <input className={rightState} value={row.right || ""} onChange={(e) => updateValue(index,"right",e.target.value)} placeholder="0,00°"/>
+              </div>;
+            })}
+          </div>
+        </section>
+        <section className="geometry-axis rear-axis">
+          <h2>EIXO TRASEIRO</h2>
+          <AxleTechnicalIllustration rear title="EIXO TRASEIRO" leftCamber={values[4]?.left} rightCamber={values[4]?.right} leftToe={values[5]?.left} rightToe={values[5]?.right}/>
+          <div className="geometry-table">
+            <div className="geometry-row heading"><b>PARÂMETRO</b><b>ESQUERDA</b><b>ESPECIFICAÇÃO</b><b>DIREITA</b></div>
+            {GEOMETRY_FIELDS.slice(4).map(([label, defaultMin, defaultMax], offset) => {
+              const index = offset + 4, row = values[index] || {}, min = row.min ?? defaultMin, max = row.max ?? defaultMax;
+              const leftState = stateOf(row.left, min, max), rightState = stateOf(row.right, min, max);
+              return <div className="geometry-row" key={label}>
+                <b>{label}</b>
+                <input className={leftState} value={row.left || ""} onChange={(e) => updateValue(index,"left",e.target.value)} placeholder="0,00°"/>
+                <span><input value={min} onChange={(e) => updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e) => updateValue(index,"max",e.target.value)}/></span>
+                <input className={rightState} value={row.right || ""} onChange={(e) => updateValue(index,"right",e.target.value)} placeholder="0,00°"/>
+              </div>;
+            })}
+          </div>
+          <div className="rear-summary">
+            <p><small>CONVERGÊNCIA TOTAL</small><b className={stateOf(values[6]?.left, values[6]?.min ?? "-0.20", values[6]?.max ?? "0.40")}>{values[6]?.left || "--"}</b></p>
+            <p><small>ÂNGULO DE IMPULSÃO</small><b className={stateOf(values[7]?.left, values[7]?.min ?? "-0.15", values[7]?.max ?? "0.15")}>{values[7]?.left || "--"}</b></p>
+          </div>
+        </section>
+        <section className="geometry-notes"><h3>OBSERVAÇÕES TÉCNICAS</h3><textarea value={notes} onChange={(e) => setNotes(e.target.value)}/><aside><b>PRÓXIMA REVISÃO</b><span>A cada 10.000 km<br/>ou 6 meses.</span></aside></section>
+      </article>
+      {sourcePdf && <section className="source-pdf"><h3>PDF original do alinhador: {sourceName}</h3><object data={sourcePdf} type="application/pdf"><a href={sourcePdf} target="_blank">Abrir PDF original</a></object></section>}
+      <style>{`
+        .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-version{margin-right:auto;border-radius:999px;background:#e9f8ef;color:#08783b;padding:7px 11px;font-size:12px;font-weight:900}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.geometry-extra-editor{max-width:1050px;margin:0 auto 14px;border:1px solid #b9c8da;border-radius:12px;background:#fff;overflow:hidden}.geometry-extra-editor summary{padding:13px 16px;background:#111d2b;color:#fff;font-weight:900;cursor:pointer}.geometry-extra-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.geometry-extra-grid label{display:flex;flex-direction:column;gap:5px;color:#344054;font-size:12px;font-weight:800}.geometry-extra-grid input,.geometry-extra-grid textarea{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:7px;background:#fff;padding:9px;color:#111;font-size:14px}.geometry-extra-grid .wide{grid-column:1/-1}.geometry-extra-grid textarea{min-height:70px;resize:vertical}.geometry-extra-editor>p{margin:0;padding:0 14px 14px;color:#475467}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-import-review{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#07111dcc}.geometry-import-card{width:min(900px,96vw);max-height:92vh;overflow:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px #0008}.geometry-import-card>header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;background:#111d2b;color:#fff;border-bottom:5px solid #e31b23}.geometry-import-card h2{margin:3px 0 0}.geometry-import-card header small{color:#ff4a52;font-weight:900}.geometry-import-card header button{border:0;background:transparent;color:#fff;font-size:30px;line-height:1;cursor:pointer}.geometry-import-card>p{margin:0;padding:15px 20px;background:#edf5ff}.import-measure-table{margin:16px 20px;border:1px solid #d8e0e8}.import-measure-row{display:grid;grid-template-columns:1.45fr .7fr 1.15fr .7fr;border-top:1px solid #d8e0e8}.import-measure-row:first-child{border-top:0}.import-measure-row>*{min-width:0;padding:10px;border:0;border-right:1px solid #d8e0e8}.import-measure-row.heading{background:#111d2b;color:#fff}.import-measure-row input{text-align:center;font-weight:800;background:#f8fafc}.import-measure-row>span{display:flex;align-items:center;justify-content:center;gap:5px}.import-measure-row>span input{width:72px;padding:5px}.geometry-import-card>footer{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px}.geometry-import-card>footer button{padding:11px 15px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:900}.geometry-import-card>footer .primary{background:#168b4b;color:#fff;border-color:#168b4b}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf h3{margin-top:0}
+        .legacy-geometry-template{display:none!important}
+        .geometry-a4-sheet{box-sizing:border-box;width:210mm;max-width:100%;height:297mm;margin:0 auto 18px;padding:5mm;background:#fff;color:#111;overflow:hidden;font-family:Arial,Helvetica,sans-serif;box-shadow:0 12px 30px #0f172a20}
+        .geometry-a4-sheet *{box-sizing:border-box}.geometry-a4-sheet input,.geometry-a4-sheet textarea{min-width:0;color:#111;font-family:inherit}
+        .a4-report-header{height:18mm;display:grid;grid-template-columns:62mm 1fr;align-items:center;background:#101d2d;border-bottom:2mm solid #e31b23;color:#fff;overflow:hidden}.a4-brand{height:16mm;padding:1.5mm 4mm;background:#fff}.a4-brand img{display:block;width:100%;height:100%;object-fit:contain}.a4-title{display:flex;flex-direction:column;justify-content:center;height:100%;padding-left:7mm;border-left:.4mm solid #ffffff55}.a4-title b{font-size:16pt;line-height:1.05;letter-spacing:.2mm}.a4-title span{margin-top:1.2mm;color:#ff323b;font-size:8.5pt;font-weight:900;letter-spacing:1.2mm}
+        .a4-customer-data{height:23mm;display:grid;grid-template-columns:1.25fr 1.25fr .8fr .75fr;grid-template-rows:1fr 1fr;gap:.5mm;margin:2mm 0;background:#d8e0e8;overflow:hidden}.a4-customer-data>div,.a4-customer-data>label{display:flex;min-width:0;flex-direction:column;justify-content:center;margin:0;padding:1.2mm 2.1mm;background:#fff;overflow:hidden}.a4-customer-data small{color:#5d6877;font-size:6.5pt;font-weight:900;line-height:1}.a4-customer-data b,.a4-customer-data input{width:100%;margin-top:.8mm;border:0;background:transparent;font-size:8.2pt;font-weight:800;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.a4-customer-data input{padding:0;border-bottom:.25mm dashed #9aa5b2}
+        .a4-axis-section{height:69mm;margin:0 0 2mm;border:.3mm solid #cfd7e1;overflow:hidden}.a4-axis-section.rear{height:58mm}.a4-axis-section h2{height:7mm;margin:0;padding:1.65mm 3mm;background:#101d2d;border-left:2.4mm solid #e31b23;color:#fff;font-size:10pt;line-height:1}.a4-axis-grid{display:grid;grid-template-columns:53% 47%;height:calc(100% - 7mm)}
+        .a4-axle-visual{position:relative;display:grid;grid-template-rows:9mm 1fr 7mm;border-right:.3mm solid #cfd7e1;background:linear-gradient(#fff,#f5f7f9);overflow:hidden}.a4-angle-strip{display:grid;align-items:stretch;background:#f5f7f9;border-bottom:.25mm solid #d6dde6}.a4-angle-strip.four{grid-template-columns:repeat(4,1fr)}.a4-angle-strip.two{grid-template-columns:repeat(2,1fr)}.a4-angle-strip span{display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:.25mm solid #d6dde6;line-height:1}.a4-angle-strip span:last-child{border-right:0}.a4-angle-strip small{font-size:5.4pt;font-weight:900}.a4-angle-strip b{margin-top:.7mm;font-size:8pt}.a4-angle-strip .ok,.a4-toe-values .ok{color:#07883e}.a4-angle-strip .bad,.a4-toe-values .bad{color:#cf121b}.a4-angle-strip .pending{color:#4d5968}
+        .a4-mechanical-image{position:relative;min-height:0;overflow:hidden}.a4-mechanical-image img{position:absolute;inset:1mm 7mm .5mm;width:calc(100% - 14mm);height:calc(100% - 1.5mm);object-fit:contain}.a4-mechanical-image svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.a4-mechanical-image line{vector-effect:non-scaling-stroke}.a4-toe-values{display:grid;grid-template-columns:1fr 1fr;align-items:center;border-top:.25mm solid #d6dde6;background:#fff}.a4-toe-values span{padding:0 2mm;text-align:center;font-size:5.6pt;font-weight:900;white-space:nowrap}.a4-toe-values b{margin-left:1mm;font-size:7.3pt}
+        .a4-measure-table{display:grid;grid-template-rows:7mm repeat(5,1fr);height:100%;overflow:hidden}.a4-measure-table.rear-table{grid-template-rows:7mm repeat(4,1fr)}.a4-measure-head,.a4-measure-row{display:grid;grid-template-columns:1.35fr .62fr 1.12fr .62fr;align-items:stretch}.a4-measure-head{background:#101d2d;color:#fff}.a4-measure-head>*{display:flex;align-items:center;justify-content:center;padding:1mm;border-right:.25mm solid #ffffff38;font-size:6.3pt}.a4-measure-row{border-top:.25mm solid #d8e0e8}.a4-measure-row>*{min-width:0;border:0;border-right:.25mm solid #d8e0e8}.a4-measure-row>b{display:flex;align-items:center;padding:1mm 1.7mm;font-size:6.7pt;line-height:1.08}.a4-measure-row>input{width:100%;padding:.5mm;text-align:center;background:#f8fafc;font-size:7.8pt;font-weight:900}.a4-measure-row>input.ok{color:#07883e;background:#e8f8ef}.a4-measure-row>input.bad{color:#cf121b;background:#fff0f1}.a4-measure-row>span{display:flex;align-items:center;justify-content:center;gap:.5mm;padding:.4mm;font-size:6pt}.a4-measure-row>span input{width:42%;border:0;border-bottom:.25mm dotted #9aa5b2;background:#fff;text-align:center;font-size:6.3pt;font-weight:800}
+        .a4-extra-data{height:50mm;display:grid;grid-template-columns:1.12fr 1fr .88fr;gap:1.5mm;margin-bottom:2mm;overflow:hidden}.a4-extra-card{border:.3mm solid #cfd7e1;overflow:hidden}.a4-extra-card h3{height:7mm;margin:0;padding:1.8mm 2.2mm;background:#101d2d;color:#fff;font-size:7.4pt}.a4-extra-card label{display:grid;grid-template-columns:1.25fr .75fr;align-items:center;height:6mm;padding:0 1.8mm;border-top:.25mm solid #d8e0e8;font-size:6.3pt;font-weight:800}.a4-extra-card input{width:100%;height:4.4mm;border:0;border-bottom:.25mm dashed #9ca7b4;background:#fffceb;text-align:center;font-size:6.7pt;font-weight:800}.a4-extra-card.steering label{grid-template-columns:1fr;height:15mm;padding:2mm}.a4-extra-card.steering label input{height:7mm;margin-top:1mm;font-size:9pt}.steering-status{margin:4mm 3mm;padding:3mm 1mm;border:.3mm solid #cfd7e1;border-radius:2mm;color:#07883e;text-align:center;font-size:7.2pt;font-weight:900}
+        .a4-report-footer{height:29mm;display:grid;grid-template-columns:1fr 50mm;border:.3mm solid #cfd7e1;overflow:hidden}.a4-report-footer>label{display:flex;flex-direction:column;padding:2mm}.a4-report-footer>label>b,.a4-report-footer>div>b{font-size:7pt}.a4-report-footer textarea{flex:1;width:100%;margin-top:1mm;padding:1.5mm;border:.25mm solid #d5dde6;background:#fff;resize:none;font-size:7.2pt;line-height:1.3}.a4-report-footer>div{display:grid;grid-template-columns:1fr 1fr;gap:1.5mm;padding:2mm;border-left:.3mm solid #cfd7e1}.a4-report-footer>div>b{grid-column:1/-1}.a4-report-footer>div label{font-size:6.2pt;font-weight:800}.a4-report-footer>div input{width:100%;margin-top:1mm;padding:1mm;border:.25mm solid #d5dde6;background:#fffceb;font-size:7pt}.a4-address{height:7mm;display:flex;align-items:center;justify-content:center;background:#101d2d;color:#fff;font-size:6.2pt;font-weight:700;letter-spacing:.15mm}
+        @media(max-width:900px){.geometry-a4-sheet{width:100%;height:auto;min-height:297mm;padding:3mm}.a4-report-header{grid-template-columns:42% 58%}.a4-title b{font-size:12pt}.a4-title span{font-size:7pt}.a4-customer-data{grid-template-columns:1fr 1fr}.a4-axis-grid{grid-template-columns:51% 49%}.a4-measure-row>b{font-size:5.8pt}.a4-extra-card label{font-size:5.7pt}}
+        @media(max-width:720px){.geometry-toolbar{display:grid}.geometry-extra-grid{grid-template-columns:1fr 1fr}.geometry-customer{grid-template-columns:1fr 1fr}.geometry-header{grid-template-columns:1fr}.geometry-header h1{font-size:24px}.geometry-row{grid-template-columns:1.2fr .7fr 1fr .7fr;font-size:11px}.geometry-row>*{padding:6px}.geometry-notes{grid-template-columns:1fr}.geometry-notes aside{border-left:0;border-top:1px solid #d8e0e8}.geometry-a4-sheet{min-width:760px;transform-origin:top left}}
+        .geometry-entry-sheet{display:none!important}.geometry-template-sheet{position:relative;container-type:inline-size;max-width:1024px;margin:0 auto 18px;background:#fff;box-shadow:0 12px 30px #0f172a20}.geometry-template-bg{position:relative;z-index:1;display:block;width:100%;height:auto}
+        .geometry-official-logo{position:absolute;z-index:5;left:2.2%;top:.6%;width:36%;height:7.5%;overflow:hidden;background:#080b0e;text-align:center}.geometry-official-logo img{display:block;width:100%;height:78%;object-fit:cover;object-position:center center;filter:brightness(0) invert(1)}.geometry-official-logo span{display:block;margin-top:-.25cqw;color:#fff;font:600 1.05cqw/1 Arial,sans-serif;letter-spacing:.34cqw}
+        .geometry-dynamic-guides{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none}.geometry-template-overlay{position:absolute;z-index:4;inset:0;font-family:Arial,sans-serif;color:#111;pointer-events:none}.geometry-template-overlay>b{position:absolute;max-width:27%;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-size:1.18cqw;line-height:1.1;white-space:nowrap}.geometry-template-overlay .header-value{width:20%;padding:0 .35cqw .32cqw;background:#fff;overflow:hidden}.geometry-template-overlay .header-value.right{width:18%}.geometry-template-overlay .header-value.date{width:8.2%}.geometry-template-overlay .header-value.time{width:7%}
+        .geometry-template-overlay .measure{font-size:9px;font-size:.85cqw;transform:translateX(-50%);padding:.08cqw .2cqw;background:#fffffff5;border-radius:3px;box-shadow:0 0 0 1px #ffffff80}.geometry-template-overlay .diagram-mask{display:none!important}.geometry-template-overlay .ok{color:#07883e}.geometry-template-overlay .bad{color:#df171f}.geometry-template-overlay .pending{color:#111}.geometry-template-overlay .cell-value{width:8%;text-align:center;transform:translateX(-50%);font-size:13px;font-size:1.2cqw;padding:.15% 0;background:#fffffff5}.geometry-template-overlay .cell-spec{width:13%;text-align:center;transform:translateX(-50%);font-size:10px;font-size:.94cqw;font-weight:700;padding:.2% 0;background:#fffffff5}
+        .editable-report-field{position:absolute;z-index:7;box-sizing:border-box;pointer-events:auto!important;border:0;border-bottom:1px solid #7c8793;background:#fffdf2;padding:0 .25cqw;color:#111;font:700 1cqw/1.2 Arial,sans-serif;text-align:center;outline:none}.editable-report-field:focus{background:#fff1a8;box-shadow:0 0 0 2px #d91d2a}.chassis-a{left:35.7%;top:76.05%;width:8%}.chassis-b{left:35.7%;top:78.02%;width:8%}.chassis-difference{left:35.7%;top:79.95%;width:8%}.wheelbase-front{left:35.7%;top:82.05%;width:8%}.wheelbase-rear{left:35.7%;top:84.02%;width:8%}.track-front{left:35.7%;top:85.98%;width:8%}.track-rear{left:35.7%;top:87.92%;width:8%}.tire-front-left{left:54.8%;top:78.2%;width:7.6%}.tire-front-right{left:69.8%;top:78.2%;width:7.6%}.tire-rear-left{left:54.8%;top:84.55%;width:7.6%}.tire-rear-right{left:69.8%;top:84.55%;width:7.6%}.steering-angle{left:84.2%;top:75.8%;width:10%}.next-review-date{left:82.6%;top:93.2%;width:14%}.next-review-km{left:82.6%;top:95.1%;width:14%}.template-notes{left:3.4%;top:93.65%;width:70%;height:3.65%;resize:none;text-align:left;line-height:1.45;border:0;background:#ffffffee;padding:.15cqw .4cqw;font-size:9px;font-size:.82cqw;overflow:hidden}.print-geometry-button{pointer-events:auto!important;cursor:pointer!important;opacity:1!important}
+        .geometry-official-logo{left:2.2%;top:.5%;width:34.5%;height:7.6%;display:flex;align-items:center;justify-content:center;background:#fff}.geometry-official-logo img{width:96%;height:92%;object-fit:contain;object-position:center;filter:none}.geometry-official-logo span{display:none}
+        .geometry-template-overlay{pointer-events:auto}.geometry-template-overlay>b{pointer-events:none}.geometry-template-overlay .header-value{display:flex;align-items:center;width:21%;height:1.55%;min-height:0;padding:0 .45cqw;background:#fff;overflow:hidden}.geometry-template-overlay .header-value.right{width:19%}.geometry-template-overlay .header-value.date{width:9.2%}.geometry-template-overlay .header-value.time{width:8%}
+        .editable-report-field{z-index:12;height:1.65%;pointer-events:auto!important;cursor:text;border:1px solid #e7c95b;border-radius:2px;background:#fff9d8;padding:0 .3cqw}.editable-report-field::placeholder{color:#78691e;opacity:1}.template-notes{left:3.4%;top:93.55%;width:70%;height:4.05%;padding:.34cqw .45cqw 0;border:0;border-radius:0;background:repeating-linear-gradient(to bottom,#fff 0,#fff 1.22cqw,#aeb5bd 1.27cqw,#fff 1.33cqw);font-size:.82cqw;line-height:1.33cqw;overflow:hidden}
+        .geometry-toolbar{position:relative!important;z-index:100!important}.geometry-toolbar button,.geometry-toolbar .pdf-upload{position:relative!important;z-index:101!important;pointer-events:auto!important}
+        .a4-report-header{align-items:stretch!important;background:#fff!important;border:.3mm solid #d8e0e8!important;border-bottom:2mm solid #e31b23!important}.a4-brand{display:flex!important;align-items:center!important;justify-content:center!important;height:100%!important;padding:1mm 4mm!important;background:#fff!important}.a4-title{height:100%!important;padding-left:7mm!important;border-left:0!important;background:#101d2d!important}.a4-title b{font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important;letter-spacing:0!important}.a4-title span{font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important;letter-spacing:.8mm!important}
+        .a4-mechanical-image .angle-reference line{stroke:#59636e;stroke-width:1.8;stroke-dasharray:5 4;opacity:.72}.a4-mechanical-image .angle-measure{stroke-width:3.2;stroke-linecap:round}.a4-mechanical-image .toe-measure{stroke-width:3.2;stroke-linecap:round}.a4-toe-values span{font-weight:800!important}
+        .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;height:17mm!important;grid-template-columns:52mm 1fr!important;padding:0!important}.a4-brand{padding:2.5mm 7mm!important}.a4-brand img{width:100%!important;height:10.5mm!important;object-fit:contain!important}.a4-title{padding-left:6mm!important;background:#fff!important;border-left:.3mm solid #d8e0e8!important}.a4-title b{color:#111!important;font-size:15pt!important}.a4-title span{color:#e31b23!important;font-size:8pt!important}
+        .a4-customer-data{height:24mm!important}.a4-axis-section{height:82mm!important}.a4-axis-section.rear{height:70mm!important}.a4-extra-data{height:30mm!important;grid-template-columns:1fr 1fr!important}.a4-report-footer{height:39mm!important}.a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}.a4-toe-values .ok{color:#07883e!important}.a4-toe-values .bad{color:#cf121b!important}.a4-toe-values .pending{color:#4d5968!important}.a4-measure-row>b{line-height:1.2!important}.a4-measure-head>*{line-height:1.15!important}
+        .a4-axis-grid{grid-template-columns:46% 54%!important}.a4-measure-table{grid-template-rows:10mm repeat(7,1fr)!important}.a4-measure-table.rear-table{grid-template-rows:10mm repeat(5,1fr)!important}.a4-measure-head{display:grid!important;grid-template-columns:1.3fr 1.12fr 1fr 1.12fr!important;background:#fff!important;color:#111!important;border-bottom:.45mm solid #e31b23!important}.a4-measure-head>b,.a4-measure-head>span{min-width:0;border-right:.25mm solid #cfd7e1!important}.a4-measure-head>b{display:flex;align-items:center;justify-content:center;padding:.7mm;font-size:5.3pt!important;text-align:center}.a4-measure-head>span{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;align-items:center;text-align:center}.a4-measure-head>span strong{grid-column:1/-1;padding:.45mm .2mm;border-bottom:.25mm solid #cfd7e1;font-size:4.8pt;line-height:1}.a4-measure-head>span i{font-size:4.7pt;font-style:normal}.a4-measure-row{grid-template-columns:1.3fr .56fr .56fr 1fr .56fr .56fr!important}.a4-measure-row.single>input:nth-of-type(1){grid-column:2/4}.a4-measure-row.single>span{grid-column:4}.a4-measure-row.single>input:nth-of-type(2){grid-column:5/7}.a4-measure-row>b{font-size:5.45pt!important;padding:.7mm 1mm!important}.a4-measure-row>input{font-size:6.2pt!important;padding:.25mm!important}.a4-measure-row>span{gap:.2mm!important;padding:.2mm!important;font-size:4.7pt!important}.a4-measure-row>span input{width:43%!important;font-size:5pt!important}.a4-axis-section h2,.a4-extra-card h3{background:#fff!important;color:#111!important;border-top:0!important;border-bottom:.45mm solid #e31b23!important}.a4-axis-section h2{border-left:2.4mm solid #e31b23!important}.a4-extra-card h3{border-left:1.5mm solid #e31b23!important}.a4-address{background:#fff!important;color:#111!important;border-top:.55mm solid #e31b23!important}.a4-unit-note{display:flex;align-items:center;height:8mm;margin:0;padding:0 2mm;border:.3mm solid #cfd7e1;border-bottom:0;background:#fff;color:#4b5563;font-size:6.1pt}.a4-unit-note b{margin-right:1.2mm;color:#111}.a4-extra-card label{height:5.5mm!important}.a4-extra-card.steering label{height:11mm!important}.steering-status{margin:2mm 3mm!important;padding:2mm 1mm!important}
+        .import-measure-row{grid-template-columns:1.45fr .7fr .7fr 1.15fr .7fr .7fr!important}.import-measure-row.single>input:nth-of-type(1){grid-column:2/4}.import-measure-row.single>span{grid-column:4}.import-measure-row.single>input:nth-of-type(2){grid-column:5/7}.import-measure-row.heading{background:#fff!important;color:#111!important;border-bottom:3px solid #e31b23}.import-measure-row.heading>*{display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px}
+        @media print{html,body{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-report-page{position:static!important;inset:auto!important;margin:0!important;padding:0!important;transform:none!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:fixed!important;left:0!important;top:0!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;padding:0!important}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
+      `}</style>
+    </div>
   );
 }
 function Reports({
@@ -5532,24 +8630,30 @@ function Reports({
   open,
   edit,
   remove,
+  updateQuoteFollowUp,
   message,
 }: any) {
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("todos"),
     [printRow, setPrintRow] = useState<Appt | null>(null),
     [reportMode, setReportMode] = useState<
-      "registros" | "semana" | "abertos" | "andamento"
+      "registros" | "semana" | "amanha" | "abertos" | "andamento"
     >(
       initialMode === "abertos" || initialMode === "andamento"
         ? initialMode
         : "registros",
     ),
-    [weekDate, setWeekDate] = useState(iso(new Date()));
+    [weekDate, setWeekDate] = useState(iso(new Date())),
+    [reminderDayDrafts, setReminderDayDrafts] = useState<
+      Record<number, number>
+    >({});
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
   const category = (a: Appt) =>
-    a.budget?.processStatus === "Finalizado"
+    a.quoteFollowUpDecision === "declined"
+      ? "Cliente desistiu"
+      : a.budget?.processStatus === "Finalizado"
       ? "Atendimento concluído"
       : a.type === "retorno"
         ? "Retorno"
@@ -5582,10 +8686,10 @@ function Reports({
     (filter === "revisoes" && a.type === "revisao") ||
     (filter === "faltas" && a.status === "faltou");
   const rows = (data as Appt[])
-    .filter((a) => a.type !== "bloqueio")
+    .filter((a) => !isEmployeeAbsence(a))
     .filter(matches)
     .filter((a) =>
-      `${a.client} ${a.vehicle} ${a.plate} ${a.note}`
+      `${a.client} ${a.vehicle} ${a.plate} ${a.note} ${a.internalNote ?? ""}`
         .toLocaleLowerCase("pt-BR")
         .includes(query.toLocaleLowerCase("pt-BR")),
     )
@@ -5598,7 +8702,7 @@ function Reports({
   saturday.setDate(monday.getDate() + 5);
   const weeklyRows = (data as Appt[]).filter(
     (a) =>
-      a.type !== "bloqueio" && a.date >= iso(monday) && a.date <= iso(saturday),
+      !isEmployeeAbsence(a) && a.date >= iso(monday) && a.date <= iso(saturday),
   );
   const weeklyMetrics = [
     ["Agendamentos", weeklyRows.length],
@@ -5614,6 +8718,7 @@ function Reports({
         (a) =>
           a.status === "avaliou" &&
           a.type === "cliente" &&
+          a.quoteFollowUpDecision !== "declined" &&
           !a.serviceAppointmentId &&
           a.budget?.processStatus !== "Finalizado",
       ).length,
@@ -5627,20 +8732,112 @@ function Reports({
     ["Garantias", weeklyRows.filter((a) => a.type === "garantia").length],
     ["Revisões 30 dias", weeklyRows.filter((a) => a.type === "revisao").length],
   ];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = iso(tomorrow);
+  const tomorrowRows = (data as Appt[])
+    .filter((a) => !isEmployeeAbsence(a) && a.date === tomorrowIso)
+    .sort((a, b) => a.time.localeCompare(b.time));
+  const tomorrowMessage = [
+    `*AGENDA MONOCENTER - ${tomorrow.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).toUpperCase()}*`,
+    "",
+    ...(tomorrowRows.length
+      ? tomorrowRows.map((a) =>
+          [
+            `*${a.time} - ${a.client}*`,
+            `${a.vehicle || "Veículo não informado"}${a.plate ? ` - ${a.plate}` : ""}`,
+            `Situação: ${category(a)}${a.inProgress ? " - veículo na oficina" : ""}`,
+            a.note ? `Relato do cliente: ${a.note}` : "",
+            a.internalNote ? `Observação interna: ${a.internalNote}` : "",
+          ].filter(Boolean).join("\n"),
+        )
+      : ["Nenhum agendamento para amanhã."]),
+  ].join("\n\n");
   const openQuotes = (data as Appt[])
     .filter(
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
+        a.quoteFollowUpDecision !== "declined" &&
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     )
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    .sort((a, b) => {
+      const aReminder = a.quoteFollowUpDueDate || "9999-12-31",
+        bReminder = b.quoteFollowUpDueDate || "9999-12-31";
+      return (
+        aReminder.localeCompare(bReminder) ||
+        `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)
+      );
+    });
+  const declinedQuotes = (data as Appt[])
+    .filter(
+      (a) =>
+        a.type === "cliente" &&
+        a.status === "avaliou" &&
+        a.quoteFollowUpDecision === "declined" &&
+        !a.serviceAppointmentId &&
+        a.budget?.processStatus !== "Finalizado",
+    )
+    .sort((a, b) =>
+      String(b.quoteFollowUpUpdatedAt || b.date).localeCompare(
+        String(a.quoteFollowUpUpdatedAt || a.date),
+      ),
+    );
+  const dueQuoteReminders = openQuotes.filter(
+    (appointment) =>
+      !!appointment.quoteFollowUpDueDate &&
+      appointment.quoteFollowUpDueDate <= iso(new Date()),
+  ).length;
+  const reminderDaysFor = (appointment: Appt) =>
+      reminderDayDrafts[appointment.id] ??
+      appointment.quoteFollowUpDays ??
+      3,
+    reminderDateFromToday = (days: number) => {
+      const date = new Date();
+      date.setHours(12, 0, 0, 0);
+      date.setDate(date.getDate() + Math.max(1, Math.min(90, days)));
+      return iso(date);
+    },
+    scheduleQuoteReminder = (appointment: Appt) => {
+      const days = Math.max(
+        1,
+        Math.min(90, Number(reminderDaysFor(appointment)) || 3),
+      );
+      updateQuoteFollowUp(appointment.id, {
+        quoteFollowUpDays: days,
+        quoteFollowUpDueDate: reminderDateFromToday(days),
+        quoteFollowUpDecision: "message",
+      });
+    },
+    prepareQuoteFollowUp = (appointment: Appt) => {
+      const days = Math.max(
+        1,
+        Math.min(90, Number(reminderDaysFor(appointment)) || 3),
+      );
+      updateQuoteFollowUp(appointment.id, {
+        quoteFollowUpDays: days,
+        quoteFollowUpDueDate: reminderDateFromToday(days),
+        quoteFollowUpDecision: "message",
+        quoteFollowUpPreparedBy: user.displayName,
+        quoteFollowUpPreparedAt: new Date().toISOString(),
+      });
+      message(
+        `Olá, ${appointment.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${appointment.vehicle || ""}${appointment.plate ? `, placa ${appointment.plate}` : ""}. Podemos ajudar com o agendamento?`,
+      );
+    };
   const inProgress = (data as Appt[])
     .filter(
       (a) =>
-        (a.inProgress || a.status === "servico") &&
-        a.type !== "bloqueio" &&
+        (a.inProgress ||
+          a.status === "servico" ||
+          (a.type === "revisao" && a.reviewWithService && !!a.review)) &&
+        !isEmployeeAbsence(a) &&
         a.budget?.processStatus !== "Finalizado",
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
@@ -5685,16 +8882,25 @@ function Reports({
             </button>
           )}
           <button
+            className={reportMode === "amanha" ? "active" : ""}
+            onClick={() => setReportMode("amanha")}
+          >
+            Agenda de amanhã
+          </button>
+          <button
             className={reportMode === "abertos" ? "active" : ""}
             onClick={() => setReportMode("abertos")}
           >
             Orçamentos em aberto
+            {dueQuoteReminders > 0
+              ? ` · ${dueQuoteReminders} ${dueQuoteReminders === 1 ? "lembrete" : "lembretes"}`
+              : ""}
           </button>
           <button
             className={reportMode === "andamento" ? "active" : ""}
             onClick={() => setReportMode("andamento")}
           >
-            Atendimentos em andamento
+            Veículos em andamento
           </button>
         </div>
         {isClissia && reportMode === "semana" && (
@@ -5763,56 +8969,213 @@ function Reports({
             </div>
           </div>
         )}
+        {reportMode === "amanha" && (
+          <div className="management-report-panel tomorrow-agenda-panel">
+            <div className="management-report-head">
+              <span>
+                <h2>Agenda do dia seguinte</h2>
+                <p>
+                  {tomorrow.toLocaleDateString("pt-BR", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  })} · {tomorrowRows.length} {tomorrowRows.length === 1 ? "registro" : "registros"}
+                </p>
+              </span>
+              <button className="wa" onClick={() => message(tomorrowMessage)}>
+                Copiar para WhatsApp
+              </button>
+            </div>
+            <div className="tomorrow-agenda-list">
+              {tomorrowRows.length ? (
+                tomorrowRows.map((a) => (
+                  <article key={a.id}>
+                    <time>{a.time}</time>
+                    <span>
+                      <b>{a.client}</b>
+                      <small>{a.vehicle || "Veículo não informado"} · {a.plate || "Sem placa"}</small>
+                      {a.note && <small>Relato do cliente: {a.note}</small>}
+                      {a.internalNote && (
+                        <small className="tomorrow-internal-note">
+                          Observação interna: {a.internalNote}
+                        </small>
+                      )}
+                    </span>
+                    <strong>{category(a)}</strong>
+                  </article>
+                ))
+              ) : (
+                <p>Nenhum agendamento para amanhã.</p>
+              )}
+            </div>
+          </div>
+        )}
         {reportMode === "abertos" && (
           <div className="management-report-panel open-quotes-panel">
+            <style>{`
+              .compact-quotes-wrap{overflow-x:auto;border:1px solid #d9e1ea;border-radius:10px;background:#fff}
+              .compact-quotes-table{min-width:980px}
+              .compact-quotes-head,.compact-quote-row{display:grid;grid-template-columns:minmax(210px,1.55fr) 130px minmax(210px,1.25fr) minmax(225px,1.3fr) 210px;gap:10px;align-items:center}
+              .compact-quotes-head{padding:8px 12px;background:#eef2f6;color:#526274;font-size:10px;font-weight:900;text-transform:uppercase}
+              .compact-quote-row{min-height:72px;padding:8px 12px;border-top:1px solid #e4e9ef}
+              .compact-quote-row:first-child{border-top:0}
+              .compact-quote-client{display:grid;gap:2px;min-width:0}
+              .compact-quote-client b{overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+              .compact-quote-client small,.compact-quote-age small,.compact-reminder small{color:#64748b;font-size:10px;line-height:1.25}
+              .compact-quote-age,.compact-reminder{display:grid;gap:3px}
+              .compact-reminder-control{display:flex;align-items:center;gap:5px}
+              .compact-reminder-control input{width:56px!important;min-width:56px;padding:5px 6px;text-align:center}
+              .compact-reminder-control button{padding:6px 8px;font-size:10px}
+              .compact-reminder-date{font-weight:800}
+              .compact-reminder-date.due{color:#c51d25}
+              .compact-quote-decision{display:grid;gap:5px}
+              .compact-quote-decision label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;cursor:pointer}
+              .compact-quote-decision input{width:15px;height:15px;margin:0}
+              .compact-quote-actions{display:flex;justify-content:flex-end;gap:6px}
+              .compact-quote-actions button{padding:7px 9px;font-size:10px;white-space:nowrap}
+              .compact-quote-actions .wa{background:#16864b;color:#fff}
+              .declined-quotes{margin-top:12px;border:1px solid #f1c0c3;border-radius:9px;background:#fff7f7}
+              .declined-quotes summary{padding:10px 12px;color:#a3131c;font-size:12px;font-weight:900;cursor:pointer}
+              .declined-quote-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:8px 12px;border-top:1px solid #f1d4d6;font-size:11px}
+              .declined-quote-row span{display:grid;gap:2px}.declined-quote-row small{color:#64748b}
+              .declined-quote-row button{padding:6px 9px;font-size:10px}
+              .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
+            `}</style>
             <div className="management-report-head">
               <span>
                 <h2>Orçamentos em aberto</h2>
-                <p>{openQuotes.length} aguardando retorno do cliente</p>
+                <p>
+                  {openQuotes.length} aguardando retorno do cliente
+                  {dueQuoteReminders > 0
+                    ? ` · ${dueQuoteReminders} ${dueQuoteReminders === 1 ? "lembrete vencido" : "lembretes vencidos"}`
+                    : ""}
+                </p>
               </span>
             </div>
-            <div className="open-quotes-list">
+            <div className="compact-quotes-wrap">
+              <div className="compact-quotes-table">
+                <div className="compact-quotes-head">
+                  <span>Cliente e veículo</span>
+                  <span>Tempo em aberto</span>
+                  <span>Próximo lembrete</span>
+                  <span>Decisão</span>
+                  <span>Ações</span>
+                </div>
               {openQuotes.length ? (
                 openQuotes.map((a) => {
                   const daysOpen = Math.max(
                     0,
                     Math.floor(
                       (Date.now() - new Date(a.date + "T12:00:00").getTime()) /
-                        86400000,
+                      86400000,
                     ),
-                  );
+                  ),
+                    reminderDays = reminderDaysFor(a),
+                    reminderDue =
+                      !!a.quoteFollowUpDueDate &&
+                      a.quoteFollowUpDueDate <= iso(new Date());
                   return (
-                    <article key={a.id}>
-                      <span>
+                    <article className="compact-quote-row" key={a.id}>
+                      <span className="compact-quote-client">
                         <b>{a.client}</b>
                         <small>
                           {a.vehicle || "Veículo não informado"} ·{" "}
                           {a.plate || "Sem placa"}
                         </small>
+                      </span>
+                      <span className="compact-quote-age">
+                        <b>{daysOpen} {daysOpen === 1 ? "dia" : "dias"}</b>
                         <small>
-                          Avaliado em{" "}
                           {new Date(a.date + "T12:00:00").toLocaleDateString(
                             "pt-BR",
-                          )}{" "}
-                          · {daysOpen} {daysOpen === 1 ? "dia" : "dias"} em
-                          aberto
+                          )}
                         </small>
                         {a.quoteSentAt && (
                           <small>
-                            Enviado em{" "}
-                            {new Date(a.quoteSentAt).toLocaleString("pt-BR")}{" "}
-                            por {a.quoteSentBy || "não informado"}
+                            Enviado por {a.quoteSentBy || "não informado"}
                           </small>
                         )}
                       </span>
-                      <div>
+                      <span className="compact-reminder">
+                        <span className="compact-reminder-control">
+                          <input
+                            type="number"
+                            min="1"
+                            max="90"
+                            value={reminderDays}
+                            onChange={(event) =>
+                              setReminderDayDrafts((current) => ({
+                                ...current,
+                                [a.id]: Math.max(
+                                  1,
+                                  Math.min(90, Number(event.target.value) || 1),
+                                ),
+                              }))
+                            }
+                            aria-label={`Dias para lembrar ${a.client}`}
+                          />
+                          <small>dias</small>
+                          <button onClick={() => scheduleQuoteReminder(a)}>
+                            Programar
+                          </button>
+                        </span>
+                        <small
+                          className={`compact-reminder-date${reminderDue ? " due" : ""}`}
+                        >
+                          {a.quoteFollowUpDueDate
+                            ? `${reminderDue ? "Lembrete vencido: " : "Lembrar em: "}${new Date(`${a.quoteFollowUpDueDate}T12:00:00`).toLocaleDateString("pt-BR")}`
+                            : "Lembrete ainda não programado"}
+                        </small>
+                        {a.quoteFollowUpPreparedAt && (
+                          <small>
+                            Última mensagem preparada em{" "}
+                            {new Date(a.quoteFollowUpPreparedAt).toLocaleDateString(
+                              "pt-BR",
+                            )}
+                          </small>
+                        )}
+                      </span>
+                      <span className="compact-quote-decision">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={a.quoteFollowUpDecision === "message"}
+                            onChange={(event) =>
+                              updateQuoteFollowUp(a.id, {
+                                quoteFollowUpDecision: event.target.checked
+                                  ? "message"
+                                  : undefined,
+                              })
+                            }
+                          />
+                          Mandar nova mensagem
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            onChange={(event) => {
+                              if (
+                                event.target.checked &&
+                                confirm(
+                                  `Confirmar que ${a.client} desistiu de fazer o serviço?`,
+                                )
+                              )
+                                updateQuoteFollowUp(a.id, {
+                                  quoteFollowUpDecision: "declined",
+                                  quoteFollowUpDueDate: undefined,
+                                });
+                            }}
+                          />
+                          Cliente desistiu
+                        </label>
+                      </span>
+                      <div className="compact-quote-actions">
                         <button onClick={() => open(a)}>Abrir orçamento</button>
                         <button
-                          onClick={() =>
-                            message(
-                              `Olá, ${a.client}! Tudo bem? Gostaríamos de saber se deseja dar continuidade ao orçamento da Monocenter para o veículo ${a.vehicle || ""}${a.plate ? `, placa ${a.plate}` : ""}. Podemos ajudar com o agendamento?`,
-                            )
-                          }
+                          className="wa"
+                          onClick={() => prepareQuoteFollowUp(a)}
                         >
                           Preparar mensagem
                         </button>
@@ -5821,20 +9184,56 @@ function Reports({
                   );
                 })
               ) : (
-                <p>Nenhum orçamento em aberto.</p>
+                <p style={{ padding: 16 }}>Nenhum orçamento em aberto.</p>
               )}
+              </div>
             </div>
+            {declinedQuotes.length > 0 && (
+              <details className="declined-quotes">
+                <summary>
+                  Clientes que desistiram ({declinedQuotes.length})
+                </summary>
+                {declinedQuotes.map((a) => (
+                  <div className="declined-quote-row" key={a.id}>
+                    <span>
+                      <b>{a.client}</b>
+                      <small>
+                        {a.vehicle || "Veículo não informado"} ·{" "}
+                        {a.plate || "Sem placa"}
+                        {a.quoteFollowUpUpdatedBy
+                          ? ` · registrado por ${a.quoteFollowUpUpdatedBy}`
+                          : ""}
+                      </small>
+                    </span>
+                    <button
+                      onClick={() =>
+                        updateQuoteFollowUp(a.id, {
+                          quoteFollowUpDecision: "message",
+                          quoteFollowUpDueDate: reminderDateFromToday(
+                            reminderDaysFor(a),
+                          ),
+                        })
+                      }
+                    >
+                      Reabrir acompanhamento
+                    </button>
+                  </div>
+                ))}
+              </details>
+            )}
           </div>
         )}
         {reportMode === "andamento" && (
           <div className="management-report-panel open-quotes-panel">
             <div className="management-report-head">
               <span>
-                <h2>Atendimentos em andamento</h2>
-                <p>{inProgress.length} veículos aguardando conclusão</p>
+                <h2>Veículos na oficina</h2>
+                <p>
+                  {inProgress.length} {inProgress.length === 1 ? "veículo" : "veículos"} aguardando avaliação ou conclusão
+                </p>
               </span>
             </div>
-            <div className="open-quotes-list">
+            <div className="open-quotes-list vehicle-progress-list">
               {inProgress.length ? (
                 inProgress.map((a) => {
                   const daysInProgress = Math.max(
@@ -5845,12 +9244,18 @@ function Reports({
                     ),
                   );
                   return (
-                    <article key={a.id}>
+                    <article key={a.id} className="vehicle-progress-card">
+                      <VehiclePicture appointment={a} />
                       <span>
-                        <b>{a.client}</b>
+                        <strong className="vehicle-progress-status">
+                          {inProgressLabel(a)}
+                        </strong>
+                        <b className="vehicle-progress-model">
+                          {a.vehicle || "Modelo não informado"}
+                          {a.vehicleColor ? ` · ${a.vehicleColor}` : ""}
+                        </b>
                         <small>
-                          {a.vehicle || "Veículo não informado"} ·{" "}
-                          {a.plate || "Sem placa"}
+                          Cliente: {a.client} · {a.plate || "Sem placa"}
                         </small>
                         <small>
                           Iniciado em{" "}
@@ -6059,13 +9464,17 @@ const TITLES: Record<View, [string, string]> = {
     "Agenda Monocenter",
     "Agendamentos, ausências e situação dos atendimentos.",
   ],
+  veiculos: [
+    "Veículos na oficina",
+    "Modelos aguardando avaliação, revisão ou conclusão do serviço.",
+  ],
   atendimento: [
     "Atendimento concluído",
     "Avaliação, orçamento aprovado e conferência final.",
   ],
   avaliacao: [
     "Avaliação veicular",
-    "Checklist técnico de suspensão, freios e geometria.",
+    "Checklist técnico de suspensão, freios e peças do veículo.",
   ],
   orcamento: [
     "Montar orçamento",
@@ -6074,7 +9483,7 @@ const TITLES: Record<View, [string, string]> = {
   proposta: ["Orçamento do cliente", "Data, placa, pagamento e mensagem."],
   torque: [
     "Conferência de torque",
-    "Abra apenas as áreas necessárias para o serviço.",
+    "Geometria, alinhamento, segurança e finalização do serviço.",
   ],
   revisao: [
     "Revisão de 30 dias",
