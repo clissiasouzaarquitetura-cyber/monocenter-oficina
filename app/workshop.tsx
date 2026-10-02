@@ -8130,6 +8130,17 @@ function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, ri
 function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue, onSave }: any) {
   const storageKey = `geometry-report-${appointment.id ?? appointment.plate ?? appointment.name}`;
   const extraStorageKey = `${storageKey}-extra-fields`;
+  const recommendedReviewKm = (() => {
+    const digits = String(appointment.km ?? "").replace(/\D/g, "");
+    const currentKm = Number(digits);
+    return Number.isFinite(currentKm) && currentKm > 0
+      ? (currentKm + 10000).toLocaleString("pt-BR")
+      : "";
+  })();
+  const withRecommendedReviewKm = (saved: any) => ({
+    ...(saved || {}),
+    nextReviewKm: saved?.nextReviewKm || recommendedReviewKm,
+  });
   const normalizeGeometryValues = (stored: any) => {
     if (!stored || typeof stored !== "object") return {};
     const rows = Object.values(stored) as any[];
@@ -8170,9 +8181,9 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     try { return normalizeGeometryValues(JSON.parse(localStorage.getItem(storageKey) || "{}")); } catch { return {}; }
   });
   const [extraFields, setExtraFields] = useState<any>(() => {
-    if (appointment.geometryReport?.extraFields) return appointment.geometryReport.extraFields;
-    if (typeof window === "undefined") return {};
-    try { return JSON.parse(localStorage.getItem(extraStorageKey) || "{}"); } catch { return {}; }
+    if (appointment.geometryReport?.extraFields) return withRecommendedReviewKm(appointment.geometryReport.extraFields);
+    if (typeof window === "undefined") return withRecommendedReviewKm({});
+    try { return withRecommendedReviewKm(JSON.parse(localStorage.getItem(extraStorageKey) || "{}")); } catch { return withRecommendedReviewKm({}); }
   });
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(values));
@@ -8471,7 +8482,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V21</span>
+        <span className="geometry-version">Laudo A4 V22</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
@@ -8774,6 +8785,10 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
         .a4-measure-row{overflow:visible!important}.a4-measure-row>*{overflow:visible!important}.a4-measure-row>b{font-size:5.25pt!important;line-height:1.28!important;white-space:normal!important}.a4-measure-row>input{line-height:1.2!important}.a4-measure-row>span,.a4-measure-row>span input{line-height:1.2!important}
         .a4-extra-data{height:36mm!important;margin-bottom:2mm!important;overflow:visible!important}.a4-extra-card{overflow:visible!important}.a4-extra-card h3{height:8mm!important;padding:1.2mm 2.4mm!important;font-size:7.6pt!important;line-height:1.25!important}.a4-extra-card label{height:6.7mm!important;padding:0 2mm!important;font-size:6.4pt!important;line-height:1.25!important;overflow:visible!important}.a4-extra-card label input{height:4.8mm!important;line-height:1.2!important}.a4-extra-card.steering label{height:13mm!important;padding:1.5mm 2mm!important}.a4-extra-card.steering label input{height:6.5mm!important;margin-top:.7mm!important}.steering-status{display:flex!important;align-items:center!important;justify-content:center!important;min-height:8mm!important;margin:2mm 3mm 0!important;padding:1.5mm 1mm!important;line-height:1.2!important;overflow:visible!important}.a4-report-footer{height:33mm!important}.a4-report-footer textarea{line-height:1.35!important;overflow:hidden!important}
         .import-measure-row{grid-template-columns:1.45fr .7fr .7fr 1.15fr .7fr .7fr!important}.import-measure-row.single>input:nth-of-type(1){grid-column:2/4}.import-measure-row.single>span{grid-column:4}.import-measure-row.single>input:nth-of-type(2){grid-column:5/7}.import-measure-row.heading{background:#fff!important;color:#111!important;border-bottom:3px solid #e31b23}.import-measure-row.heading>*{display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px}
+        /* V22: visualização ampliada na tela e tipografia mais legível nos eixos. */
+        .a4-axis-section h2{font-size:10.8pt!important}.a4-angle-strip small{font-size:6.1pt!important}.a4-angle-strip b{font-size:8.7pt!important}.a4-toe-values span{font-size:6.1pt!important}.a4-toe-values b{font-size:8pt!important}.a4-measure-head>b{font-size:5.9pt!important}.a4-measure-head>span strong{font-size:5.35pt!important}.a4-measure-head>span i{font-size:5.2pt!important}.a4-measure-row>b{font-size:5.8pt!important}.a4-measure-row>input{font-size:6.75pt!important}.a4-measure-row>span{font-size:5.15pt!important}.a4-measure-row>span input{font-size:5.45pt!important}
+        @media screen and (min-width:1300px){.geometry-a4-sheet{zoom:1.3}}
+        @media print{.geometry-a4-sheet{zoom:1!important}}
         @media print{html,body{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-report-page{position:static!important;inset:auto!important;margin:0!important;padding:0!important;transform:none!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:fixed!important;left:0!important;top:0!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;padding:0!important}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
     </div>
