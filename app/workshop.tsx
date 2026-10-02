@@ -8288,7 +8288,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V13</span>
+        <span className="geometry-version">Laudo A4 V14</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry}>Salvar laudo</button>
@@ -8385,11 +8385,15 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                   {values[0]?.right && <line className="angle-measure" x1="512" y1="219" x2="512" y2="82" stroke={guideColor(0,values[0]?.right)} transform={`rotate(${clampAngle(values[0]?.right,4)} 512 219)`}/>} 
                   {values[1]?.left && <line className="angle-measure" x1="197" y1="174" x2="163" y2="75" stroke={guideColor(1,values[1]?.left)} transform={`rotate(${clampAngle(values[1]?.left,-1.4)} 197 174)`}/>} 
                   {values[1]?.right && <line className="angle-measure" x1="403" y1="174" x2="437" y2="75" stroke={guideColor(1,values[1]?.right)} transform={`rotate(${clampAngle(values[1]?.right,1.4)} 403 174)`}/>} 
+                  {values[0]?.left && <text className="guide-label" x="42" y="92" fill={guideColor(0,values[0]?.left)}>CAMBER E.</text>}
+                  {values[1]?.left && <text className="guide-label" x="128" y="72" fill={guideColor(1,values[1]?.left)}>CASTER E.</text>}
+                  {values[1]?.right && <text className="guide-label" x="472" y="72" textAnchor="end" fill={guideColor(1,values[1]?.right)}>CASTER D.</text>}
+                  {values[0]?.right && <text className="guide-label" x="558" y="92" textAnchor="end" fill={guideColor(0,values[0]?.right)}>CAMBER D.</text>}
                   {values[2]?.left && <line className="toe-measure" x1="35" y1="226" x2="137" y2="226" stroke={guideColor(2,values[2]?.left)} markerEnd={stateOf(values[2]?.left,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
                   {values[2]?.right && <line className="toe-measure" x1="565" y1="226" x2="463" y2="226" stroke={guideColor(2,values[2]?.right)} markerEnd={stateOf(values[2]?.right,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
                 </svg>
               </div>
-              <div className="a4-toe-values"><span>CONVERGÊNCIA E. <b>{values[2]?.left || "—"}</b></span><span>CONVERGÊNCIA D. <b>{values[2]?.right || "—"}</b></span></div>
+              <div className="a4-toe-values"><span className={stateOf(values[2]?.left,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA E. <b>{values[2]?.left || "—"}</b></span><span className={stateOf(values[2]?.right,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA D. <b>{values[2]?.right || "—"}</b></span></div>
             </div>
             <div className="a4-measure-table">
               <div className="a4-measure-head"><b>PARÂMETRO</b><b>ESQ.</b><b>ESPECIFICAÇÃO</b><b>DIR.</b></div>
@@ -8407,14 +8411,16 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                 <img src="/eixo-traseiro-laudo.png" alt="Conjunto técnico do eixo traseiro"/>
                 <svg viewBox="0 0 600 230" preserveAspectRatio="none" aria-hidden="true">
                   <defs><marker id="a4rg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4rr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
-                  <g className="angle-reference"><line x1="88" y1="204" x2="88" y2="73"/><line x1="512" y1="204" x2="512" y2="73"/></g>
-                  {values[5]?.left && <line className="angle-measure" x1="88" y1="204" x2="88" y2="73" stroke={guideColor(5,values[5]?.left)} transform={`rotate(${clampAngle(values[5]?.left,-4)} 88 204)`}/>} 
-                  {values[5]?.right && <line className="angle-measure" x1="512" y1="204" x2="512" y2="73" stroke={guideColor(5,values[5]?.right)} transform={`rotate(${clampAngle(values[5]?.right,4)} 512 204)`}/>} 
-                  {values[6]?.left && <line className="toe-measure" x1="35" y1="211" x2="137" y2="211" stroke={guideColor(6,values[6]?.left)} markerEnd={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
-                  {values[6]?.right && <line className="toe-measure" x1="565" y1="211" x2="463" y2="211" stroke={guideColor(6,values[6]?.right)} markerEnd={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  <g className="angle-reference"><line x1="155" y1="204" x2="155" y2="66"/><line x1="445" y1="204" x2="445" y2="66"/></g>
+                  {values[5]?.left && <line className="angle-measure" x1="155" y1="204" x2="155" y2="66" stroke={guideColor(5,values[5]?.left)} transform={`rotate(${clampAngle(values[5]?.left,-4)} 155 204)`}/>} 
+                  {values[5]?.right && <line className="angle-measure" x1="445" y1="204" x2="445" y2="66" stroke={guideColor(5,values[5]?.right)} transform={`rotate(${clampAngle(values[5]?.right,4)} 445 204)`}/>} 
+                  {values[5]?.left && <text className="guide-label" x="112" y="78" fill={guideColor(5,values[5]?.left)}>CAMBER E.</text>}
+                  {values[5]?.right && <text className="guide-label" x="488" y="78" textAnchor="end" fill={guideColor(5,values[5]?.right)}>CAMBER D.</text>}
+                  {values[6]?.left && <line className="toe-measure" x1="70" y1="211" x2="175" y2="211" stroke={guideColor(6,values[6]?.left)} markerEnd={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {values[6]?.right && <line className="toe-measure" x1="530" y1="211" x2="425" y2="211" stroke={guideColor(6,values[6]?.right)} markerEnd={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
                 </svg>
               </div>
-              <div className="a4-toe-values"><span>CONVERGÊNCIA E. <b>{values[6]?.left || "—"}</b></span><span>CONVERGÊNCIA D. <b>{values[6]?.right || "—"}</b></span></div>
+              <div className="a4-toe-values"><span className={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])}>CONVERGÊNCIA E. <b>{values[6]?.left || "—"}</b></span><span className={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])}>CONVERGÊNCIA D. <b>{values[6]?.right || "—"}</b></span></div>
             </div>
             <div className="a4-measure-table rear-table">
               <div className="a4-measure-head"><b>PARÂMETRO</b><b>ESQ.</b><b>ESPECIFICAÇÃO</b><b>DIR.</b></div>
@@ -8559,7 +8565,9 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         .geometry-toolbar{position:relative!important;z-index:100!important}.geometry-toolbar button,.geometry-toolbar .pdf-upload{position:relative!important;z-index:101!important;pointer-events:auto!important}
         .a4-report-header{align-items:stretch!important;background:#fff!important;border:.3mm solid #d8e0e8!important;border-bottom:2mm solid #e31b23!important}.a4-brand{display:flex!important;align-items:center!important;justify-content:center!important;height:100%!important;padding:1mm 4mm!important;background:#fff!important}.a4-title{height:100%!important;padding-left:7mm!important;border-left:0!important;background:#101d2d!important}.a4-title b{font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important;letter-spacing:0!important}.a4-title span{font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important;letter-spacing:.8mm!important}
         .a4-mechanical-image .angle-reference line{stroke:#59636e;stroke-width:1.8;stroke-dasharray:5 4;opacity:.72}.a4-mechanical-image .angle-measure{stroke-width:3.2;stroke-linecap:round}.a4-mechanical-image .toe-measure{stroke-width:3.2;stroke-linecap:round}.a4-toe-values span{font-weight:800!important}
-        @media print{body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:absolute;left:0;top:0;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
+        .a4-report-header{height:17mm!important;grid-template-columns:52mm 1fr!important}.a4-brand{padding:2.5mm 7mm!important}.a4-brand img{width:100%!important;height:10.5mm!important;object-fit:contain!important}.a4-title{padding-left:6mm!important;background:#fff!important;border-left:.3mm solid #d8e0e8!important}.a4-title b{color:#111!important;font-size:15pt!important}.a4-title span{color:#e31b23!important;font-size:8pt!important}
+        .a4-customer-data{height:24mm!important}.a4-axis-section{height:73mm!important}.a4-axis-section.rear{height:63mm!important}.a4-extra-data{height:55mm!important}.a4-report-footer{height:34mm!important}.a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}.a4-toe-values .ok{color:#07883e!important}.a4-toe-values .bad{color:#cf121b!important}.a4-toe-values .pending{color:#4d5968!important}.a4-measure-row>b{line-height:1.2!important}.a4-measure-head>*{line-height:1.15!important}
+        @media print{html,body{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-report-page{position:static!important;inset:auto!important;margin:0!important;padding:0!important;transform:none!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:fixed!important;left:0!important;top:0!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
     </div>
   );
