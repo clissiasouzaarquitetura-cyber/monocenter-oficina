@@ -8038,15 +8038,18 @@ function AttendanceSummary({
 }
 
 const GEOMETRY_FIELDS = [
-  ["Camber dianteiro", "", ""],
-  ["Caster", "", ""],
-  ["Convergência dianteira", "", ""],
-  ["KPI / SAI", "", ""],
-  ["Ângulo incluso", "", ""],
-  ["Camber traseiro", "", ""],
-  ["Convergência traseira", "", ""],
-  ["Convergência total traseira", "", ""],
-  ["Ângulo de impulsão", "", ""],
+  ["Camber dianteiro", "", "", false],
+  ["Caster", "", "", false],
+  ["Convergência dianteira", "", "", false],
+  ["Convergência total dianteira", "", "", true],
+  ["KPI / SAI", "", "", false],
+  ["Ângulo de inclusão", "", "", false],
+  ["Setback dianteira", "", "", true],
+  ["Camber traseiro", "", "", false],
+  ["Convergência traseira", "", "", false],
+  ["Convergência total traseira", "", "", true],
+  ["Ângulo de impulsão", "", "", true],
+  ["Setback traseira", "", "", true],
 ];
 
 function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, rightToe, rear = false }: any) {
@@ -8077,6 +8080,26 @@ function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, ri
 function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: any) {
   const storageKey = `geometry-report-${appointment.id ?? appointment.plate ?? appointment.name}`;
   const extraStorageKey = `${storageKey}-extra-fields`;
+  const normalizeGeometryValues = (stored: any) => {
+    if (!stored || typeof stored !== "object") return {};
+    const rows = Object.values(stored) as any[];
+    if (rows.some((row) => row?.beforeLeft !== undefined || row?.afterLeft !== undefined)) return stored;
+    const migrated: any = {};
+    const oldToNew: Record<number, number> = { 0: 0, 1: 1, 2: 2, 3: 4, 4: 5, 5: 7, 6: 8, 7: 9, 8: 10 };
+    Object.entries(oldToNew).forEach(([oldIndex, newIndex]) => {
+      const row: any = stored[Number(oldIndex)];
+      if (!row) return;
+      migrated[newIndex] = {
+        min: row.min ?? "",
+        max: row.max ?? "",
+        beforeLeft: "",
+        beforeRight: "",
+        afterLeft: row.left ?? "",
+        afterRight: row.right ?? "",
+      };
+    });
+    return migrated;
+  };
   const [sourcePdf, setSourcePdf] = useState("");
   const [sourceName, setSourceName] = useState(appointment.geometryReport?.sourceName || "");
   const [technician, setTechnician] = useState(appointment.geometryReport?.technician || appointment.tech || "");
@@ -8085,9 +8108,9 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   const [readMessage, setReadMessage] = useState("");
   const [pendingValues, setPendingValues] = useState<any>(null);
   const [values, setValues] = useState<any>(() => {
-    if (appointment.geometryReport?.values) return appointment.geometryReport.values;
+    if (appointment.geometryReport?.values) return normalizeGeometryValues(appointment.geometryReport.values);
     if (typeof window === "undefined") return {};
-    try { return JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch { return {}; }
+    try { return normalizeGeometryValues(JSON.parse(localStorage.getItem(storageKey) || "{}")); } catch { return {}; }
   });
   const [extraFields, setExtraFields] = useState<any>(() => {
     if (appointment.geometryReport?.extraFields) return appointment.geometryReport.extraFields;
@@ -8130,6 +8153,10 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       row.max ?? GEOMETRY_FIELDS[field][2],
     ) === "ok" ? "#079447" : "#df171f";
   };
+  const beforeLeftOf = (row: any) => row?.beforeLeft ?? "";
+  const beforeRightOf = (row: any) => row?.beforeRight ?? "";
+  const afterLeftOf = (row: any) => row?.afterLeft ?? row?.left ?? "";
+  const afterRightOf = (row: any) => row?.afterRight ?? row?.right ?? "";
   const updateValue = (index: number, field: string, value: string) =>
     setValues((current: any) => ({ ...current, [index]: { ...(current[index] || {}), [field]: value } }));
   const updateExtra = (field: string, value: string) =>
@@ -8146,54 +8173,56 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   const findGeometryLine = (text: string, pattern: RegExp) =>
     text.split(/\r?\n/).find((line) => pattern.test(line.normalize("NFD").replace(/[\u0300-\u036f]/g, ""))) || "";
   const readGeometryText = (text: string) => {
-    const definitions: Array<[number, RegExp]> = [
-      [0, /camber dianteir|cambagem dianteir/i],
-      [1, /caster/i],
-      [2, /converg.ncia dianteira(?! total)/i],
-      [3, /\bkpi\b|sai/i],
-      [4, /angulo de inclusao/i],
-      [5, /camber traseir|cambagem traseir/i],
-      [6, /converg.ncia traseira(?! total)/i],
-      [7, /converg.ncia total traseir/i],
-      [8, /angulo de (impulsao|empurrao)/i],
+    const definitions: Array<[number, RegExp, boolean]> = [
+      [0, /camber dianteir|cambagem dianteir/i, false],
+      [1, /caster/i, false],
+      [2, /converg.ncia dianteira(?! total)/i, false],
+      [3, /converg.ncia total dianteir/i, true],
+      [4, /\bkpi\b|sai/i, false],
+      [5, /angulo de inclusao/i, false],
+      [6, /setback dianteir/i, true],
+      [7, /camber traseir|cambagem traseir/i, false],
+      [8, /converg.ncia traseira(?! total)/i, false],
+      [9, /converg.ncia total traseir/i, true],
+      [10, /angulo de (impulsao|empurrao)/i, true],
+      [11, /setback traseir/i, true],
     ];
     const next: any = {};
     let recognized = 0;
-    definitions.forEach(([index, pattern]) => {
+    definitions.forEach(([index, pattern, single]) => {
       const line = findGeometryLine(text, pattern);
       const angles = line.match(/[+-]?\d+[°º]\s*\d*[\'’′\"”″]?/g) || [];
-      if (angles.length >= 6) {
+      if (!single && angles.length >= 6) {
         next[index] = {
           ...(values[index] || {}),
           min: formatAngle(angles[0]),
           max: formatAngle(angles[1]),
-          left: formatAngle(angles[angles.length - 3]),
-          right: formatAngle(angles[angles.length - 1]),
+          beforeLeft: formatAngle(angles[angles.length - 4]),
+          afterLeft: formatAngle(angles[angles.length - 3]),
+          beforeRight: formatAngle(angles[angles.length - 2]),
+          afterRight: formatAngle(angles[angles.length - 1]),
+        };
+        recognized += 4;
+      } else if (single && angles.length >= 4) {
+        next[index] = {
+          ...(values[index] || {}),
+          min: formatAngle(angles[0]),
+          max: formatAngle(angles[1]),
+          beforeLeft: formatAngle(angles[angles.length - 2]),
+          beforeRight: "",
+          afterLeft: formatAngle(angles[angles.length - 1]),
+          afterRight: "",
         };
         recognized += 2;
-      } else if (angles.length >= 4 && (index === 7 || index === 8)) {
+      } else if (!single && angles.length >= 4) {
         next[index] = {
           ...(values[index] || {}),
           min: formatAngle(angles[0]),
           max: formatAngle(angles[1]),
-          left: formatAngle(angles[angles.length - 1]),
-          right: "",
-        };
-        recognized += 1;
-      } else if (angles.length >= 4) {
-        next[index] = {
-          ...(values[index] || {}),
-          min: formatAngle(angles[0]),
-          max: formatAngle(angles[1]),
-          left: formatAngle(angles[angles.length - 2]),
-          right: formatAngle(angles[angles.length - 1]),
-        };
-        recognized += 2;
-      } else if (angles.length >= 2) {
-        next[index] = {
-          ...(values[index] || {}),
-          left: formatAngle(angles[angles.length - 2]),
-          right: formatAngle(angles[angles.length - 1]),
+          beforeLeft: "",
+          beforeRight: "",
+          afterLeft: formatAngle(angles[angles.length - 2]),
+          afterRight: formatAngle(angles[angles.length - 1]),
         };
         recognized += 2;
       }
@@ -8282,13 +8311,38 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     }
   };
   const saveGeometry = () => {
-    onSave?.({ values, technician, notes, sourceName, extraFields });
+    onSave?.({ schemaVersion: 2, values, technician, notes, sourceName, extraFields });
     setReadMessage("Laudo salvo no atendimento do cliente.");
   };
+  const renderMeasureRow = ([label, defaultMin, defaultMax, single]: any, index: number) => {
+    const row = values[index] || {};
+    const min = row.min ?? defaultMin;
+    const max = row.max ?? defaultMax;
+    if (single) return <div className="a4-measure-row single" key={label}>
+      <b>{label}</b>
+      <input className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
+      <span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
+      <input className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
+    </div>;
+    return <div className="a4-measure-row" key={label}>
+      <b>{label}</b>
+      <input className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
+      <input className={stateOf(beforeRightOf(row),min,max)} value={beforeRightOf(row)} onChange={(e)=>updateValue(index,"beforeRight",e.target.value)}/>
+      <span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
+      <input className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
+      <input className={stateOf(afterRightOf(row),min,max)} value={afterRightOf(row)} onChange={(e)=>updateValue(index,"afterRight",e.target.value)}/>
+    </div>;
+  };
+  const measureHead = <div className="a4-measure-head">
+    <b>PARÂMETRO</b>
+    <span><strong>ANTES DO AJUSTE</strong><i>ESQ.</i><i>DIR.</i></span>
+    <b>ESPECIFICAÇÃO</b>
+    <span><strong>APÓS O AJUSTE</strong><i>ESQ.</i><i>DIR.</i></span>
+  </div>;
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V15</span>
+        <span className="geometry-version">Laudo A4 V16</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry}>Salvar laudo</button>
@@ -8299,13 +8353,6 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         <summary>Editar dados complementares do laudo</summary>
         <div className="geometry-extra-grid">
           <label>Técnico<input value={technician} onChange={(e)=>setTechnician(e.target.value)}/></label>
-          <label>Diagonal esquerda (A)<input value={extraFields.chassisA || ""} onChange={(e)=>updateExtra("chassisA",e.target.value)}/></label>
-          <label>Diagonal direita (B)<input value={extraFields.chassisB || ""} onChange={(e)=>updateExtra("chassisB",e.target.value)}/></label>
-          <label>Diferença A - B<input value={extraFields.chassisDifference || ""} onChange={(e)=>updateExtra("chassisDifference",e.target.value)}/></label>
-          <label>Entre eixos dianteiro<input value={extraFields.wheelbaseFront || ""} onChange={(e)=>updateExtra("wheelbaseFront",e.target.value)}/></label>
-          <label>Entre eixos traseiro<input value={extraFields.wheelbaseRear || ""} onChange={(e)=>updateExtra("wheelbaseRear",e.target.value)}/></label>
-          <label>Bitola dianteira<input value={extraFields.trackFront || ""} onChange={(e)=>updateExtra("trackFront",e.target.value)}/></label>
-          <label>Bitola traseira<input value={extraFields.trackRear || ""} onChange={(e)=>updateExtra("trackRear",e.target.value)}/></label>
           <label>Pneu dianteiro esquerdo<input value={extraFields.tireFrontLeft || ""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/></label>
           <label>Pneu dianteiro direito<input value={extraFields.tireFrontRight || ""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/></label>
           <label>Pneu traseiro esquerdo<input value={extraFields.tireRearLeft || ""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/></label>
@@ -8327,15 +8374,17 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
             </header>
             <p>Confira os valores lidos no relatório do alinhador. Eles só serão aplicados ao laudo depois da confirmação.</p>
             <div className="import-measure-table">
-              <div className="import-measure-row heading"><b>Parâmetro</b><b>Esquerda</b><b>Especificação</b><b>Direita</b></div>
-              {GEOMETRY_FIELDS.map(([label, defaultMin, defaultMax], index) => {
+              <div className="import-measure-row heading"><b>Parâmetro</b><b>Antes E.</b><b>Antes D.</b><b>Especificação</b><b>Após E.</b><b>Após D.</b></div>
+              {GEOMETRY_FIELDS.map(([label, defaultMin, defaultMax, single], index) => {
                 const row = pendingValues[index] || {};
                 if (!pendingValues[index]) return null;
-                return <div className="import-measure-row" key={label}>
+                return <div className={`import-measure-row ${single ? "single" : ""}`} key={label}>
                   <b>{label}</b>
-                  <input value={row.left || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],left:e.target.value}}))}/>
+                  <input value={row.beforeLeft || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],beforeLeft:e.target.value}}))}/>
+                  {!single && <input value={row.beforeRight || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],beforeRight:e.target.value}}))}/>} 
                   <span><input value={row.min ?? defaultMin} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],min:e.target.value}}))}/> a <input value={row.max ?? defaultMax} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],max:e.target.value}}))}/></span>
-                  <input value={row.right || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],right:e.target.value}}))}/>
+                  <input value={row.afterLeft || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],afterLeft:e.target.value}}))}/>
+                  {!single && <input value={row.afterRight || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],afterRight:e.target.value}}))}/>} 
                 </div>;
               })}
             </div>
@@ -8371,33 +8420,33 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
           <div className="a4-axis-grid">
             <div className="a4-axle-visual">
               <div className="a4-angle-strip four">
-                <span className={stateOf(values[0]?.left,values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])}><small>CAMBER E.</small><b>{values[0]?.left || "—"}</b></span>
-                <span className={stateOf(values[1]?.left,values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])}><small>CASTER E.</small><b>{values[1]?.left || "—"}</b></span>
-                <span className={stateOf(values[1]?.right,values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])}><small>CASTER D.</small><b>{values[1]?.right || "—"}</b></span>
-                <span className={stateOf(values[0]?.right,values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])}><small>CAMBER D.</small><b>{values[0]?.right || "—"}</b></span>
+                <span className={stateOf(afterLeftOf(values[0]),values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])}><small>CAMBER E.</small><b>{afterLeftOf(values[0]) || "—"}</b></span>
+                <span className={stateOf(afterLeftOf(values[1]),values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])}><small>CASTER E.</small><b>{afterLeftOf(values[1]) || "—"}</b></span>
+                <span className={stateOf(afterRightOf(values[1]),values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])}><small>CASTER D.</small><b>{afterRightOf(values[1]) || "—"}</b></span>
+                <span className={stateOf(afterRightOf(values[0]),values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])}><small>CAMBER D.</small><b>{afterRightOf(values[0]) || "—"}</b></span>
               </div>
               <div className="a4-mechanical-image">
                 <img src="/eixo-dianteiro-laudo.png" alt="Conjunto técnico do eixo dianteiro"/>
                 <svg viewBox="0 0 600 250" preserveAspectRatio="none" aria-hidden="true">
                   <defs><marker id="a4fg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4fr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
                   <g className="angle-reference"><line x1="88" y1="219" x2="88" y2="82"/><line x1="512" y1="219" x2="512" y2="82"/><line x1="197" y1="174" x2="163" y2="75"/><line x1="403" y1="174" x2="437" y2="75"/></g>
-                  {values[0]?.left && <line className="angle-measure" x1="88" y1="219" x2="88" y2="82" stroke={guideColor(0,values[0]?.left)} transform={`rotate(${clampAngle(values[0]?.left,-4)} 88 219)`}/>} 
-                  {values[0]?.right && <line className="angle-measure" x1="512" y1="219" x2="512" y2="82" stroke={guideColor(0,values[0]?.right)} transform={`rotate(${clampAngle(values[0]?.right,4)} 512 219)`}/>} 
-                  {values[1]?.left && <line className="angle-measure" x1="197" y1="174" x2="163" y2="75" stroke={guideColor(1,values[1]?.left)} transform={`rotate(${clampAngle(values[1]?.left,-1.4)} 197 174)`}/>} 
-                  {values[1]?.right && <line className="angle-measure" x1="403" y1="174" x2="437" y2="75" stroke={guideColor(1,values[1]?.right)} transform={`rotate(${clampAngle(values[1]?.right,1.4)} 403 174)`}/>} 
-                  {values[0]?.left && <text className="guide-label" x="42" y="92" fill={guideColor(0,values[0]?.left)}>CAMBER E.</text>}
-                  {values[1]?.left && <text className="guide-label" x="128" y="72" fill={guideColor(1,values[1]?.left)}>CASTER E.</text>}
-                  {values[1]?.right && <text className="guide-label" x="472" y="72" textAnchor="end" fill={guideColor(1,values[1]?.right)}>CASTER D.</text>}
-                  {values[0]?.right && <text className="guide-label" x="558" y="92" textAnchor="end" fill={guideColor(0,values[0]?.right)}>CAMBER D.</text>}
-                  {values[2]?.left && <line className="toe-measure" x1="35" y1="226" x2="137" y2="226" stroke={guideColor(2,values[2]?.left)} markerEnd={stateOf(values[2]?.left,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
-                  {values[2]?.right && <line className="toe-measure" x1="565" y1="226" x2="463" y2="226" stroke={guideColor(2,values[2]?.right)} markerEnd={stateOf(values[2]?.right,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  {afterLeftOf(values[0]) && <line className="angle-measure" x1="88" y1="219" x2="88" y2="82" stroke={guideColor(0,afterLeftOf(values[0]))} transform={`rotate(${clampAngle(afterLeftOf(values[0]),-4)} 88 219)`}/>} 
+                  {afterRightOf(values[0]) && <line className="angle-measure" x1="512" y1="219" x2="512" y2="82" stroke={guideColor(0,afterRightOf(values[0]))} transform={`rotate(${clampAngle(afterRightOf(values[0]),4)} 512 219)`}/>} 
+                  {afterLeftOf(values[1]) && <line className="angle-measure" x1="197" y1="174" x2="163" y2="75" stroke={guideColor(1,afterLeftOf(values[1]))} transform={`rotate(${clampAngle(afterLeftOf(values[1]),-1.4)} 197 174)`}/>} 
+                  {afterRightOf(values[1]) && <line className="angle-measure" x1="403" y1="174" x2="437" y2="75" stroke={guideColor(1,afterRightOf(values[1]))} transform={`rotate(${clampAngle(afterRightOf(values[1]),1.4)} 403 174)`}/>} 
+                  {afterLeftOf(values[0]) && <text className="guide-label" x="42" y="92" fill={guideColor(0,afterLeftOf(values[0]))}>CAMBER E.</text>}
+                  {afterLeftOf(values[1]) && <text className="guide-label" x="128" y="72" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
+                  {afterRightOf(values[1]) && <text className="guide-label" x="472" y="72" textAnchor="end" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
+                  {afterRightOf(values[0]) && <text className="guide-label" x="558" y="92" textAnchor="end" fill={guideColor(0,afterRightOf(values[0]))}>CAMBER D.</text>}
+                  {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="226" x2="137" y2="226" stroke={guideColor(2,afterLeftOf(values[2]))} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="226" x2="463" y2="226" stroke={guideColor(2,afterRightOf(values[2]))} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
                 </svg>
               </div>
-              <div className="a4-toe-values"><span className={stateOf(values[2]?.left,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA E. <b>{values[2]?.left || "—"}</b></span><span className={stateOf(values[2]?.right,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA D. <b>{values[2]?.right || "—"}</b></span></div>
+              <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[2]) || "—"}</b></span><span className={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[2]) || "—"}</b></span></div>
             </div>
             <div className="a4-measure-table">
-              <div className="a4-measure-head"><b>PARÂMETRO</b><b>ESQ.</b><b>ESPECIFICAÇÃO</b><b>DIR.</b></div>
-              {GEOMETRY_FIELDS.slice(0,5).map(([label,defaultMin,defaultMax],index)=>{const row=values[index]||{},min=row.min??defaultMin,max=row.max??defaultMax;return <div className="a4-measure-row" key={label}><b>{label}</b><input className={stateOf(row.left,min,max)} value={row.left||""} onChange={(e)=>updateValue(index,"left",e.target.value)}/><span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span><input className={stateOf(row.right,min,max)} value={row.right||""} onChange={(e)=>updateValue(index,"right",e.target.value)}/></div>})}
+              {measureHead}
+              {GEOMETRY_FIELDS.slice(0,7).map((field,index)=>renderMeasureRow(field,index))}
             </div>
           </div>
         </section>
@@ -8406,34 +8455,34 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
           <h2>EIXO TRASEIRO</h2>
           <div className="a4-axis-grid">
             <div className="a4-axle-visual">
-              <div className="a4-angle-strip two"><span className={stateOf(values[5]?.left,values[5]?.min??GEOMETRY_FIELDS[5][1],values[5]?.max??GEOMETRY_FIELDS[5][2])}><small>CAMBER E.</small><b>{values[5]?.left || "—"}</b></span><span className={stateOf(values[5]?.right,values[5]?.min??GEOMETRY_FIELDS[5][1],values[5]?.max??GEOMETRY_FIELDS[5][2])}><small>CAMBER D.</small><b>{values[5]?.right || "—"}</b></span></div>
+              <div className="a4-angle-strip two"><span className={stateOf(afterLeftOf(values[7]),values[7]?.min??GEOMETRY_FIELDS[7][1],values[7]?.max??GEOMETRY_FIELDS[7][2])}><small>CAMBER E.</small><b>{afterLeftOf(values[7]) || "—"}</b></span><span className={stateOf(afterRightOf(values[7]),values[7]?.min??GEOMETRY_FIELDS[7][1],values[7]?.max??GEOMETRY_FIELDS[7][2])}><small>CAMBER D.</small><b>{afterRightOf(values[7]) || "—"}</b></span></div>
               <div className="a4-mechanical-image rear-image">
                 <img src="/eixo-traseiro-laudo.png" alt="Conjunto técnico do eixo traseiro"/>
                 <svg viewBox="0 0 600 230" preserveAspectRatio="none" aria-hidden="true">
                   <defs><marker id="a4rg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4rr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
                   <g className="angle-reference"><line x1="155" y1="204" x2="155" y2="66"/><line x1="445" y1="204" x2="445" y2="66"/></g>
-                  {values[5]?.left && <line className="angle-measure" x1="155" y1="204" x2="155" y2="66" stroke={guideColor(5,values[5]?.left)} transform={`rotate(${clampAngle(values[5]?.left,-4)} 155 204)`}/>} 
-                  {values[5]?.right && <line className="angle-measure" x1="445" y1="204" x2="445" y2="66" stroke={guideColor(5,values[5]?.right)} transform={`rotate(${clampAngle(values[5]?.right,4)} 445 204)`}/>} 
-                  {values[5]?.left && <text className="guide-label" x="112" y="78" fill={guideColor(5,values[5]?.left)}>CAMBER E.</text>}
-                  {values[5]?.right && <text className="guide-label" x="488" y="78" textAnchor="end" fill={guideColor(5,values[5]?.right)}>CAMBER D.</text>}
-                  {values[6]?.left && <line className="toe-measure" x1="70" y1="211" x2="175" y2="211" stroke={guideColor(6,values[6]?.left)} markerEnd={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
-                  {values[6]?.right && <line className="toe-measure" x1="530" y1="211" x2="425" y2="211" stroke={guideColor(6,values[6]?.right)} markerEnd={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {afterLeftOf(values[7]) && <line className="angle-measure" x1="155" y1="204" x2="155" y2="66" stroke={guideColor(7,afterLeftOf(values[7]))} transform={`rotate(${clampAngle(afterLeftOf(values[7]),-4)} 155 204)`}/>} 
+                  {afterRightOf(values[7]) && <line className="angle-measure" x1="445" y1="204" x2="445" y2="66" stroke={guideColor(7,afterRightOf(values[7]))} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 445 204)`}/>} 
+                  {afterLeftOf(values[7]) && <text className="guide-label" x="112" y="78" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
+                  {afterRightOf(values[7]) && <text className="guide-label" x="488" y="78" textAnchor="end" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
+                  {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="211" x2="175" y2="211" stroke={guideColor(8,afterLeftOf(values[8]))} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="211" x2="425" y2="211" stroke={guideColor(8,afterRightOf(values[8]))} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
                 </svg>
               </div>
-              <div className="a4-toe-values"><span className={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])}>CONVERGÊNCIA E. <b>{values[6]?.left || "—"}</b></span><span className={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])}>CONVERGÊNCIA D. <b>{values[6]?.right || "—"}</b></span></div>
+              <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[8]) || "—"}</b></span><span className={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[8]) || "—"}</b></span></div>
             </div>
             <div className="a4-measure-table rear-table">
-              <div className="a4-measure-head"><b>PARÂMETRO</b><b>ESQ.</b><b>ESPECIFICAÇÃO</b><b>DIR.</b></div>
-              {GEOMETRY_FIELDS.slice(5,9).map(([label,defaultMin,defaultMax],offset)=>{const index=offset+5,row=values[index]||{},min=row.min??defaultMin,max=row.max??defaultMax;return <div className="a4-measure-row" key={label}><b>{label}</b><input className={stateOf(row.left,min,max)} value={row.left||""} onChange={(e)=>updateValue(index,"left",e.target.value)}/><span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span><input className={stateOf(row.right,min,max)} value={row.right||""} onChange={(e)=>updateValue(index,"right",e.target.value)}/></div>})}
+              {measureHead}
+              {GEOMETRY_FIELDS.slice(7).map((field,offset)=>renderMeasureRow(field,offset+7))}
             </div>
           </div>
         </section>
 
         <section className="a4-extra-data">
-          <div className="a4-extra-card"><h3>MEDIDAS DO CHASSI</h3><label>Diagonal esq. (A)<input value={extraFields.chassisA||""} onChange={(e)=>updateExtra("chassisA",e.target.value)}/></label><label>Diagonal dir. (B)<input value={extraFields.chassisB||""} onChange={(e)=>updateExtra("chassisB",e.target.value)}/></label><label>Diferença A - B<input value={extraFields.chassisDifference||""} onChange={(e)=>updateExtra("chassisDifference",e.target.value)}/></label><label>Entre eixos dianteiro<input value={extraFields.wheelbaseFront||""} onChange={(e)=>updateExtra("wheelbaseFront",e.target.value)}/></label><label>Entre eixos traseiro<input value={extraFields.wheelbaseRear||""} onChange={(e)=>updateExtra("wheelbaseRear",e.target.value)}/></label><label>Bitola dianteira<input value={extraFields.trackFront||""} onChange={(e)=>updateExtra("trackFront",e.target.value)}/></label><label>Bitola traseira<input value={extraFields.trackRear||""} onChange={(e)=>updateExtra("trackRear",e.target.value)}/></label></div>
           <div className="a4-extra-card"><h3>CONDIÇÃO DOS PNEUS</h3><label>Dianteiro esquerdo<input value={extraFields.tireFrontLeft||""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/></label><label>Dianteiro direito<input value={extraFields.tireFrontRight||""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/></label><label>Traseiro esquerdo<input value={extraFields.tireRearLeft||""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/></label><label>Traseiro direito<input value={extraFields.tireRearRight||""} onChange={(e)=>updateExtra("tireRearRight",e.target.value)}/></label></div>
           <div className="a4-extra-card steering"><h3>ÂNGULO DO VOLANTE</h3><label>Posição / medida<input value={extraFields.steeringAngle||""} onChange={(e)=>updateExtra("steeringAngle",e.target.value)}/></label><div className="steering-status">VOLANTE CENTRALIZADO</div></div>
         </section>
+        <p className="a4-unit-note"><b>UNIDADE DAS MEDIDAS:</b> sistema sexagesimal (60 graus): 1 grau (1°) corresponde a 60 minutos (60').</p>
         <section className="a4-report-footer">
           <label><b>OBSERVAÇÕES TÉCNICAS</b><textarea value={notes} onChange={(e)=>setNotes(e.target.value)}/></label>
           <div><b>PRÓXIMA REVISÃO</b><label>Data<input value={extraFields.nextReviewDate||""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label><label>KM<input value={extraFields.nextReviewKm||""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label></div>
@@ -8566,7 +8615,9 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         .a4-report-header{align-items:stretch!important;background:#fff!important;border:.3mm solid #d8e0e8!important;border-bottom:2mm solid #e31b23!important}.a4-brand{display:flex!important;align-items:center!important;justify-content:center!important;height:100%!important;padding:1mm 4mm!important;background:#fff!important}.a4-title{height:100%!important;padding-left:7mm!important;border-left:0!important;background:#101d2d!important}.a4-title b{font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important;letter-spacing:0!important}.a4-title span{font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important;letter-spacing:.8mm!important}
         .a4-mechanical-image .angle-reference line{stroke:#59636e;stroke-width:1.8;stroke-dasharray:5 4;opacity:.72}.a4-mechanical-image .angle-measure{stroke-width:3.2;stroke-linecap:round}.a4-mechanical-image .toe-measure{stroke-width:3.2;stroke-linecap:round}.a4-toe-values span{font-weight:800!important}
         .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;height:17mm!important;grid-template-columns:52mm 1fr!important;padding:0!important}.a4-brand{padding:2.5mm 7mm!important}.a4-brand img{width:100%!important;height:10.5mm!important;object-fit:contain!important}.a4-title{padding-left:6mm!important;background:#fff!important;border-left:.3mm solid #d8e0e8!important}.a4-title b{color:#111!important;font-size:15pt!important}.a4-title span{color:#e31b23!important;font-size:8pt!important}
-        .a4-customer-data{height:24mm!important}.a4-axis-section{height:73mm!important}.a4-axis-section.rear{height:63mm!important}.a4-extra-data{height:55mm!important}.a4-report-footer{height:38mm!important}.a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}.a4-toe-values .ok{color:#07883e!important}.a4-toe-values .bad{color:#cf121b!important}.a4-toe-values .pending{color:#4d5968!important}.a4-measure-row>b{line-height:1.2!important}.a4-measure-head>*{line-height:1.15!important}
+        .a4-customer-data{height:24mm!important}.a4-axis-section{height:82mm!important}.a4-axis-section.rear{height:70mm!important}.a4-extra-data{height:30mm!important;grid-template-columns:1fr 1fr!important}.a4-report-footer{height:39mm!important}.a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}.a4-toe-values .ok{color:#07883e!important}.a4-toe-values .bad{color:#cf121b!important}.a4-toe-values .pending{color:#4d5968!important}.a4-measure-row>b{line-height:1.2!important}.a4-measure-head>*{line-height:1.15!important}
+        .a4-axis-grid{grid-template-columns:46% 54%!important}.a4-measure-table{grid-template-rows:10mm repeat(7,1fr)!important}.a4-measure-table.rear-table{grid-template-rows:10mm repeat(5,1fr)!important}.a4-measure-head{display:grid!important;grid-template-columns:1.3fr 1.12fr 1fr 1.12fr!important;background:#fff!important;color:#111!important;border-bottom:.45mm solid #e31b23!important}.a4-measure-head>b,.a4-measure-head>span{min-width:0;border-right:.25mm solid #cfd7e1!important}.a4-measure-head>b{display:flex;align-items:center;justify-content:center;padding:.7mm;font-size:5.3pt!important;text-align:center}.a4-measure-head>span{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;align-items:center;text-align:center}.a4-measure-head>span strong{grid-column:1/-1;padding:.45mm .2mm;border-bottom:.25mm solid #cfd7e1;font-size:4.8pt;line-height:1}.a4-measure-head>span i{font-size:4.7pt;font-style:normal}.a4-measure-row{grid-template-columns:1.3fr .56fr .56fr 1fr .56fr .56fr!important}.a4-measure-row.single>input:nth-of-type(1){grid-column:2/4}.a4-measure-row.single>span{grid-column:4}.a4-measure-row.single>input:nth-of-type(2){grid-column:5/7}.a4-measure-row>b{font-size:5.45pt!important;padding:.7mm 1mm!important}.a4-measure-row>input{font-size:6.2pt!important;padding:.25mm!important}.a4-measure-row>span{gap:.2mm!important;padding:.2mm!important;font-size:4.7pt!important}.a4-measure-row>span input{width:43%!important;font-size:5pt!important}.a4-axis-section h2,.a4-extra-card h3{background:#fff!important;color:#111!important;border-top:0!important;border-bottom:.45mm solid #e31b23!important}.a4-axis-section h2{border-left:2.4mm solid #e31b23!important}.a4-extra-card h3{border-left:1.5mm solid #e31b23!important}.a4-address{background:#fff!important;color:#111!important;border-top:.55mm solid #e31b23!important}.a4-unit-note{display:flex;align-items:center;height:8mm;margin:0;padding:0 2mm;border:.3mm solid #cfd7e1;border-bottom:0;background:#fff;color:#4b5563;font-size:6.1pt}.a4-unit-note b{margin-right:1.2mm;color:#111}.a4-extra-card label{height:5.5mm!important}.a4-extra-card.steering label{height:11mm!important}.steering-status{margin:2mm 3mm!important;padding:2mm 1mm!important}
+        .import-measure-row{grid-template-columns:1.45fr .7fr .7fr 1.15fr .7fr .7fr!important}.import-measure-row.single>input:nth-of-type(1){grid-column:2/4}.import-measure-row.single>span{grid-column:4}.import-measure-row.single>input:nth-of-type(2){grid-column:5/7}.import-measure-row.heading{background:#fff!important;color:#111!important;border-bottom:3px solid #e31b23}.import-measure-row.heading>*{display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px}
         @media print{html,body{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-report-page{position:static!important;inset:auto!important;margin:0!important;padding:0!important;transform:none!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:fixed!important;left:0!important;top:0!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;padding:0!important}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
     </div>
