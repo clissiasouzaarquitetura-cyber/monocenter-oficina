@@ -8272,15 +8272,14 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     document.body.classList.add("print-geometry-report");
     const finishPrint = () => document.body.classList.remove("print-geometry-report");
     window.addEventListener("afterprint", finishPrint, { once: true });
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      try {
-        window.print();
-        setReadMessage("Escolha imprimir ou salvar como PDF.");
-      } catch {
-        finishPrint();
-        setReadMessage("Não foi possível abrir a impressão neste navegador.");
-      }
-    }));
+    try {
+      window.print();
+      setReadMessage("Escolha imprimir ou salvar como PDF.");
+      window.setTimeout(finishPrint, 3000);
+    } catch {
+      finishPrint();
+      setReadMessage("Não foi possível abrir a impressão neste navegador.");
+    }
   };
   const saveGeometry = () => {
     onSave?.({ values, technician, notes, sourceName, extraFields });
@@ -8289,7 +8288,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V12</span>
+        <span className="geometry-version">Laudo A4 V13</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry}>Salvar laudo</button>
@@ -8380,13 +8379,14 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
               <div className="a4-mechanical-image">
                 <img src="/eixo-dianteiro-laudo.png" alt="Conjunto técnico do eixo dianteiro"/>
                 <svg viewBox="0 0 600 250" preserveAspectRatio="none" aria-hidden="true">
-                  <defs><marker id="a4fg" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L0,4 L4,2 z" fill="#07883e"/></marker><marker id="a4fr" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L0,4 L4,2 z" fill="#d71920"/></marker></defs>
-                  {values[0]?.left && <line x1="92" y1="211" x2="92" y2="150" stroke={guideColor(0,values[0]?.left)} strokeWidth="4" transform={`rotate(${clampAngle(values[0]?.left,-4)} 92 211)`}/>}
-                  {values[0]?.right && <line x1="508" y1="211" x2="508" y2="150" stroke={guideColor(0,values[0]?.right)} strokeWidth="4" transform={`rotate(${clampAngle(values[0]?.right,4)} 508 211)`}/>}
-                  {values[1]?.left && <line x1="198" y1="166" x2="181" y2="115" stroke={guideColor(1,values[1]?.left)} strokeWidth="4" transform={`rotate(${clampAngle(values[1]?.left,-1.4)} 198 166)`}/>}
-                  {values[1]?.right && <line x1="402" y1="166" x2="419" y2="115" stroke={guideColor(1,values[1]?.right)} strokeWidth="4" transform={`rotate(${clampAngle(values[1]?.right,1.4)} 402 166)`}/>}
-                  {values[2]?.left && <line x1="66" y1="224" x2="126" y2="224" stroke={guideColor(2,values[2]?.left)} strokeWidth="4" markerEnd={stateOf(values[2]?.left,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>}
-                  {values[2]?.right && <line x1="534" y1="224" x2="474" y2="224" stroke={guideColor(2,values[2]?.right)} strokeWidth="4" markerEnd={stateOf(values[2]?.right,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>}
+                  <defs><marker id="a4fg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4fr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
+                  <g className="angle-reference"><line x1="88" y1="219" x2="88" y2="82"/><line x1="512" y1="219" x2="512" y2="82"/><line x1="197" y1="174" x2="163" y2="75"/><line x1="403" y1="174" x2="437" y2="75"/></g>
+                  {values[0]?.left && <line className="angle-measure" x1="88" y1="219" x2="88" y2="82" stroke={guideColor(0,values[0]?.left)} transform={`rotate(${clampAngle(values[0]?.left,-4)} 88 219)`}/>} 
+                  {values[0]?.right && <line className="angle-measure" x1="512" y1="219" x2="512" y2="82" stroke={guideColor(0,values[0]?.right)} transform={`rotate(${clampAngle(values[0]?.right,4)} 512 219)`}/>} 
+                  {values[1]?.left && <line className="angle-measure" x1="197" y1="174" x2="163" y2="75" stroke={guideColor(1,values[1]?.left)} transform={`rotate(${clampAngle(values[1]?.left,-1.4)} 197 174)`}/>} 
+                  {values[1]?.right && <line className="angle-measure" x1="403" y1="174" x2="437" y2="75" stroke={guideColor(1,values[1]?.right)} transform={`rotate(${clampAngle(values[1]?.right,1.4)} 403 174)`}/>} 
+                  {values[2]?.left && <line className="toe-measure" x1="35" y1="226" x2="137" y2="226" stroke={guideColor(2,values[2]?.left)} markerEnd={stateOf(values[2]?.left,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  {values[2]?.right && <line className="toe-measure" x1="565" y1="226" x2="463" y2="226" stroke={guideColor(2,values[2]?.right)} markerEnd={stateOf(values[2]?.right,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
                 </svg>
               </div>
               <div className="a4-toe-values"><span>CONVERGÊNCIA E. <b>{values[2]?.left || "—"}</b></span><span>CONVERGÊNCIA D. <b>{values[2]?.right || "—"}</b></span></div>
@@ -8406,11 +8406,12 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
               <div className="a4-mechanical-image rear-image">
                 <img src="/eixo-traseiro-laudo.png" alt="Conjunto técnico do eixo traseiro"/>
                 <svg viewBox="0 0 600 230" preserveAspectRatio="none" aria-hidden="true">
-                  <defs><marker id="a4rg" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L0,4 L4,2 z" fill="#07883e"/></marker><marker id="a4rr" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L0,4 L4,2 z" fill="#d71920"/></marker></defs>
-                  {values[5]?.left && <line x1="90" y1="193" x2="90" y2="137" stroke={guideColor(5,values[5]?.left)} strokeWidth="4" transform={`rotate(${clampAngle(values[5]?.left,-4)} 90 193)`}/>}
-                  {values[5]?.right && <line x1="510" y1="193" x2="510" y2="137" stroke={guideColor(5,values[5]?.right)} strokeWidth="4" transform={`rotate(${clampAngle(values[5]?.right,4)} 510 193)`}/>}
-                  {values[6]?.left && <line x1="66" y1="207" x2="126" y2="207" stroke={guideColor(6,values[6]?.left)} strokeWidth="4" markerEnd={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>}
-                  {values[6]?.right && <line x1="534" y1="207" x2="474" y2="207" stroke={guideColor(6,values[6]?.right)} strokeWidth="4" markerEnd={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>}
+                  <defs><marker id="a4rg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4rr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
+                  <g className="angle-reference"><line x1="88" y1="204" x2="88" y2="73"/><line x1="512" y1="204" x2="512" y2="73"/></g>
+                  {values[5]?.left && <line className="angle-measure" x1="88" y1="204" x2="88" y2="73" stroke={guideColor(5,values[5]?.left)} transform={`rotate(${clampAngle(values[5]?.left,-4)} 88 204)`}/>} 
+                  {values[5]?.right && <line className="angle-measure" x1="512" y1="204" x2="512" y2="73" stroke={guideColor(5,values[5]?.right)} transform={`rotate(${clampAngle(values[5]?.right,4)} 512 204)`}/>} 
+                  {values[6]?.left && <line className="toe-measure" x1="35" y1="211" x2="137" y2="211" stroke={guideColor(6,values[6]?.left)} markerEnd={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {values[6]?.right && <line className="toe-measure" x1="565" y1="211" x2="463" y2="211" stroke={guideColor(6,values[6]?.right)} markerEnd={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
                 </svg>
               </div>
               <div className="a4-toe-values"><span>CONVERGÊNCIA E. <b>{values[6]?.left || "—"}</b></span><span>CONVERGÊNCIA D. <b>{values[6]?.right || "—"}</b></span></div>
@@ -8555,6 +8556,9 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         .geometry-official-logo{left:2.2%;top:.5%;width:34.5%;height:7.6%;display:flex;align-items:center;justify-content:center;background:#fff}.geometry-official-logo img{width:96%;height:92%;object-fit:contain;object-position:center;filter:none}.geometry-official-logo span{display:none}
         .geometry-template-overlay{pointer-events:auto}.geometry-template-overlay>b{pointer-events:none}.geometry-template-overlay .header-value{display:flex;align-items:center;width:21%;height:1.55%;min-height:0;padding:0 .45cqw;background:#fff;overflow:hidden}.geometry-template-overlay .header-value.right{width:19%}.geometry-template-overlay .header-value.date{width:9.2%}.geometry-template-overlay .header-value.time{width:8%}
         .editable-report-field{z-index:12;height:1.65%;pointer-events:auto!important;cursor:text;border:1px solid #e7c95b;border-radius:2px;background:#fff9d8;padding:0 .3cqw}.editable-report-field::placeholder{color:#78691e;opacity:1}.template-notes{left:3.4%;top:93.55%;width:70%;height:4.05%;padding:.34cqw .45cqw 0;border:0;border-radius:0;background:repeating-linear-gradient(to bottom,#fff 0,#fff 1.22cqw,#aeb5bd 1.27cqw,#fff 1.33cqw);font-size:.82cqw;line-height:1.33cqw;overflow:hidden}
+        .geometry-toolbar{position:relative!important;z-index:100!important}.geometry-toolbar button,.geometry-toolbar .pdf-upload{position:relative!important;z-index:101!important;pointer-events:auto!important}
+        .a4-report-header{align-items:stretch!important;background:#fff!important;border:.3mm solid #d8e0e8!important;border-bottom:2mm solid #e31b23!important}.a4-brand{display:flex!important;align-items:center!important;justify-content:center!important;height:100%!important;padding:1mm 4mm!important;background:#fff!important}.a4-title{height:100%!important;padding-left:7mm!important;border-left:0!important;background:#101d2d!important}.a4-title b{font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important;letter-spacing:0!important}.a4-title span{font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important;letter-spacing:.8mm!important}
+        .a4-mechanical-image .angle-reference line{stroke:#59636e;stroke-width:1.8;stroke-dasharray:5 4;opacity:.72}.a4-mechanical-image .angle-measure{stroke-width:3.2;stroke-linecap:round}.a4-mechanical-image .toe-measure{stroke-width:3.2;stroke-linecap:round}.a4-toe-values span{font-weight:800!important}
         @media print{body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:absolute;left:0;top:0;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
     </div>
