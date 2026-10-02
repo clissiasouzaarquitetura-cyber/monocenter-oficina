@@ -1213,6 +1213,67 @@ export default function App({ initialState, user, onLogout }: any) {
         document.body.classList.remove("no-values");
       }, 500);
     },
+    saveGeometryReport = async (geometryReport: any) => {
+      if (!activeAppointment) throw new Error("Atendimento não localizado.");
+      const savedAt = new Date().toISOString();
+      const updated: Appt = {
+        ...activeAppointment,
+        geometryReport: {
+          ...geometryReport,
+          savedAt,
+          savedBy: user.displayName,
+        },
+        lastEditedBy: user.displayName,
+        lastEditedAt: savedAt,
+        _updatedAt: Date.now(),
+      };
+      const nextAppointments = appointments.map((item) =>
+        item.id === updated.id ? updated : item,
+      );
+      syncBlockedUntil.current = Date.now() + 8000;
+      DISPLAY_APPT = updated;
+      setActiveAppointment(updated);
+      setAppointments(nextAppointments);
+      const response = await fetch("/api/state", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          state: {
+            appointments: nextAppointments,
+            deletedAppointmentIds,
+            footerSize,
+            roundStep,
+            status,
+            evaluationNotes,
+            checks,
+            custom,
+            techs,
+            holidays,
+            evaluator,
+            started,
+            templates,
+            parts,
+            selectedServices,
+            serviceQty,
+            servicePrices,
+            manualServices,
+            proposalPaymentOptions,
+            patioNotes,
+            processStatus,
+            purchaseChecks,
+            purchaseOrderStates,
+          },
+          action: "Salvou laudo de geometria",
+          entity: "Laudo de geometria",
+          detail: `${updated.client} · ${updated.plate || "sem placa"}`,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("O laudo ficou neste computador, mas não foi confirmado no banco compartilhado.");
+      }
+      setSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+      return updated;
+    },
     messageParts = groupMessageParts(parts, roundStep),
     messageServices = [
       ...selectedServices.map((i: number) => ({
@@ -3768,25 +3829,7 @@ export default function App({ initialState, user, onLogout }: any) {
                   appointment={activeAppointment}
                   onBack={() => go("proposta")}
                   onContinue={() => go("torque")}
-                  onSave={(geometryReport: any) => {
-                    const updated: Appt = {
-                      ...activeAppointment,
-                      geometryReport: {
-                        ...geometryReport,
-                        savedAt: new Date().toISOString(),
-                        savedBy: user.displayName,
-                      },
-                      lastEditedBy: user.displayName,
-                      lastEditedAt: new Date().toISOString(),
-                      _updatedAt: Date.now(),
-                    };
-                    DISPLAY_APPT = updated;
-                    setActiveAppointment(updated);
-                    setAppointments((list) =>
-                      list.map((item) => item.id === updated.id ? updated : item),
-                    );
-                    setSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-                  }}
+                  onSave={saveGeometryReport}
                 />
               )}
             </section>
@@ -3796,25 +3839,7 @@ export default function App({ initialState, user, onLogout }: any) {
             appointment={activeAppointment}
             roundStep={roundStep}
             onBack={() => go("agenda")}
-            onSaveGeometry={(geometryReport: any) => {
-              const updated: Appt = {
-                ...activeAppointment,
-                geometryReport: {
-                  ...geometryReport,
-                  savedAt: new Date().toISOString(),
-                  savedBy: user.displayName,
-                },
-                lastEditedBy: user.displayName,
-                lastEditedAt: new Date().toISOString(),
-                _updatedAt: Date.now(),
-              };
-              DISPLAY_APPT = updated;
-              setActiveAppointment(updated);
-              setAppointments((list) =>
-                list.map((item) => item.id === updated.id ? updated : item),
-              );
-              setSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-            }}
+            onSaveGeometry={saveGeometryReport}
             onEditConference={() => {
               setChecks(activeAppointment.conference?.checks ?? {});
               setGeometry(activeAppointment.conference?.geometry ?? {});
@@ -8126,6 +8151,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   const [technician, setTechnician] = useState(appointment.geometryReport?.technician || appointment.tech || "");
   const [notes, setNotes] = useState(appointment.geometryReport?.notes || "Realizado alinhamento conforme especificação do fabricante.");
   const [readingPdf, setReadingPdf] = useState(false);
+  const [savingGeometry, setSavingGeometry] = useState(false);
   const [readMessage, setReadMessage] = useState("");
   const [pendingValues, setPendingValues] = useState<any>(null);
   const [values, setValues] = useState<any>(() => {
@@ -8327,28 +8353,52 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   const printGeometry = () => {
     const report = document.querySelector(".geometry-template-sheet") as HTMLElement | null;
     if (!report) { setReadMessage("Não foi possível localizar o laudo para impressão."); return; }
-    setReadMessage("Abrindo a impressão do laudo...");
-    document.body.classList.add("print-geometry-report");
-    const finishPrint = () => {
-      document.body.classList.remove("print-geometry-report");
-      window.removeEventListener("afterprint", finishPrint);
+    const printWindow = window.open("", "_blank", "width=980,height=1080");
+    if (!printWindow) {
+      setReadMessage("O navegador bloqueou a janela de impressão. Permita pop-ups para este site e clique novamente.");
+      return;
+    }
+    const copy = report.cloneNode(true) as HTMLElement;
+    const originalFields = report.querySelectorAll("input, textarea");
+    const copiedFields = copy.querySelectorAll("input, textarea");
+    originalFields.forEach((field: any, index) => {
+      const copied: any = copiedFields[index];
+      if (!copied) return;
+      if (copied.tagName === "TEXTAREA") copied.textContent = field.value;
+      else copied.setAttribute("value", field.value);
+    });
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => node.outerHTML)
+      .join("\n");
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><base href="${window.location.origin}/"><title>Laudo de geometria - ${appointment.client || appointment.name || "Cliente"}</title>${styles}<style>html,body{margin:0!important;padding:0!important;background:#fff!important}.geometry-template-sheet{display:block!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:297mm!important;margin:0!important;padding:5mm!important;box-shadow:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.geometry-template-sheet input,.geometry-template-sheet textarea{outline:0!important}@page{size:A4 portrait;margin:0}</style></head><body>${copy.outerHTML}</body></html>`);
+    printWindow.document.close();
+    let opened = false;
+    const openDialog = () => {
+      if (opened) return;
+      opened = true;
+      printWindow.focus();
+      printWindow.print();
     };
-    window.addEventListener("afterprint", finishPrint, { once: true });
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      try {
-        window.focus();
-        window.print();
-        setReadMessage("Na janela aberta, escolha a impressora ou Salvar como PDF.");
-      } catch {
-        finishPrint();
-        setReadMessage("Não foi possível abrir a impressão neste navegador.");
-      }
-    }));
-    window.setTimeout(finishPrint, 15000);
+    printWindow.addEventListener("load", () => window.setTimeout(openDialog, 250), { once: true });
+    window.setTimeout(openDialog, 700);
+    setReadMessage("A impressão foi aberta em uma nova janela. Escolha a impressora ou Salvar como PDF.");
   };
-  const saveGeometry = () => {
-    onSave?.({ schemaVersion: 2, values, technician, notes, sourceName, extraFields });
-    setReadMessage("Laudo salvo no atendimento do cliente.");
+  const saveGeometry = async () => {
+    if (savingGeometry) return false;
+    setSavingGeometry(true);
+    setReadMessage("Salvando o laudo no sistema compartilhado...");
+    try {
+      if (!onSave) throw new Error("Não foi possível acessar o salvamento compartilhado.");
+      await onSave({ schemaVersion: 3, values, technician, notes, sourceName, extraFields });
+      setReadMessage("Laudo salvo e confirmado no sistema. Ele já pode ser aberto em outro computador.");
+      return true;
+    } catch (error: any) {
+      setReadMessage(error?.message || "Não foi possível confirmar o salvamento do laudo.");
+      return false;
+    } finally {
+      setSavingGeometry(false);
+    }
   };
   const renderMeasureRow = ([label, defaultMin, defaultMax, single]: any, index: number) => {
     const row = values[index] || {};
@@ -8378,12 +8428,12 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V18</span>
+        <span className="geometry-version">Laudo A4 V20</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
-        <button type="button" onClick={saveGeometry}>Salvar laudo</button>
+        <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
         <button type="button" className="primary print-geometry-button" onClick={printGeometry}>Imprimir / compartilhar PDF</button>
-        {onContinue && <button type="button" className="primary" onClick={() => { saveGeometry(); onContinue(); }}>Ir para conferência →</button>}
+        {onContinue && <button type="button" className="primary" disabled={savingGeometry} onClick={async () => { if (await saveGeometry()) onContinue(); }}>Ir para conferência →</button>}
       </div>
       <details className="geometry-extra-editor" open>
         <summary>Editar dados complementares do laudo</summary>
@@ -8467,17 +8517,17 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                 <img src="/eixo-dianteiro-laudo.png" alt="Conjunto técnico do eixo dianteiro"/>
                 <svg viewBox="0 0 600 250" preserveAspectRatio="none" aria-hidden="true">
                   <defs><marker id="a4fg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4fr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
-                  <g className="angle-reference"><line x1="88" y1="219" x2="88" y2="82"/><line x1="512" y1="219" x2="512" y2="82"/><line x1="197" y1="174" x2="163" y2="75"/><line x1="403" y1="174" x2="437" y2="75"/></g>
-                  {afterLeftOf(values[0]) && <line className="angle-measure" x1="88" y1="219" x2="88" y2="82" stroke={guideColor(0,afterLeftOf(values[0]))} transform={`rotate(${clampAngle(afterLeftOf(values[0]),-4)} 88 219)`}/>} 
-                  {afterRightOf(values[0]) && <line className="angle-measure" x1="512" y1="219" x2="512" y2="82" stroke={guideColor(0,afterRightOf(values[0]))} transform={`rotate(${clampAngle(afterRightOf(values[0]),4)} 512 219)`}/>} 
-                  {afterLeftOf(values[1]) && <line className="angle-measure" x1="197" y1="174" x2="163" y2="75" stroke={guideColor(1,afterLeftOf(values[1]))} transform={`rotate(${clampAngle(afterLeftOf(values[1]),-1.4)} 197 174)`}/>} 
-                  {afterRightOf(values[1]) && <line className="angle-measure" x1="403" y1="174" x2="437" y2="75" stroke={guideColor(1,afterRightOf(values[1]))} transform={`rotate(${clampAngle(afterRightOf(values[1]),1.4)} 403 174)`}/>} 
-                  {afterLeftOf(values[0]) && <text className="guide-label" x="42" y="92" fill={guideColor(0,afterLeftOf(values[0]))}>CAMBER E.</text>}
-                  {afterLeftOf(values[1]) && <text className="guide-label caster-label" x="163" y="61" textAnchor="middle" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
-                  {afterRightOf(values[1]) && <text className="guide-label caster-label" x="437" y="61" textAnchor="middle" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
-                  {afterRightOf(values[0]) && <text className="guide-label" x="558" y="92" textAnchor="end" fill={guideColor(0,afterRightOf(values[0]))}>CAMBER D.</text>}
-                  {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="204" x2="137" y2="204" stroke={guideColor(2,afterLeftOf(values[2]))} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
-                  {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="204" x2="463" y2="204" stroke={guideColor(2,afterRightOf(values[2]))} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  <g className="angle-reference"><line x1="88" y1="214" x2="88" y2="58"/><line x1="512" y1="214" x2="512" y2="58"/><line x1="197" y1="174" x2="163" y2="52"/><line x1="403" y1="174" x2="437" y2="52"/></g>
+                  {afterLeftOf(values[0]) && <line className="angle-measure" x1="88" y1="214" x2="88" y2="58" stroke={guideColor(0,afterLeftOf(values[0]))} markerEnd={stateOf(afterLeftOf(values[0]),values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])==="ok"?"url(#a4fg)":"url(#a4fr)"} transform={`rotate(${clampAngle(afterLeftOf(values[0]),-4)} 88 214)`}/>} 
+                  {afterRightOf(values[0]) && <line className="angle-measure" x1="512" y1="214" x2="512" y2="58" stroke={guideColor(0,afterRightOf(values[0]))} markerEnd={stateOf(afterRightOf(values[0]),values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])==="ok"?"url(#a4fg)":"url(#a4fr)"} transform={`rotate(${clampAngle(afterRightOf(values[0]),4)} 512 214)`}/>} 
+                  {afterLeftOf(values[1]) && <line className="angle-measure" x1="197" y1="174" x2="163" y2="52" stroke={guideColor(1,afterLeftOf(values[1]))} markerEnd={stateOf(afterLeftOf(values[1]),values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])==="ok"?"url(#a4fg)":"url(#a4fr)"} transform={`rotate(${clampAngle(afterLeftOf(values[1]),-1.4)} 197 174)`}/>} 
+                  {afterRightOf(values[1]) && <line className="angle-measure" x1="403" y1="174" x2="437" y2="52" stroke={guideColor(1,afterRightOf(values[1]))} markerEnd={stateOf(afterRightOf(values[1]),values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])==="ok"?"url(#a4fg)":"url(#a4fr)"} transform={`rotate(${clampAngle(afterRightOf(values[1]),1.4)} 403 174)`}/>} 
+                  {afterLeftOf(values[0]) && <text className="guide-label" x="88" y="38" textAnchor="middle" fill={guideColor(0,afterLeftOf(values[0]))}>CAMBER E.</text>}
+                  {afterLeftOf(values[1]) && <text className="guide-label caster-label" x="190" y="38" textAnchor="middle" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
+                  {afterRightOf(values[1]) && <text className="guide-label caster-label" x="410" y="38" textAnchor="middle" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
+                  {afterRightOf(values[0]) && <text className="guide-label" x="512" y="38" textAnchor="middle" fill={guideColor(0,afterRightOf(values[0]))}>CAMBER D.</text>}
+                  {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="232" x2="137" y2="232" stroke={guideColor(2,afterLeftOf(values[2]))} transform={`rotate(${-clampAngle(afterLeftOf(values[2]),18)} 86 232)`} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="232" x2="463" y2="232" stroke={guideColor(2,afterRightOf(values[2]))} transform={`rotate(${clampAngle(afterRightOf(values[2]),18)} 514 232)`} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
                 </svg>
               </div>
               <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[2]) || "—"}</b></span><span className={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[2]) || "—"}</b></span></div>
@@ -8498,13 +8548,13 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                 <img src="/eixo-traseiro-laudo.png" alt="Conjunto técnico do eixo traseiro"/>
                 <svg viewBox="0 0 600 230" preserveAspectRatio="none" aria-hidden="true">
                   <defs><marker id="a4rg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4rr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
-                  <g className="angle-reference"><line x1="88" y1="204" x2="88" y2="66"/><line x1="512" y1="204" x2="512" y2="66"/></g>
-                  {afterLeftOf(values[7]) && <line className="angle-measure" x1="88" y1="204" x2="88" y2="66" stroke={guideColor(7,afterLeftOf(values[7]))} transform={`rotate(${clampAngle(afterLeftOf(values[7]),-4)} 88 204)`}/>} 
-                  {afterRightOf(values[7]) && <line className="angle-measure" x1="512" y1="204" x2="512" y2="66" stroke={guideColor(7,afterRightOf(values[7]))} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 512 204)`}/>} 
-                  {afterLeftOf(values[7]) && <text className="guide-label" x="42" y="78" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
-                  {afterRightOf(values[7]) && <text className="guide-label" x="558" y="78" textAnchor="end" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
-                  {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="188" x2="175" y2="188" stroke={guideColor(8,afterLeftOf(values[8]))} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
-                  {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="188" x2="425" y2="188" stroke={guideColor(8,afterRightOf(values[8]))} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  <g className="angle-reference"><line x1="88" y1="198" x2="88" y2="50"/><line x1="512" y1="198" x2="512" y2="50"/></g>
+                  {afterLeftOf(values[7]) && <line className="angle-measure" x1="88" y1="198" x2="88" y2="50" stroke={guideColor(7,afterLeftOf(values[7]))} markerEnd={stateOf(afterLeftOf(values[7]),values[7]?.min??GEOMETRY_FIELDS[7][1],values[7]?.max??GEOMETRY_FIELDS[7][2])==="ok"?"url(#a4rg)":"url(#a4rr)"} transform={`rotate(${clampAngle(afterLeftOf(values[7]),-4)} 88 198)`}/>} 
+                  {afterRightOf(values[7]) && <line className="angle-measure" x1="512" y1="198" x2="512" y2="50" stroke={guideColor(7,afterRightOf(values[7]))} markerEnd={stateOf(afterRightOf(values[7]),values[7]?.min??GEOMETRY_FIELDS[7][1],values[7]?.max??GEOMETRY_FIELDS[7][2])==="ok"?"url(#a4rg)":"url(#a4rr)"} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 512 198)`}/>} 
+                  {afterLeftOf(values[7]) && <text className="guide-label" x="88" y="32" textAnchor="middle" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
+                  {afterRightOf(values[7]) && <text className="guide-label" x="512" y="32" textAnchor="middle" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
+                  {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="220" x2="175" y2="220" stroke={guideColor(8,afterLeftOf(values[8]))} transform={`rotate(${-clampAngle(afterLeftOf(values[8]),18)} 122.5 220)`} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="220" x2="425" y2="220" stroke={guideColor(8,afterRightOf(values[8]))} transform={`rotate(${clampAngle(afterRightOf(values[8]),18)} 477.5 220)`} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
                 </svg>
               </div>
               <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[8]) || "—"}</b></span><span className={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[8]) || "—"}</b></span></div>
