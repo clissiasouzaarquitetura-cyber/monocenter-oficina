@@ -8250,6 +8250,11 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     });
     return { next, recognized };
   };
+  const readGeometryMetadata = (text: string) => {
+    const normalized = text.replace(/\u00a0/g, " ");
+    const rimMatch = normalized.match(/(?:tamanho\s+do\s+aro|\baro\b)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d)?)/i);
+    return rimMatch ? { rim: rimMatch[1].replace(",", ".") } : {};
+  };
   const scanPdf = async (file: File) => {
     setReadingPdf(true);
     setReadMessage("Preparando a página do laudo...");
@@ -8278,6 +8283,8 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         .join("\n");
       const embeddedReading = readGeometryText(embeddedText);
       if (embeddedReading.recognized >= 4) {
+        const metadata = readGeometryMetadata(embeddedText);
+        if (Object.keys(metadata).length) setExtraFields((current:any) => ({ ...current, ...metadata }));
         setPendingValues(embeddedReading.next);
         setReadMessage(`${embeddedReading.recognized} medidas reconhecidas diretamente do PDF. Confira a tela de confirmação antes de importar.`);
         return;
@@ -8295,6 +8302,8 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       const result = await worker.recognize(canvas);
       await worker.terminate();
       const { next, recognized } = readGeometryText(result.data.text || "");
+      const metadata = readGeometryMetadata(result.data.text || "");
+      if (Object.keys(metadata).length) setExtraFields((current:any) => ({ ...current, ...metadata }));
       setPendingValues(recognized ? next : null);
       setReadMessage(
         recognized
@@ -8369,7 +8378,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V17</span>
+        <span className="geometry-version">Laudo A4 V18</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry}>Salvar laudo</button>
@@ -8380,6 +8389,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         <summary>Editar dados complementares do laudo</summary>
         <div className="geometry-extra-grid">
           <label>Técnico<input value={technician} onChange={(e)=>setTechnician(e.target.value)}/></label>
+          <label>Aro<input value={extraFields.rim || ""} onChange={(e)=>updateExtra("rim",e.target.value)} placeholder="Ex.: 16"/></label>
           <label>Pneu dianteiro esquerdo<input value={extraFields.tireFrontLeft || ""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/></label>
           <label>Pneu dianteiro direito<input value={extraFields.tireFrontRight || ""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/></label>
           <label>Pneu traseiro esquerdo<input value={extraFields.tireRearLeft || ""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/></label>
@@ -8432,14 +8442,15 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
           <div className="a4-title"><b>LAUDO TÉCNICO DE GEOMETRIA</b><span>ALINHAMENTO 3D</span></div>
         </header>
         <section className="a4-customer-data">
-          <div><small>CLIENTE</small><b>{appointment.client || appointment.name || "Não informado"}</b></div>
-          <div><small>VEÍCULO</small><b>{appointment.vehicle || appointment.model || "Não informado"}</b></div>
-          <div><small>ANO / MODELO</small><b>{appointment.vehicleYear || appointment.year || "Não informado"}</b></div>
-          <div><small>PLACA</small><b>{appointment.plate || "Não informada"}</b></div>
-          <div><small>KM</small><b>{appointment.km || "Não informado"}</b></div>
-          <div><small>CHASSI</small><b>{appointment.chassis || "Não informado"}</b></div>
-          <div><small>DATA / HORA</small><b>{new Date().toLocaleDateString("pt-BR")} · {new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b></div>
-          <label><small>TÉCNICO</small><input value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Nome do técnico"/></label>
+          <div className="data-client"><small>CLIENTE</small><b>{appointment.client || appointment.name || "Não informado"}</b></div>
+          <div className="data-vehicle"><small>VEÍCULO</small><b>{appointment.vehicle || appointment.model || "Não informado"}</b></div>
+          <div className="data-year"><small>ANO / MODELO</small><b>{appointment.vehicleYear || appointment.year || "Não informado"}</b></div>
+          <div className="data-plate"><small>PLACA</small><b>{appointment.plate || "Não informada"}</b></div>
+          <div className="data-km"><small>KM</small><b>{appointment.km || "Não informado"}</b></div>
+          <div className="data-rim"><small>ARO</small><b>{extraFields.rim || (appointment as any).rim || "Não informado"}</b></div>
+          <div className="data-chassis"><small>CHASSI</small><b>{appointment.chassis || "Não informado"}</b></div>
+          <div className="data-date"><small>DATA / HORA</small><b>{new Date().toLocaleDateString("pt-BR")} · {new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b></div>
+          <label className="data-tech"><small>TÉCNICO</small><input value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Nome do técnico"/></label>
         </section>
 
         <section className="a4-axis-section front">
@@ -8465,8 +8476,8 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                   {afterLeftOf(values[1]) && <text className="guide-label caster-label" x="163" y="61" textAnchor="middle" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
                   {afterRightOf(values[1]) && <text className="guide-label caster-label" x="437" y="61" textAnchor="middle" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
                   {afterRightOf(values[0]) && <text className="guide-label" x="558" y="92" textAnchor="end" fill={guideColor(0,afterRightOf(values[0]))}>CAMBER D.</text>}
-                  {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="226" x2="137" y2="226" stroke={guideColor(2,afterLeftOf(values[2]))} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
-                  {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="226" x2="463" y2="226" stroke={guideColor(2,afterRightOf(values[2]))} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="204" x2="137" y2="204" stroke={guideColor(2,afterLeftOf(values[2]))} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="204" x2="463" y2="204" stroke={guideColor(2,afterRightOf(values[2]))} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
                 </svg>
               </div>
               <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[2]) || "—"}</b></span><span className={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[2]) || "—"}</b></span></div>
@@ -8492,8 +8503,8 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                   {afterRightOf(values[7]) && <line className="angle-measure" x1="512" y1="204" x2="512" y2="66" stroke={guideColor(7,afterRightOf(values[7]))} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 512 204)`}/>} 
                   {afterLeftOf(values[7]) && <text className="guide-label" x="42" y="78" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
                   {afterRightOf(values[7]) && <text className="guide-label" x="558" y="78" textAnchor="end" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
-                  {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="211" x2="175" y2="211" stroke={guideColor(8,afterLeftOf(values[8]))} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
-                  {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="211" x2="425" y2="211" stroke={guideColor(8,afterRightOf(values[8]))} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="188" x2="175" y2="188" stroke={guideColor(8,afterLeftOf(values[8]))} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="188" x2="425" y2="188" stroke={guideColor(8,afterRightOf(values[8]))} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
                 </svg>
               </div>
               <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[8]) || "—"}</b></span><span className={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[8]) || "—"}</b></span></div>
@@ -8649,6 +8660,10 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         .a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif!important;font-size:9.5px!important;font-weight:800!important;letter-spacing:.15px!important;paint-order:stroke!important;stroke:#fff!important;stroke-width:2.2px!important;stroke-linejoin:round!important}.a4-mechanical-image .guide-label.caster-label{font-size:9px!important;stroke-width:2px!important}
         .a4-measure-table{grid-template-rows:12mm repeat(7,1fr)!important}.a4-measure-table.rear-table{grid-template-rows:12mm repeat(5,1fr)!important}.a4-measure-head{overflow:visible!important}.a4-measure-head>*{line-height:1.25!important;overflow:visible!important}.a4-measure-head>b{padding:1mm .7mm!important;line-height:1.25!important;white-space:normal!important}.a4-measure-head>span{grid-template-rows:minmax(5.8mm,auto) 1fr!important;align-items:stretch!important;overflow:visible!important}.a4-measure-head>span strong{display:flex!important;align-items:center!important;justify-content:center!important;min-height:5.8mm!important;padding:.8mm .3mm!important;line-height:1.25!important;white-space:normal!important;overflow:visible!important}.a4-measure-head>span i{display:flex!important;align-items:center!important;justify-content:center!important;padding:.45mm!important;line-height:1.2!important}
         .a4-axis-section h2,.a4-extra-card h3{display:flex!important;align-items:center!important;line-height:1.2!important;overflow:visible!important}.a4-extra-card h3{height:7mm!important;margin:0!important;padding:1mm 2.2mm!important;font-size:7.4pt!important;white-space:nowrap!important}
+        /* V18: cabeçalho completo, mais espaço nos pneus/volante e observações compactas. */
+        .a4-customer-data{grid-template-columns:repeat(6,minmax(0,1fr))!important;grid-template-rows:repeat(2,minmax(0,1fr))!important;overflow:visible!important}.a4-customer-data .data-client{grid-column:span 2}.a4-customer-data .data-vehicle{grid-column:span 2}.a4-customer-data .data-year,.a4-customer-data .data-plate,.a4-customer-data .data-km,.a4-customer-data .data-rim{grid-column:span 1}.a4-customer-data .data-chassis{grid-column:span 1}.a4-customer-data .data-date{grid-column:span 2}.a4-customer-data .data-tech{grid-column:span 1}.a4-customer-data>div,.a4-customer-data>label{justify-content:flex-start!important;padding:1.1mm 1.6mm!important;overflow:visible!important}.a4-customer-data small{flex:0 0 auto!important}.a4-customer-data b,.a4-customer-data input{flex:0 0 auto!important;min-height:3.8mm!important;line-height:1.25!important}
+        .a4-measure-row{overflow:visible!important}.a4-measure-row>*{overflow:visible!important}.a4-measure-row>b{font-size:5.25pt!important;line-height:1.28!important;white-space:normal!important}.a4-measure-row>input{line-height:1.2!important}.a4-measure-row>span,.a4-measure-row>span input{line-height:1.2!important}
+        .a4-extra-data{height:36mm!important;margin-bottom:2mm!important;overflow:visible!important}.a4-extra-card{overflow:visible!important}.a4-extra-card h3{height:8mm!important;padding:1.2mm 2.4mm!important;font-size:7.6pt!important;line-height:1.25!important}.a4-extra-card label{height:6.7mm!important;padding:0 2mm!important;font-size:6.4pt!important;line-height:1.25!important;overflow:visible!important}.a4-extra-card label input{height:4.8mm!important;line-height:1.2!important}.a4-extra-card.steering label{height:13mm!important;padding:1.5mm 2mm!important}.a4-extra-card.steering label input{height:6.5mm!important;margin-top:.7mm!important}.steering-status{display:flex!important;align-items:center!important;justify-content:center!important;min-height:8mm!important;margin:2mm 3mm 0!important;padding:1.5mm 1mm!important;line-height:1.2!important;overflow:visible!important}.a4-report-footer{height:33mm!important}.a4-report-footer textarea{line-height:1.35!important;overflow:hidden!important}
         .import-measure-row{grid-template-columns:1.45fr .7fr .7fr 1.15fr .7fr .7fr!important}.import-measure-row.single>input:nth-of-type(1){grid-column:2/4}.import-measure-row.single>span{grid-column:4}.import-measure-row.single>input:nth-of-type(2){grid-column:5/7}.import-measure-row.heading{background:#fff!important;color:#111!important;border-bottom:3px solid #e31b23}.import-measure-row.heading>*{display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px}
         @media print{html,body{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-report-page{position:static!important;inset:auto!important;margin:0!important;padding:0!important;transform:none!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:fixed!important;left:0!important;top:0!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;padding:0!important}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
