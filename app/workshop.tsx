@@ -8038,14 +8038,15 @@ function AttendanceSummary({
 }
 
 const GEOMETRY_FIELDS = [
-  ["Camber dianteiro", "-0.80", "0.20"],
-  ["Caster", "2.90", "4.10"],
-  ["Convergência dianteira", "-0.05", "0.15"],
-  ["KPI / SAI", "11.50", "13.50"],
-  ["Camber traseiro", "-1.50", "-0.50"],
-  ["Convergência traseira", "-0.10", "0.20"],
-  ["Convergência total traseira", "-0.20", "0.40"],
-  ["Ângulo de impulsão", "-0.15", "0.15"],
+  ["Camber dianteiro", "", ""],
+  ["Caster", "", ""],
+  ["Convergência dianteira", "", ""],
+  ["KPI / SAI", "", ""],
+  ["Ângulo incluso", "", ""],
+  ["Camber traseiro", "", ""],
+  ["Convergência traseira", "", ""],
+  ["Convergência total traseira", "", ""],
+  ["Ângulo de impulsão", "", ""],
 ];
 
 function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, rightToe, rear = false }: any) {
@@ -8092,7 +8093,14 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   }, [storageKey, values]);
   useEffect(() => () => { if (sourcePdf) URL.revokeObjectURL(sourcePdf); }, [sourcePdf]);
   const numberOf = (value: any) => {
-    const normalized = String(value ?? "").replace(",", ".").replace(/[^0-9+-.]/g, "");
+    const raw = String(value ?? "").trim().replace(",", ".");
+    const angle = raw.match(/([+-]?\d+)[°º]\s*(\d+)?/);
+    if (angle) {
+      const negative = angle[1].startsWith("-");
+      const decimal = Math.abs(Number(angle[1])) + Number(angle[2] || 0) / 60;
+      return negative ? -decimal : decimal;
+    }
+    const normalized = raw.replace(/[^0-9+-.]/g, "");
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : null;
   };
@@ -8115,14 +8123,14 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   };
   const updateValue = (index: number, field: string, value: string) =>
     setValues((current: any) => ({ ...current, [index]: { ...(current[index] || {}), [field]: value } }));
-  const angleToDecimal = (raw: string) => {
+  const formatAngle = (raw: string) => {
     const cleaned = raw.replace(/\s/g, "").replace(",", ".");
     const match = cleaned.match(/([+-]?\d+)[°º](?:(\d+)[\'’′\"”″])?/);
     if (!match) return cleaned;
-    const degree = Number(match[1]);
-    const minutes = Number(match[2] || 0) / 60;
-    const decimal = degree < 0 ? degree - minutes : degree + minutes;
-    return decimal.toFixed(2).replace(".", ",") + "°";
+    const sign = match[1].startsWith("-") ? "-" : "";
+    const degrees = String(Math.abs(Number(match[1])));
+    const minutes = String(Number(match[2] || 0)).padStart(2, "0");
+    return `${sign}${degrees}°${minutes}'`;
   };
   const findGeometryLine = (text: string, pattern: RegExp) =>
     text.split(/\r?\n/).find((line) => pattern.test(line.normalize("NFD").replace(/[\u0300-\u036f]/g, ""))) || "";
@@ -8130,12 +8138,13 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     const definitions: Array<[number, RegExp]> = [
       [0, /camber dianteir|cambagem dianteir/i],
       [1, /caster/i],
-      [2, /converg.ncia dianteir(?!a total)/i],
+      [2, /converg.ncia dianteira(?! total)/i],
       [3, /\bkpi\b|sai/i],
-      [4, /camber traseir|cambagem traseir/i],
-      [5, /converg.ncia traseir(?!a total)/i],
-      [6, /converg.ncia total traseir/i],
-      [7, /angulo de (impulsao|empurrao)/i],
+      [4, /angulo de inclusao/i],
+      [5, /camber traseir|cambagem traseir/i],
+      [6, /converg.ncia traseira(?! total)/i],
+      [7, /converg.ncia total traseir/i],
+      [8, /angulo de (impulsao|empurrao)/i],
     ];
     const next: any = {};
     let recognized = 0;
@@ -8145,35 +8154,35 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       if (angles.length >= 6) {
         next[index] = {
           ...(values[index] || {}),
-          min: angleToDecimal(angles[0]),
-          max: angleToDecimal(angles[1]),
-          left: angleToDecimal(angles[angles.length - 3]),
-          right: angleToDecimal(angles[angles.length - 1]),
+          min: formatAngle(angles[0]),
+          max: formatAngle(angles[1]),
+          left: formatAngle(angles[angles.length - 3]),
+          right: formatAngle(angles[angles.length - 1]),
         };
         recognized += 2;
-      } else if (angles.length >= 4 && (index === 6 || index === 7)) {
+      } else if (angles.length >= 4 && (index === 7 || index === 8)) {
         next[index] = {
           ...(values[index] || {}),
-          min: angleToDecimal(angles[0]),
-          max: angleToDecimal(angles[1]),
-          left: angleToDecimal(angles[angles.length - 1]),
+          min: formatAngle(angles[0]),
+          max: formatAngle(angles[1]),
+          left: formatAngle(angles[angles.length - 1]),
           right: "",
         };
         recognized += 1;
       } else if (angles.length >= 4) {
         next[index] = {
           ...(values[index] || {}),
-          min: angleToDecimal(angles[0]),
-          max: angleToDecimal(angles[1]),
-          left: angleToDecimal(angles[angles.length - 2]),
-          right: angleToDecimal(angles[angles.length - 1]),
+          min: formatAngle(angles[0]),
+          max: formatAngle(angles[1]),
+          left: formatAngle(angles[angles.length - 2]),
+          right: formatAngle(angles[angles.length - 1]),
         };
         recognized += 2;
       } else if (angles.length >= 2) {
         next[index] = {
           ...(values[index] || {}),
-          left: angleToDecimal(angles[angles.length - 2]),
-          right: angleToDecimal(angles[angles.length - 1]),
+          left: formatAngle(angles[angles.length - 2]),
+          right: formatAngle(angles[angles.length - 1]),
         };
         recognized += 2;
       }
@@ -8191,6 +8200,27 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       ).toString();
       const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
       const page = await pdf.getPage(1);
+      const textContent = await page.getTextContent();
+      const textRows: Array<{ y: number; parts: Array<{ x: number; text: string }> }> = [];
+      (textContent.items || []).forEach((item: any) => {
+        const text = String(item.str || "").trim();
+        if (!text) return;
+        const x = Number(item.transform?.[4] || 0);
+        const y = Number(item.transform?.[5] || 0);
+        let row = textRows.find((candidate) => Math.abs(candidate.y - y) < 2.5);
+        if (!row) { row = { y, parts: [] }; textRows.push(row); }
+        row.parts.push({ x, text });
+      });
+      const embeddedText = textRows
+        .sort((a, b) => b.y - a.y)
+        .map((row) => row.parts.sort((a, b) => a.x - b.x).map((part) => part.text).join(" "))
+        .join("\n");
+      const embeddedReading = readGeometryText(embeddedText);
+      if (embeddedReading.recognized >= 4) {
+        setPendingValues(embeddedReading.next);
+        setReadMessage(`${embeddedReading.recognized} medidas reconhecidas diretamente do PDF. Confira a tela de confirmação antes de importar.`);
+        return;
+      }
       const viewport = page.getViewport({ scale: 2.4 });
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
@@ -8228,7 +8258,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     document.body.classList.add("print-geometry-report");
     const cleanup = () => document.body.classList.remove("print-geometry-report");
     window.addEventListener("afterprint", cleanup, { once: true });
-    setTimeout(() => window.print(), 50);
+    window.print();
     setTimeout(cleanup, 15000);
   };
   const saveGeometry = () => {
@@ -8241,7 +8271,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         <button onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button onClick={saveGeometry}>Salvar laudo</button>
-        <button className="primary" onClick={printGeometry}>Imprimir / compartilhar PDF</button>
+        <button type="button" className="primary print-geometry-button" onClick={printGeometry}>Imprimir / compartilhar PDF</button>
         {onContinue && <button className="primary" onClick={() => { saveGeometry(); onContinue(); }}>Ir para conferência →</button>}
       </div>
       {readMessage && <div className={`ocr-message ${readingPdf ? "reading" : ""}`}>{readMessage}</div>}
@@ -8279,6 +8309,10 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       )}
       <article className="geometry-template-sheet">
         <img className="geometry-template-bg" src="/laudo-geometria-template.png" alt="Laudo técnico de geometria Monocenter no modelo oficial"/>
+        <div className="geometry-official-logo" aria-label="Logo oficial Monocenter">
+          <img src="/logo-monocenter-oficial-transparente.png" alt="Monocenter"/>
+          <span>ALINHAMENTO TÉCNICO</span>
+        </div>
         <svg className="geometry-dynamic-guides" viewBox="0 0 1024 1536" preserveAspectRatio="none" aria-hidden="true">
           <defs>
             <marker id="dynamicArrowGreen" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L0,9 L8,4.5 z" fill="#079447"/></marker>
@@ -8290,10 +8324,10 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
           {values[1]?.right && <line x1="395" y1="535" x2="362" y2="368" stroke={guideColor(1,values[1]?.right)} strokeWidth="6" transform={`rotate(${clampAngle(values[1]?.right,2.2)} 395 535)`}/>} 
           {values[2]?.left && <line x1="42" y1="626" x2="123" y2="626" stroke={guideColor(2,values[2]?.left)} strokeWidth="7" markerEnd={stateOf(values[2]?.left,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[2]?.left,16)} 83 626)`}/>} 
           {values[2]?.right && <line x1="501" y1="626" x2="420" y2="626" stroke={guideColor(2,values[2]?.right)} strokeWidth="7" markerEnd={stateOf(values[2]?.right,values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[2]?.right,-16)} 460 626)`}/>} 
-          {values[4]?.left && <line x1="88" y1="1055" x2="88" y2="875" stroke={guideColor(4,values[4]?.left)} strokeWidth="6" transform={`rotate(${clampAngle(values[4]?.left,-7)} 88 1055)`}/>} 
-          {values[4]?.right && <line x1="452" y1="1055" x2="452" y2="875" stroke={guideColor(4,values[4]?.right)} strokeWidth="6" transform={`rotate(${clampAngle(values[4]?.right,7)} 452 1055)`}/>} 
-          {values[5]?.left && <line x1="42" y1="1080" x2="123" y2="1080" stroke={guideColor(5,values[5]?.left)} strokeWidth="7" markerEnd={stateOf(values[5]?.left,values[5]?.min??GEOMETRY_FIELDS[5][1],values[5]?.max??GEOMETRY_FIELDS[5][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[5]?.left,16)} 83 1080)`}/>} 
-          {values[5]?.right && <line x1="501" y1="1080" x2="420" y2="1080" stroke={guideColor(5,values[5]?.right)} strokeWidth="7" markerEnd={stateOf(values[5]?.right,values[5]?.min??GEOMETRY_FIELDS[5][1],values[5]?.max??GEOMETRY_FIELDS[5][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[5]?.right,-16)} 460 1080)`}/>} 
+          {values[5]?.left && <line x1="88" y1="1055" x2="88" y2="875" stroke={guideColor(5,values[5]?.left)} strokeWidth="6" transform={`rotate(${clampAngle(values[5]?.left,-7)} 88 1055)`}/>} 
+          {values[5]?.right && <line x1="452" y1="1055" x2="452" y2="875" stroke={guideColor(5,values[5]?.right)} strokeWidth="6" transform={`rotate(${clampAngle(values[5]?.right,7)} 452 1055)`}/>} 
+          {values[6]?.left && <line x1="42" y1="1080" x2="123" y2="1080" stroke={guideColor(6,values[6]?.left)} strokeWidth="7" markerEnd={stateOf(values[6]?.left,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[6]?.left,16)} 83 1080)`}/>} 
+          {values[6]?.right && <line x1="501" y1="1080" x2="420" y2="1080" stroke={guideColor(6,values[6]?.right)} strokeWidth="7" markerEnd={stateOf(values[6]?.right,values[6]?.min??GEOMETRY_FIELDS[6][1],values[6]?.max??GEOMETRY_FIELDS[6][2])==="ok"?"url(#dynamicArrowGreen)":"url(#dynamicArrowRed)"} transform={`rotate(${clampAngle(values[6]?.right,-16)} 460 1080)`}/>} 
         </svg>
         <div className="geometry-template-overlay">
           <b style={{left:"14.4%",top:"10.15%"}}>{appointment.client || appointment.name || ""}</b>
@@ -8308,17 +8342,17 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
           {[
             [values[0]?.left,"8.4%","22.5%"],[values[1]?.left,"16.4%","22.5%"],[values[1]?.right,"36.7%","22.5%"],[values[0]?.right,"43.8%","22.5%"],
             [values[2]?.left,"8.3%","40.7%"],[values[2]?.right,"44.4%","40.7%"],
-            [values[4]?.left,"8.5%","56.5%"],[values[4]?.right,"43.8%","56.5%"],[values[5]?.left,"8.2%","69.5%"],[values[5]?.right,"44.0%","69.5%"],
+            [values[5]?.left,"8.5%","56.5%"],[values[5]?.right,"43.8%","56.5%"],[values[6]?.left,"8.2%","69.1%"],[values[6]?.right,"44.0%","69.1%"],
           ].map(([value,left,top],index)=>{
-            const field = index < 4 ? (index === 0 || index === 3 ? 0 : 1) : (index < 6 ? 2 : index < 8 ? 4 : 5);
+            const field = index < 4 ? (index === 0 || index === 3 ? 0 : 1) : (index < 6 ? 2 : index < 8 ? 5 : 6);
             const row = values[field] || {};
             const min = row.min ?? GEOMETRY_FIELDS[field][1];
             const max = row.max ?? GEOMETRY_FIELDS[field][2];
             return <b key={`diagram-${index}`} className={`measure diagram-mask ${stateOf(value,min,max)}`} style={{left,top}}>{value || "--"}</b>;
           })}
           {[
-            [0,"23.5%"],[1,"26.95%"],[2,"30.65%"],[3,"34.2%"],
-            [4,"55.4%"],[5,"59.0%"],[6,"62.35%"],[7,"64.85%"],
+            [0,"23.2%"],[1,"26.9%"],[2,"30.7%"],[3,"34.4%"],[4,"37.5%"],
+            [5,"56.8%"],[6,"60.7%"],[7,"63.5%"],[8,"65.4%"],
           ].flatMap(([field,top]:any)=>{
             const row=values[field]||{}, min=row.min??GEOMETRY_FIELDS[field][1], max=row.max??GEOMETRY_FIELDS[field][2];
             return [
@@ -8388,7 +8422,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       <style>{`
         .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-import-review{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#07111dcc}.geometry-import-card{width:min(900px,96vw);max-height:92vh;overflow:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px #0008}.geometry-import-card>header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;background:#111d2b;color:#fff;border-bottom:5px solid #e31b23}.geometry-import-card h2{margin:3px 0 0}.geometry-import-card header small{color:#ff4a52;font-weight:900}.geometry-import-card header button{border:0;background:transparent;color:#fff;font-size:30px;line-height:1;cursor:pointer}.geometry-import-card>p{margin:0;padding:15px 20px;background:#edf5ff}.import-measure-table{margin:16px 20px;border:1px solid #d8e0e8}.import-measure-row{display:grid;grid-template-columns:1.45fr .7fr 1.15fr .7fr;border-top:1px solid #d8e0e8}.import-measure-row:first-child{border-top:0}.import-measure-row>*{min-width:0;padding:10px;border:0;border-right:1px solid #d8e0e8}.import-measure-row.heading{background:#111d2b;color:#fff}.import-measure-row input{text-align:center;font-weight:800;background:#f8fafc}.import-measure-row>span{display:flex;align-items:center;justify-content:center;gap:5px}.import-measure-row>span input{width:72px;padding:5px}.geometry-import-card>footer{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px}.geometry-import-card>footer button{padding:11px 15px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:900}.geometry-import-card>footer .primary{background:#168b4b;color:#fff;border-color:#168b4b}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf h3{margin-top:0}
         @media(max-width:720px){.geometry-toolbar{display:grid}.geometry-customer{grid-template-columns:1fr 1fr}.geometry-header{grid-template-columns:1fr}.geometry-header h1{font-size:24px}.geometry-row{grid-template-columns:1.2fr .7fr 1fr .7fr;font-size:11px}.geometry-row>*{padding:6px}.geometry-notes{grid-template-columns:1fr}.geometry-notes aside{border-left:0;border-top:1px solid #d8e0e8}}
-        .geometry-entry-sheet{display:none!important}.geometry-template-sheet{position:relative;container-type:inline-size;max-width:1024px;margin:0 auto 18px;background:#fff;box-shadow:0 12px 30px #0f172a20}.geometry-template-bg{position:relative;z-index:1;display:block;width:100%;height:auto}.geometry-dynamic-guides{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none}.geometry-template-overlay{position:absolute;z-index:4;inset:0;font-family:Arial,sans-serif;color:#111;pointer-events:none}.geometry-template-overlay>b{position:absolute;font-size:12px;font-size:1.25cqw;line-height:1.1;white-space:nowrap}.geometry-template-overlay .measure{font-size:17px;font-size:1.7cqw;transform:translateX(-50%);padding:.12cqw .25cqw;background:#fffffff2;border-radius:2px}.geometry-template-overlay .ok{color:#07883e}.geometry-template-overlay .bad{color:#df171f}.geometry-template-overlay .pending{color:#111}.geometry-template-overlay .cell-value{width:8%;text-align:center;transform:translateX(-50%);font-size:15px;font-size:1.48cqw;padding:.15% 0;background:#fffffff2}.geometry-template-overlay .cell-spec{width:12%;text-align:center;transform:translateX(-50%);font-size:12px;font-size:1.15cqw;font-weight:700;padding:.2% 0;background:#fffffff2}.template-notes{position:absolute;left:3.4%;right:27%;top:91.7%;font-size:12px;font-size:1.15cqw;line-height:1.35;white-space:pre-wrap;background:#fff}
+        .geometry-entry-sheet{display:none!important}.geometry-template-sheet{position:relative;container-type:inline-size;max-width:1024px;margin:0 auto 18px;background:#fff;box-shadow:0 12px 30px #0f172a20}.geometry-template-bg{position:relative;z-index:1;display:block;width:100%;height:auto}.geometry-official-logo{position:absolute;z-index:5;left:2.2%;top:.6%;width:36%;height:7.5%;overflow:hidden;background:#080b0e;text-align:center}.geometry-official-logo img{display:block;width:100%;height:78%;object-fit:cover;object-position:center center}.geometry-official-logo span{display:block;margin-top:-.25cqw;color:#fff;font:600 1.05cqw/1 Arial,sans-serif;letter-spacing:.34cqw}.geometry-dynamic-guides{position:absolute;z-index:3;inset:0;width:100%;height:100%;pointer-events:none}.geometry-template-overlay{position:absolute;z-index:4;inset:0;font-family:Arial,sans-serif;color:#111;pointer-events:none}.geometry-template-overlay>b{position:absolute;max-width:27%;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-size:1.18cqw;line-height:1.1;white-space:nowrap}.geometry-template-overlay .measure{font-size:15px;font-size:1.48cqw;transform:translateX(-50%);padding:.1cqw .25cqw;background:#fffffff5;border-radius:3px;box-shadow:0 0 0 1px #ffffff80}.geometry-template-overlay .ok{color:#07883e}.geometry-template-overlay .bad{color:#df171f}.geometry-template-overlay .pending{color:#111}.geometry-template-overlay .cell-value{width:8%;text-align:center;transform:translateX(-50%);font-size:14px;font-size:1.35cqw;padding:.15% 0;background:#fffffff5}.geometry-template-overlay .cell-spec{width:13%;text-align:center;transform:translateX(-50%);font-size:11px;font-size:1.04cqw;font-weight:700;padding:.2% 0;background:#fffffff5}.template-notes{position:absolute;left:3.4%;right:27%;top:91.7%;font-size:11px;font-size:1.05cqw;line-height:1.35;white-space:pre-wrap;background:#fff}.print-geometry-button{pointer-events:auto!important;cursor:pointer!important;opacity:1!important}
         @media print{body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:absolute;left:0;top:0;width:100%;max-width:none;margin:0;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
     </div>
