@@ -8081,6 +8081,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   const [notes, setNotes] = useState(appointment.geometryReport?.notes || "Realizado alinhamento conforme especificação do fabricante.");
   const [readingPdf, setReadingPdf] = useState(false);
   const [readMessage, setReadMessage] = useState("");
+  const [pendingValues, setPendingValues] = useState<any>(null);
   const [values, setValues] = useState<any>(() => {
     if (appointment.geometryReport?.values) return appointment.geometryReport.values;
     if (typeof window === "undefined") return {};
@@ -8104,7 +8105,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     setValues((current: any) => ({ ...current, [index]: { ...(current[index] || {}), [field]: value } }));
   const angleToDecimal = (raw: string) => {
     const cleaned = raw.replace(/\s/g, "").replace(",", ".");
-    const match = cleaned.match(/([+-]?\d+)[°º](?:(\d+)[\'’′])?/);
+    const match = cleaned.match(/([+-]?\d+)[°º](?:(\d+)[\'’′\"”″])?/);
     if (!match) return cleaned;
     const degree = Number(match[1]);
     const minutes = Number(match[2] || 0) / 60;
@@ -8117,37 +8118,55 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     const definitions: Array<[number, RegExp]> = [
       [0, /camber dianteir|cambagem dianteir/i],
       [1, /caster/i],
-      [2, /convergencia dianteir(?!a total)/i],
+      [2, /converg.ncia dianteir(?!a total)/i],
       [3, /\bkpi\b|sai/i],
       [4, /camber traseir|cambagem traseir/i],
-      [5, /convergencia traseir(?!a total)/i],
-      [6, /convergencia total traseir/i],
+      [5, /converg.ncia traseir(?!a total)/i],
+      [6, /converg.ncia total traseir/i],
       [7, /angulo de (impulsao|empurrao)/i],
     ];
-    const next: any = { ...values };
+    const next: any = {};
     let recognized = 0;
     definitions.forEach(([index, pattern]) => {
       const line = findGeometryLine(text, pattern);
-      const angles = line.match(/[+-]?\d+[°º]\s*\d*[\'’′]?/g) || [];
-      if (angles.length >= 4) {
-        const measurements = angles.slice(-4);
+      const angles = line.match(/[+-]?\d+[°º]\s*\d*[\'’′\"”″]?/g) || [];
+      if (angles.length >= 6) {
         next[index] = {
-          ...(next[index] || {}),
-          left: angleToDecimal(measurements[1]),
-          right: angleToDecimal(measurements[3]),
+          ...(values[index] || {}),
+          min: angleToDecimal(angles[0]),
+          max: angleToDecimal(angles[1]),
+          left: angleToDecimal(angles[angles.length - 3]),
+          right: angleToDecimal(angles[angles.length - 1]),
+        };
+        recognized += 2;
+      } else if (angles.length >= 4 && (index === 6 || index === 7)) {
+        next[index] = {
+          ...(values[index] || {}),
+          min: angleToDecimal(angles[0]),
+          max: angleToDecimal(angles[1]),
+          left: angleToDecimal(angles[angles.length - 1]),
+          right: "",
+        };
+        recognized += 1;
+      } else if (angles.length >= 4) {
+        next[index] = {
+          ...(values[index] || {}),
+          min: angleToDecimal(angles[0]),
+          max: angleToDecimal(angles[1]),
+          left: angleToDecimal(angles[angles.length - 2]),
+          right: angleToDecimal(angles[angles.length - 1]),
         };
         recognized += 2;
       } else if (angles.length >= 2) {
         next[index] = {
-          ...(next[index] || {}),
+          ...(values[index] || {}),
           left: angleToDecimal(angles[angles.length - 2]),
           right: angleToDecimal(angles[angles.length - 1]),
         };
         recognized += 2;
       }
     });
-    setValues(next);
-    return recognized;
+    return { next, recognized };
   };
   const scanPdf = async (file: File) => {
     setReadingPdf(true);
@@ -8172,10 +8191,11 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       const worker = await createWorker("por");
       const result = await worker.recognize(canvas);
       await worker.terminate();
-      const recognized = readGeometryText(result.data.text || "");
+      const { next, recognized } = readGeometryText(result.data.text || "");
+      setPendingValues(recognized ? next : null);
       setReadMessage(
         recognized
-          ? `${recognized} medidas reconhecidas. Confira os campos antes de salvar ou imprimir.`
+          ? `${recognized} medidas reconhecidas. Confira a tela de confirmação antes de importar.`
           : "O PDF foi importado, mas as medidas não foram reconhecidas com segurança. Preencha ou corrija os campos abaixo.",
       );
     } catch (error: any) {
@@ -8213,7 +8233,76 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         {onContinue && <button className="primary" onClick={() => { saveGeometry(); onContinue(); }}>Ir para conferência →</button>}
       </div>
       {readMessage && <div className={`ocr-message ${readingPdf ? "reading" : ""}`}>{readMessage}</div>}
-      <article className="geometry-sheet">
+      {pendingValues && (
+        <section className="geometry-import-review" role="dialog" aria-modal="true" aria-label="Confirmar medidas lidas do PDF">
+          <div className="geometry-import-card">
+            <header>
+              <div><small>LEITURA DO PDF</small><h2>Confirme as medidas antes de importar</h2></div>
+              <button onClick={() => setPendingValues(null)} aria-label="Fechar conferência">×</button>
+            </header>
+            <p>Confira os valores lidos no relatório do alinhador. Eles só serão aplicados ao laudo depois da confirmação.</p>
+            <div className="import-measure-table">
+              <div className="import-measure-row heading"><b>Parâmetro</b><b>Esquerda</b><b>Especificação</b><b>Direita</b></div>
+              {GEOMETRY_FIELDS.map(([label, defaultMin, defaultMax], index) => {
+                const row = pendingValues[index] || {};
+                if (!pendingValues[index]) return null;
+                return <div className="import-measure-row" key={label}>
+                  <b>{label}</b>
+                  <input value={row.left || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],left:e.target.value}}))}/>
+                  <span><input value={row.min ?? defaultMin} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],min:e.target.value}}))}/> a <input value={row.max ?? defaultMax} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],max:e.target.value}}))}/></span>
+                  <input value={row.right || ""} onChange={(e) => setPendingValues((current:any) => ({...current,[index]:{...current[index],right:e.target.value}}))}/>
+                </div>;
+              })}
+            </div>
+            <footer>
+              <button onClick={() => { setPendingValues(null); setReadMessage("Importação cancelada. Nenhuma medida foi alterada."); }}>Cancelar</button>
+              <button className="primary" onClick={() => {
+                setValues((current:any) => ({...current,...pendingValues}));
+                setPendingValues(null);
+                setReadMessage("Medidas confirmadas e importadas para o laudo. Confira o resultado e salve.");
+              }}>Confirmar e importar medidas</button>
+            </footer>
+          </div>
+        </section>
+      )}
+      <article className="geometry-template-sheet">
+        <img className="geometry-template-bg" src="/laudo-geometria-template.png" alt="Laudo técnico de geometria Monocenter no modelo oficial"/>
+        <div className="geometry-template-overlay">
+          <b style={{left:"14.4%",top:"10.15%"}}>{appointment.client || ""}</b>
+          <b style={{left:"14.4%",top:"12.2%"}}>{appointment.vehicle || ""}</b>
+          <b style={{left:"14.4%",top:"14.25%"}}>{appointment.vehicleYear || appointment.year || ""}</b>
+          <b style={{left:"14.4%",top:"16.3%"}}>{appointment.plate || ""}</b>
+          <b style={{left:"50.8%",top:"10.15%"}}>{appointment.km || ""}</b>
+          <b style={{left:"50.8%",top:"12.2%"}}>{appointment.chassis || ""}</b>
+          <b style={{left:"50.8%",top:"14.25%"}}>{new Date().toLocaleDateString("pt-BR")}</b>
+          <b style={{left:"65.2%",top:"14.25%"}}>{new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b>
+          <b style={{left:"50.8%",top:"16.3%"}}>{technician}</b>
+          {[
+            [values[0]?.left,"8.4%","22.5%"],[values[1]?.left,"16.4%","22.5%"],[values[1]?.right,"36.7%","22.5%"],[values[0]?.right,"43.8%","22.5%"],
+            [values[2]?.left,"8.3%","40.7%"],[values[2]?.right,"44.4%","40.7%"],
+            [values[4]?.left,"8.5%","56.5%"],[values[4]?.right,"43.8%","56.5%"],[values[5]?.left,"8.2%","69.5%"],[values[5]?.right,"44.0%","69.5%"],
+          ].map(([value,left,top],index)=>{
+            const field = index < 4 ? (index === 0 || index === 3 ? 0 : 1) : (index < 6 ? 2 : index < 8 ? 4 : 5);
+            const row = values[field] || {};
+            const min = row.min ?? GEOMETRY_FIELDS[field][1];
+            const max = row.max ?? GEOMETRY_FIELDS[field][2];
+            return <b key={`diagram-${index}`} className={`measure diagram-mask ${stateOf(value,min,max)}`} style={{left,top}}>{value || "--"}</b>;
+          })}
+          {[
+            [0,"23.5%"],[1,"26.95%"],[2,"30.65%"],[3,"34.2%"],
+            [4,"55.4%"],[5,"59.0%"],[6,"62.35%"],[7,"64.85%"],
+          ].flatMap(([field,top]:any)=>{
+            const row=values[field]||{}, min=row.min??GEOMETRY_FIELDS[field][1], max=row.max??GEOMETRY_FIELDS[field][2];
+            return [
+              <b key={`${field}-l`} className={`cell-value ${stateOf(row.left,min,max)}`} style={{left:"70.8%",top}}>{row.left||""}</b>,
+              <b key={`${field}-s`} className="cell-spec" style={{left:"81.7%",top}}>{min} a {max}</b>,
+              <b key={`${field}-r`} className={`cell-value ${stateOf(row.right,min,max)}`} style={{left:"93.0%",top}}>{row.right||""}</b>,
+            ];
+          })}
+          <div className="template-notes">{notes}</div>
+        </div>
+      </article>
+      <article className="geometry-sheet geometry-entry-sheet">
         <header className="geometry-header">
           <div><strong>MONOCENTER</strong><small>ALINHAMENTO TÉCNICO</small></div>
           <h1>LAUDO TÉCNICO<br/>DE GEOMETRIA <small>ALINHAMENTO 3D</small></h1>
@@ -8269,9 +8358,10 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       </article>
       {sourcePdf && <section className="source-pdf"><h3>PDF original do alinhador: {sourceName}</h3><object data={sourcePdf} type="application/pdf"><a href={sourcePdf} target="_blank">Abrir PDF original</a></object></section>}
       <style>{`
-        .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf h3{margin-top:0}
+        .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-import-review{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#07111dcc}.geometry-import-card{width:min(900px,96vw);max-height:92vh;overflow:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px #0008}.geometry-import-card>header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;background:#111d2b;color:#fff;border-bottom:5px solid #e31b23}.geometry-import-card h2{margin:3px 0 0}.geometry-import-card header small{color:#ff4a52;font-weight:900}.geometry-import-card header button{border:0;background:transparent;color:#fff;font-size:30px;line-height:1;cursor:pointer}.geometry-import-card>p{margin:0;padding:15px 20px;background:#edf5ff}.import-measure-table{margin:16px 20px;border:1px solid #d8e0e8}.import-measure-row{display:grid;grid-template-columns:1.45fr .7fr 1.15fr .7fr;border-top:1px solid #d8e0e8}.import-measure-row:first-child{border-top:0}.import-measure-row>*{min-width:0;padding:10px;border:0;border-right:1px solid #d8e0e8}.import-measure-row.heading{background:#111d2b;color:#fff}.import-measure-row input{text-align:center;font-weight:800;background:#f8fafc}.import-measure-row>span{display:flex;align-items:center;justify-content:center;gap:5px}.import-measure-row>span input{width:72px;padding:5px}.geometry-import-card>footer{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px}.geometry-import-card>footer button{padding:11px 15px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:900}.geometry-import-card>footer .primary{background:#168b4b;color:#fff;border-color:#168b4b}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf h3{margin-top:0}
         @media(max-width:720px){.geometry-toolbar{display:grid}.geometry-customer{grid-template-columns:1fr 1fr}.geometry-header{grid-template-columns:1fr}.geometry-header h1{font-size:24px}.geometry-row{grid-template-columns:1.2fr .7fr 1fr .7fr;font-size:11px}.geometry-row>*{padding:6px}.geometry-notes{grid-template-columns:1fr}.geometry-notes aside{border-left:0;border-top:1px solid #d8e0e8}}
-        @media print{body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-sheet,body.print-geometry-report .geometry-sheet *{visibility:visible!important}body.print-geometry-report .geometry-sheet{position:absolute;left:0;top:0;width:100%;max-width:none;border:0;box-shadow:none}body.print-geometry-report input,body.print-geometry-report textarea{border:0!important}body.print-geometry-report .geometry-header,body.print-geometry-report .geometry-axis h2,body.print-geometry-report .geometry-notes h3,body.print-geometry-report .geometry-row.heading{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{size:A4;margin:7mm}}
+        .geometry-template-sheet{position:relative;max-width:1024px;margin:0 auto 18px;background:#fff;box-shadow:0 12px 30px #0f172a20}.geometry-template-bg{display:block;width:100%;height:auto}.official-report-brand{position:absolute;z-index:2;left:2.7%;top:1.3%;width:34.5%;height:6.4%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(110deg,#080a0d 0%,#14191f 82%,transparent 83%);padding-right:3%}.official-report-brand img{display:block;width:88%;height:auto;filter:drop-shadow(0 2px 2px #000)}.official-report-brand span{margin-top:.3%;font-size:clamp(8px,1.08vw,13px);letter-spacing:.34em;color:#fff;font-weight:700}.geometry-template-overlay{position:absolute;inset:0;font-family:Arial,sans-serif;color:#111}.geometry-template-overlay>b{position:absolute;font-size:1.25%;white-space:nowrap}.geometry-template-overlay .measure{font-size:1.75%;transform:translateX(-50%)}.geometry-template-overlay .ok{color:#07883e}.geometry-template-overlay .bad{color:#df171f}.geometry-template-overlay .pending{color:#111}.geometry-template-overlay .cell-value{width:8%;text-align:center;transform:translateX(-50%);font-size:1.48%}.geometry-template-overlay .cell-spec{width:12%;text-align:center;transform:translateX(-50%);font-size:1.15%;font-weight:500}.template-notes{position:absolute;left:3.4%;right:27%;top:91.7%;font-size:1.15%;line-height:1.35;white-space:pre-wrap}
+        @media print{body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:absolute;left:0;top:0;width:100%;max-width:none;margin:0;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
     </div>
   );
