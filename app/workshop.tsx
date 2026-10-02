@@ -3827,6 +3827,7 @@ export default function App({ initialState, user, onLogout }: any) {
               {view === "geometria" && activeAppointment && (
                 <GeometryTechnicalReport
                   appointment={activeAppointment}
+                  currentUser={user}
                   onBack={() => go("proposta")}
                   onContinue={() => go("torque")}
                   onSave={saveGeometryReport}
@@ -3837,6 +3838,7 @@ export default function App({ initialState, user, onLogout }: any) {
         {view === "atendimento" && activeAppointment && (
           <AttendanceSummary
             appointment={activeAppointment}
+            currentUser={user}
             roundStep={roundStep}
             onBack={() => go("agenda")}
             onSaveGeometry={saveGeometryReport}
@@ -7803,6 +7805,7 @@ function History() {
 }
 function AttendanceSummary({
   appointment,
+  currentUser,
   roundStep,
   onBack,
   onEditConference,
@@ -7890,6 +7893,7 @@ function AttendanceSummary({
     return (
       <GeometryTechnicalReport
         appointment={appointment}
+        currentUser={currentUser}
         onBack={() => setSummaryView("summary")}
         onSave={onSaveGeometry}
       />
@@ -8123,7 +8127,7 @@ function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, ri
   );
 }
 
-function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: any) {
+function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue, onSave }: any) {
   const storageKey = `geometry-report-${appointment.id ?? appointment.plate ?? appointment.name}`;
   const extraStorageKey = `${storageKey}-extra-fields`;
   const normalizeGeometryValues = (stored: any) => {
@@ -8154,6 +8158,12 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   const [savingGeometry, setSavingGeometry] = useState(false);
   const [readMessage, setReadMessage] = useState("");
   const [pendingValues, setPendingValues] = useState<any>(null);
+  const [measureEditing, setMeasureEditing] = useState(false);
+  const [adminUnlockOpen, setAdminUnlockOpen] = useState(false);
+  const [adminUsername, setAdminUsername] = useState(currentUser?.username || "");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminUnlockError, setAdminUnlockError] = useState("");
+  const [checkingAdmin, setCheckingAdmin] = useState(false);
   const [values, setValues] = useState<any>(() => {
     if (appointment.geometryReport?.values) return normalizeGeometryValues(appointment.geometryReport.values);
     if (typeof window === "undefined") return {};
@@ -8400,27 +8410,60 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       setSavingGeometry(false);
     }
   };
+  const openMeasureUnlock = () => {
+    if (measureEditing) {
+      setMeasureEditing(false);
+      setReadMessage("Quadro de medidas bloqueado novamente.");
+      return;
+    }
+    setAdminUnlockError("");
+    setAdminPassword("");
+    setAdminUnlockOpen(true);
+  };
+  const unlockMeasureEditing = async (event: any) => {
+    event.preventDefault();
+    if (checkingAdmin) return;
+    setCheckingAdmin(true);
+    setAdminUnlockError("");
+    try {
+      const response = await fetch("/api/admin-verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: adminUsername, password: adminPassword }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Senha administrativa incorreta");
+      setMeasureEditing(true);
+      setAdminUnlockOpen(false);
+      setAdminPassword("");
+      setReadMessage(`Edição das medidas liberada por ${result.displayName || "administrador"}. Revise e salve o laudo ao concluir.`);
+    } catch (error: any) {
+      setAdminUnlockError(error?.message || "Não foi possível liberar a edição.");
+    } finally {
+      setCheckingAdmin(false);
+    }
+  };
   const renderMeasureRow = ([label, defaultMin, defaultMax, single]: any, index: number) => {
     const row = values[index] || {};
     const min = row.min ?? defaultMin;
     const max = row.max ?? defaultMax;
     if (single) return <div className="a4-measure-row single" key={label}>
       <b>{label}</b>
-      <input className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
-      <span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
-      <input className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
+      <input readOnly={!measureEditing} className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
+      <span><input readOnly={!measureEditing} value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input readOnly={!measureEditing} value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
+      <input readOnly={!measureEditing} className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
     </div>;
     return <div className="a4-measure-row" key={label}>
       <b>{label}</b>
-      <input className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
-      <input className={stateOf(beforeRightOf(row),min,max)} value={beforeRightOf(row)} onChange={(e)=>updateValue(index,"beforeRight",e.target.value)}/>
-      <span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
-      <input className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
-      <input className={stateOf(afterRightOf(row),min,max)} value={afterRightOf(row)} onChange={(e)=>updateValue(index,"afterRight",e.target.value)}/>
+      <input readOnly={!measureEditing} className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
+      <input readOnly={!measureEditing} className={stateOf(beforeRightOf(row),min,max)} value={beforeRightOf(row)} onChange={(e)=>updateValue(index,"beforeRight",e.target.value)}/>
+      <span><input readOnly={!measureEditing} value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input readOnly={!measureEditing} value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
+      <input readOnly={!measureEditing} className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
+      <input readOnly={!measureEditing} className={stateOf(afterRightOf(row),min,max)} value={afterRightOf(row)} onChange={(e)=>updateValue(index,"afterRight",e.target.value)}/>
     </div>;
   };
   const measureHead = <div className="a4-measure-head">
-    <b>PARÂMETRO</b>
+    <b className="measure-parameter-head">PARÂMETRO<button type="button" className={`measure-edit-button no-print ${measureEditing ? "unlocked" : ""}`} onClick={openMeasureUnlock} title={measureEditing ? "Bloquear edição das medidas" : "Alterar medidas com senha administrativa"} aria-label={measureEditing ? "Bloquear edição das medidas" : "Alterar medidas com senha administrativa"}>{measureEditing ? "🔒" : "✎"}</button></b>
     <span><strong>ANTES DO AJUSTE</strong><i>ESQ.</i><i>DIR.</i></span>
     <b>ESPECIFICAÇÃO</b>
     <span><strong>APÓS O AJUSTE</strong><i>ESQ.</i><i>DIR.</i></span>
@@ -8428,7 +8471,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V20</span>
+        <span className="geometry-version">Laudo A4 V21</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
@@ -8486,7 +8529,22 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
           </div>
         </section>
       )}
-      <article className="geometry-template-sheet geometry-a4-sheet">
+      {adminUnlockOpen && (
+        <section className="geometry-admin-unlock no-print" role="dialog" aria-modal="true" aria-labelledby="admin-unlock-title">
+          <form onSubmit={unlockMeasureEditing}>
+            <header>
+              <div><small>EDIÇÃO PROTEGIDA</small><h2 id="admin-unlock-title">Liberar alteração das medidas</h2></div>
+              <button type="button" onClick={() => setAdminUnlockOpen(false)} aria-label="Fechar">×</button>
+            </header>
+            <p>Informe um acesso de administrador. A senha será apenas validada e não ficará gravada no laudo.</p>
+            <label>Usuário administrador<input value={adminUsername} onChange={(e)=>setAdminUsername(e.target.value)} autoComplete="username" autoCapitalize="none" required autoFocus/></label>
+            <label>Senha<input type="password" value={adminPassword} onChange={(e)=>setAdminPassword(e.target.value)} autoComplete="current-password" required/></label>
+            {adminUnlockError && <p className="geometry-admin-error" role="alert">{adminUnlockError}</p>}
+            <footer><button type="button" onClick={() => setAdminUnlockOpen(false)}>Cancelar</button><button type="submit" className="primary" disabled={checkingAdmin}>{checkingAdmin ? "Conferindo..." : "Liberar edição"}</button></footer>
+          </form>
+        </section>
+      )}
+      <article className={`geometry-template-sheet geometry-a4-sheet ${measureEditing ? "measure-editing" : ""}`}>
         <header className="a4-report-header">
           <div className="a4-brand"><img src="/logo-monocenter.jpg" alt="Monocenter Alinhamento Técnico"/></div>
           <div className="a4-title"><b>LAUDO TÉCNICO DE GEOMETRIA</b><span>ALINHAMENTO 3D</span></div>
@@ -8678,6 +8736,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       {sourcePdf && <section className="source-pdf"><h3>PDF original do alinhador: {sourceName}</h3><object data={sourcePdf} type="application/pdf"><a href={sourcePdf} target="_blank">Abrir PDF original</a></object></section>}
       <style>{`
         .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-version{margin-right:auto;border-radius:999px;background:#e9f8ef;color:#08783b;padding:7px 11px;font-size:12px;font-weight:900}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.geometry-extra-editor{max-width:1050px;margin:0 auto 14px;border:1px solid #b9c8da;border-radius:12px;background:#fff;overflow:hidden}.geometry-extra-editor summary{padding:13px 16px;background:#111d2b;color:#fff;font-weight:900;cursor:pointer}.geometry-extra-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.geometry-extra-grid label{display:flex;flex-direction:column;gap:5px;color:#344054;font-size:12px;font-weight:800}.geometry-extra-grid input,.geometry-extra-grid textarea{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:7px;background:#fff;padding:9px;color:#111;font-size:14px}.geometry-extra-grid .wide{grid-column:1/-1}.geometry-extra-grid textarea{min-height:70px;resize:vertical}.geometry-extra-editor>p{margin:0;padding:0 14px 14px;color:#475467}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-import-review{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#07111dcc}.geometry-import-card{width:min(900px,96vw);max-height:92vh;overflow:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px #0008}.geometry-import-card>header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;background:#111d2b;color:#fff;border-bottom:5px solid #e31b23}.geometry-import-card h2{margin:3px 0 0}.geometry-import-card header small{color:#ff4a52;font-weight:900}.geometry-import-card header button{border:0;background:transparent;color:#fff;font-size:30px;line-height:1;cursor:pointer}.geometry-import-card>p{margin:0;padding:15px 20px;background:#edf5ff}.import-measure-table{margin:16px 20px;border:1px solid #d8e0e8}.import-measure-row{display:grid;grid-template-columns:1.45fr .7fr 1.15fr .7fr;border-top:1px solid #d8e0e8}.import-measure-row:first-child{border-top:0}.import-measure-row>*{min-width:0;padding:10px;border:0;border-right:1px solid #d8e0e8}.import-measure-row.heading{background:#111d2b;color:#fff}.import-measure-row input{text-align:center;font-weight:800;background:#f8fafc}.import-measure-row>span{display:flex;align-items:center;justify-content:center;gap:5px}.import-measure-row>span input{width:72px;padding:5px}.geometry-import-card>footer{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px}.geometry-import-card>footer button{padding:11px 15px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:900}.geometry-import-card>footer .primary{background:#168b4b;color:#fff;border-color:#168b4b}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf h3{margin-top:0}
+        .a4-measure-row input[readonly]{cursor:not-allowed}.measure-editing .a4-measure-row input:not([readonly]){outline:1px solid #e0a800;outline-offset:-1px;background:#fff9d8}.measure-parameter-head{position:relative!important;padding-right:7mm!important}.measure-edit-button{position:absolute;right:.7mm;top:50%;display:flex;align-items:center;justify-content:center;width:5.5mm;height:5.5mm;padding:0;border:.25mm solid #8ea0b5;border-radius:1.2mm;background:#fff;color:#152236;font-size:8pt;line-height:1;transform:translateY(-50%);cursor:pointer}.measure-edit-button.unlocked{border-color:#07883e;background:#e7f8ee}.geometry-admin-unlock{position:fixed;z-index:10000;inset:0;display:grid;place-items:center;padding:20px;background:#0f172ab8}.geometry-admin-unlock form{width:min(440px,100%);padding:20px;border-radius:14px;background:#fff;box-shadow:0 24px 70px #0006}.geometry-admin-unlock header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.geometry-admin-unlock header small{color:#d71920;font-weight:900}.geometry-admin-unlock h2{margin:4px 0 0;font-size:21px}.geometry-admin-unlock header>button{width:38px;height:38px;border:1px solid #d8e0e8;border-radius:9px;background:#fff;font-size:24px}.geometry-admin-unlock>form>p{margin:14px 0;color:#475467}.geometry-admin-unlock label{display:grid;gap:6px;margin-top:12px;font-weight:800}.geometry-admin-unlock input{height:42px;padding:0 12px;border:1px solid #aeb9c7;border-radius:8px;font-size:16px}.geometry-admin-unlock footer{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.geometry-admin-error{padding:9px 11px;border-radius:7px;background:#fff0f1!important;color:#b42318!important;font-weight:800}@media print{.no-print,.measure-edit-button,.geometry-admin-unlock{display:none!important}}
         .legacy-geometry-template{display:none!important}
         .geometry-a4-sheet{box-sizing:border-box;width:210mm;max-width:100%;height:297mm;margin:0 auto 18px;padding:5mm;background:#fff;color:#111;overflow:hidden;font-family:Arial,Helvetica,sans-serif;box-shadow:0 12px 30px #0f172a20}
         .geometry-a4-sheet *{box-sizing:border-box}.geometry-a4-sheet input,.geometry-a4-sheet textarea{min-width:0;color:#111;font-family:inherit}
