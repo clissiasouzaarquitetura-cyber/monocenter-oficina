@@ -8330,16 +8330,42 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   };
   const readGeometryMetadata = (text: string) => {
     const normalized = text.replace(/\u00a0/g, " ");
+    const normalizedWithoutAccents = (value: string) => value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const extractComments = () => {
+      const lines = normalized
+        .split(/\r?\n/)
+        .map((line) => line.replace(/\s+/g, " ").trim());
+      const collected: string[] = [];
+      let readingComments = false;
+
+      for (const originalLine of lines) {
+        const searchableLine = normalizedWithoutAccents(originalLine);
+        if (!readingComments) {
+          const heading = searchableLine.match(/\bcoment(?:ario|arios)\b\s*:?[\s-]*/i);
+          if (!heading) continue;
+          readingComments = true;
+          const sameLine = originalLine.slice(heading.index! + heading[0].length).trim();
+          if (sameLine) collected.push(sameLine);
+          continue;
+        }
+
+        if (!originalLine || /^[-_]{3,}$/.test(originalLine)) continue;
+        if (/^(oficina|telefone|relatorio\s+do\s+alinhador)\b\s*:?/i.test(searchableLine)) break;
+        collected.push(originalLine);
+        if (collected.length >= 8) break;
+      }
+
+      return collected
+        .join("\n")
+        .replace(/\s+(oficina|telefone)\s*:.*$/i, "")
+        .trim();
+    };
     const rimMatch = normalized.match(/(?:tamanho\s+do\s+aro|\baro\b)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d)?)/i);
     const dateMatch = normalized.match(/\bData\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
     const timeMatch = normalized.match(/\bHora\s+(\d{1,2}:\d{2}(?::\d{2})?)/i);
-    const commentsBlock = normalized.match(/coment[áa]rios?\s*:\s*([\s\S]*?)(?=\n\s*oficina\s*:|\n\s*-{3,}|$)/i)?.[1] || "";
-    const comments = commentsBlock
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !/^(oficina|telefone)\s*:/i.test(line))
-      .join("\n")
-      .trim();
+    const comments = extractComments();
     return {
       ...(rimMatch ? { rim: rimMatch[1].replace(",", ".") } : {}),
       ...(dateMatch ? { reportDate: dateMatch[1] } : {}),
@@ -8542,7 +8568,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V24</span>
+        <span className="geometry-version">Laudo A4 V25</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
