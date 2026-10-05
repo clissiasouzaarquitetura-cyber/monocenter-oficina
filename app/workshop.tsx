@@ -4531,7 +4531,8 @@ function Agenda({
     [openCal, setOpenCal] = useState(true),
     [showSaturday, setShowSaturday] = useState(false),
     [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
-    [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
+    [expandedAppointments, setExpandedAppointments] = useState<number[]>([]),
+    [appointmentSearch, setAppointmentSearch] = useState("");
   useEffect(() => {
     localStorage.setItem("monocenter-calendar-mode", mode);
   }, [mode]);
@@ -4595,6 +4596,29 @@ function Agenda({
       !isEmployeeAbsence(appointment) &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado",
+    normalizedAppointmentSearch = normalizeSearch(appointmentSearch),
+    compactAppointmentSearch = normalizedAppointmentSearch.replace(/[^a-z0-9]/g, ""),
+    appointmentSearchActive = normalizedAppointmentSearch.length >= 2,
+    appointmentSearchResults = appointmentSearchActive
+      ? (data as Appt[])
+          .filter((appointment) => {
+            if (isEmployeeAbsence(appointment)) return false;
+            const client = normalizeSearch(appointment.client || "");
+            const plate = normalizeSearch(appointment.plate || "");
+            const compactPlate = plate.replace(/[^a-z0-9]/g, "");
+            return (
+              client.includes(normalizedAppointmentSearch) ||
+              plate.includes(normalizedAppointmentSearch) ||
+              (!!compactAppointmentSearch && compactPlate.includes(compactAppointmentSearch))
+            );
+          })
+          .sort(
+            (first, second) =>
+              second.date.localeCompare(first.date) ||
+              second.time.localeCompare(first.time, "pt-BR", { numeric: true }),
+          )
+          .slice(0, 80)
+      : [],
     selectedDayAppointments =
       mode === "semana"
         ? (data as Appt[]).filter((appointment) => appointment.date === date)
@@ -4856,9 +4880,11 @@ function Agenda({
         .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:#4d171b!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
+        .appointment-history-search{position:relative;margin:0 0 14px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff);box-shadow:0 5px 16px rgba(15,23,42,.06)}.appointment-history-search>label{display:grid;grid-template-columns:auto minmax(240px,1fr) auto;align-items:center;gap:10px;padding:12px 14px}.appointment-history-search>label>b{font-size:13px;white-space:nowrap}.appointment-history-search input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px 12px;background:var(--card,#fff);color:inherit;font-size:14px}.appointment-history-search .clear-search{border:0;background:transparent;color:#b3151d;font-weight:900;cursor:pointer}.appointment-search-hint{display:block;padding:0 14px 12px;color:#64748b;font-size:11px}.appointment-search-results{display:grid;gap:8px;max-height:430px;overflow:auto;padding:0 12px 12px}.appointment-search-results>header{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;color:#526274;font-size:12px}.appointment-search-result{display:grid;grid-template-columns:105px minmax(190px,1.2fr) minmax(180px,1fr) auto;align-items:center;gap:12px;padding:11px 12px;border:1px solid #d9e1ea;border-left:5px solid #df1823;border-radius:9px;background:#fff}.appointment-search-result time{display:grid;gap:2px;font-size:12px}.appointment-search-result time b{font-size:14px}.appointment-search-result .result-client,.appointment-search-result .result-vehicle{display:grid;gap:3px;min-width:0}.appointment-search-result strong,.appointment-search-result span{overflow-wrap:anywhere}.appointment-search-result small{color:#64748b}.appointment-search-result .result-plate{font-weight:900;letter-spacing:.04em}.appointment-search-result .result-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.appointment-search-result .result-actions button{border:1px solid #bac6d4;border-radius:7px;padding:8px 10px;background:#fff;font-size:11px;font-weight:900;cursor:pointer}.appointment-search-result .result-actions .primary{border-color:#16864b;background:#16864b;color:#fff}.appointment-search-empty{margin:0;padding:14px;border:1px dashed #c8d3df;border-radius:8px;color:#64748b;text-align:center}.dark .appointment-search-result{background:#172231}.dark .appointment-search-result .result-actions button{background:#223044;color:#fff}
         @media(min-width:1600px){.agenda{max-width:1600px!important}.agenda-grid-semana{grid-template-columns:minmax(0,1fr) 460px!important}.week-time-zone,.week-timeline-head button small{font-size:10px}.week-timeline-head button b{font-size:22px}.week-appointment{font-size:10px}.week-appointment>b{font-size:10px}.week-appointment>strong{font-size:12px}.week-appointment>small{font-size:10px}.week-appointment>.week-appointment-status,.week-appointment>.week-budget-type{font-size:9px}.week-time-column span{font-size:11px}.agenda-grid-semana .day article time>b{font-size:12px}.agenda-grid-semana .day article h3{font-size:13px}.agenda-grid-semana .day article p,.agenda-grid-semana .day article span>small{font-size:10px}.agenda-grid-semana .day article .appointment-toggle{font-size:11px!important}}
         @media(max-width:1500px){.agenda-grid-semana .agenda-finalization.compact{padding:6px 7px}.agenda-grid-semana .agenda-finalization.compact>b{display:block;font-size:11px!important;line-height:1.2;letter-spacing:-.04em;white-space:nowrap!important}}
-        @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
+        @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}.appointment-search-result{grid-template-columns:90px minmax(170px,1fr) minmax(150px,1fr)}.appointment-search-result .result-actions{grid-column:1/-1}}
+        @media(max-width:700px){.appointment-history-search>label{grid-template-columns:1fr}.appointment-history-search>label>b{white-space:normal}.appointment-history-search .clear-search{justify-self:start}.appointment-search-result{grid-template-columns:1fr}.appointment-search-result .result-actions{grid-column:auto;justify-content:flex-start}}
       `}</style>
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
@@ -4957,6 +4983,90 @@ function Agenda({
             + Novo agendamento
           </button>
         </div>
+      </div>
+      <div className="appointment-history-search">
+        <label>
+          <b>Pesquisar agendamentos</b>
+          <input
+            type="search"
+            value={appointmentSearch}
+            onChange={(event) => setAppointmentSearch(event.target.value)}
+            placeholder="Digite o nome do cliente ou a placa"
+            aria-label="Pesquisar agendamentos antigos por nome ou placa"
+          />
+          {appointmentSearch && (
+            <button
+              type="button"
+              className="clear-search"
+              onClick={() => setAppointmentSearch("")}
+            >
+              Limpar pesquisa
+            </button>
+          )}
+        </label>
+        {!appointmentSearchActive && (
+          <small className="appointment-search-hint">
+            A pesquisa consulta todo o histórico, inclusive meses anteriores. Digite pelo menos 2 caracteres.
+          </small>
+        )}
+        {appointmentSearchActive && (
+          <div className="appointment-search-results">
+            <header>
+              <b>Resultados encontrados</b>
+              <span>{appointmentSearchResults.length}{appointmentSearchResults.length === 80 ? "+" : ""}</span>
+            </header>
+            {appointmentSearchResults.length === 0 ? (
+              <p className="appointment-search-empty">
+                Nenhum agendamento encontrado para “{appointmentSearch}”.
+              </p>
+            ) : (
+              appointmentSearchResults.map((appointment) => {
+                const evaluatedItems = Object.values(appointment.evaluation?.status ?? {})
+                  .filter((state) => state && state !== "na").length;
+                return (
+                  <article className="appointment-search-result" key={`search-${appointment.id}`}>
+                    <time>
+                      <b>{fmt(appointment.date)}</b>
+                      <span>{appointment.time}</span>
+                      <small>{agendaStatusLabel(appointment)}</small>
+                    </time>
+                    <span className="result-client">
+                      <strong>{appointment.client}</strong>
+                      <small>{evaluatedItems ? `${evaluatedItems} itens avaliados` : "Sem avaliação registrada"}</small>
+                    </span>
+                    <span className="result-vehicle">
+                      <strong>{appointment.vehicle || "Veículo não informado"}</strong>
+                      <span className="result-plate">{appointment.plate || "SEM PLACA"}</span>
+                    </span>
+                    <span className="result-actions">
+                      <button type="button" className="primary" onClick={() => preview(appointment)}>
+                        Ver avaliação / resumo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const selected = new Date(`${appointment.date}T12:00:00`);
+                          setDate(appointment.date);
+                          setCursor(new Date(selected.getFullYear(), selected.getMonth(), 1));
+                          setMode("dia");
+                          setOpenCal(true);
+                          setExpandedAppointments((current) =>
+                            current.includes(appointment.id)
+                              ? current
+                              : [...current, appointment.id],
+                          );
+                          setAppointmentSearch("");
+                        }}
+                      >
+                        Ir para o dia
+                      </button>
+                    </span>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
       <div
         className={`${openCal ? "aggrid" : "aggrid calendar-closed"} agenda-grid-${mode}`}
@@ -5794,6 +5904,14 @@ function ReviewScreen({
 }
 function AttendancePreviewModal({ appointment, roundStep, close }: any) {
   const budget = appointment.budget as BudgetState | undefined,
+    evaluationRows = [...ITEMS, ...(appointment.evaluation?.custom ?? [])]
+      .map((name, index) => ({
+        name,
+        state: appointment.evaluation?.status?.[index + 1] ?? "",
+        note: appointment.evaluation?.notes?.[index + 1] ?? "",
+        quoted: !!appointment.evaluation?.quoteItems?.[index + 1],
+      }))
+      .filter((item) => item.state && item.state !== "na"),
     evaluationStates = Object.values(
       appointment.evaluation?.status ?? {},
     ) as string[],
@@ -5924,6 +6042,38 @@ function AttendancePreviewModal({ appointment, roundStep, close }: any) {
           </section>
         </div>
 
+        <section className="attendance-preview-section attendance-preview-evaluation">
+          <div className="attendance-preview-section-title">
+            <h3>Itens avaliados</h3>
+            <strong>{evaluationRows.length}</strong>
+          </div>
+          {!evaluationRows.length ? (
+            <p className="attendance-preview-empty">Nenhum item de avaliação foi registrado.</p>
+          ) : (
+            <div className="attendance-evaluation-items">
+              {evaluationRows.map((item, index) => {
+                const label = item.state === "g"
+                  ? "Bom estado"
+                  : item.state === "y"
+                    ? "Atenção"
+                    : item.state === "r"
+                      ? "Troca urgente"
+                      : "Avaliado";
+                return (
+                  <div className={`evaluation-result ${item.state}`} key={`${item.name}-${index}`}>
+                    <span>
+                      <b>{item.name}</b>
+                      {item.note && <small>{item.note}</small>}
+                    </span>
+                    <strong>{label}</strong>
+                    {item.quoted && <em>Incluído no orçamento</em>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
         <section className="attendance-preview-section">
           <div className="attendance-preview-section-title">
             <h3>Orçamento e serviços</h3>
@@ -6025,19 +6175,21 @@ function AttendancePreviewModal({ appointment, roundStep, close }: any) {
         .attendance-preview-meta span{font-size:12px;line-height:1.4}
         .attendance-preview-meta b{display:block;color:var(--muted,#5d6878)}
         .attendance-preview-empty{margin:6px 0;color:var(--muted,#5d6878)}
+        .attendance-evaluation-items{display:grid;gap:7px}.attendance-evaluation-items .evaluation-result{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:9px 10px;border-left:5px solid #94a3b8;border-radius:8px;background:#f4f7fa}.attendance-evaluation-items .evaluation-result.g{border-left-color:#16864b}.attendance-evaluation-items .evaluation-result.y{border-left-color:#d49a00;background:#fff9e8}.attendance-evaluation-items .evaluation-result.r{border-left-color:#d71920;background:#fff0f1}.attendance-evaluation-items .evaluation-result span{display:grid;gap:2px;min-width:0}.attendance-evaluation-items .evaluation-result small{color:#64748b;white-space:pre-wrap}.attendance-evaluation-items .evaluation-result strong{font-size:12px;white-space:nowrap}.attendance-evaluation-items .evaluation-result.g>strong{color:#08723c}.attendance-evaluation-items .evaluation-result.y>strong{color:#8a6200}.attendance-evaluation-items .evaluation-result.r>strong{color:#b3151d}.attendance-evaluation-items .evaluation-result em{border-radius:999px;padding:4px 7px;background:#e8eef5;color:#334155;font-size:10px;font-style:normal;font-weight:900;white-space:nowrap}
         .attendance-preview-note{display:block!important;padding:10px;border-radius:8px;background:#f4f7fa;white-space:pre-wrap}
         .attendance-preview-note b{display:block;margin-bottom:4px}
         .attendance-preview-internal-note{background:#fff4cc!important;border-left:4px solid #d98b00;color:#5d3b00}
         .attendance-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 24px 24px}
         .attendance-preview-footer small{color:var(--muted,#5d6878)}
         .attendance-preview-footer button{white-space:nowrap}
-        .dark .attendance-preview-items>div,.dark .attendance-preview-note,.dark .attendance-preview-badges>*{background:#1c2938}
+        .dark .attendance-preview-items>div,.dark .attendance-preview-note,.dark .attendance-preview-badges>*,.dark .attendance-evaluation-items .evaluation-result{background:#1c2938}
         .dark .attendance-preview-internal-note{background:#493713!important;color:#ffe29a}
         @media(max-width:720px){
           .attendance-preview-backdrop{padding:8px}
           .attendance-preview-modal{max-height:calc(100vh - 16px)}
           .attendance-preview-header,.attendance-preview-badges,.attendance-preview-grid,.attendance-preview-footer{padding-left:14px;padding-right:14px}
           .attendance-preview-grid,.attendance-preview-meta{grid-template-columns:1fr}
+          .attendance-evaluation-items .evaluation-result{grid-template-columns:1fr auto}.attendance-evaluation-items .evaluation-result em{grid-column:1/-1;justify-self:start}
           .attendance-preview-section{margin-left:14px;margin-right:14px}
           .attendance-preview-grid p{grid-template-columns:125px 1fr}
           .attendance-preview-footer{align-items:stretch;flex-direction:column}
@@ -8568,7 +8720,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V25</span>
+        <span className="geometry-version">Laudo A4 V26</span>
         <button type="button" onClick={onBack}>← Voltar à proposta</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
