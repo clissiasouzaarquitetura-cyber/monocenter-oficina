@@ -187,9 +187,9 @@ const WORKSHOP_SPOTS = [
   { id: 9, label: "Posição 9", left: 68.8, top: 76.4, rotation: 90 },
   { id: 10, label: "Posição 10", left: 85.6, top: 76.4, rotation: 90 },
   { id: 11, label: "Posição 11", left: 14.7, top: 88.4, rotation: 90 },
-  { id: "elevador-1", label: "Elevador 1", left: 23.2, top: 13.5, rotation: -70 },
-  { id: "elevador-2", label: "Elevador 2", left: 23.2, top: 34.2, rotation: -70 },
-  { id: "elevador-3", label: "Elevador 3", left: 23.2, top: 54.8, rotation: -70 },
+  { id: "elevador-1", label: "Elevador 1", left: 23.2, top: 8, rotation: -70 },
+  { id: "elevador-2", label: "Elevador 2", left: 23.2, top: 28.7, rotation: -70 },
+  { id: "elevador-3", label: "Elevador 3", left: 23.2, top: 49.3, rotation: -70 },
   { id: "rampa-gabaritagem", label: "Rampa de gabaritagem", left: 85.3, top: 28.8, rotation: 90 },
   { id: "rampa-alinhamento", label: "Rampa de alinhamento", left: 33.5, top: 66.1, rotation: 0 },
 ] as const;
