@@ -176,17 +176,22 @@ const findVehicle = (value: string) => {
 const vehicleColorHex = (value?: string) =>
   VEHICLE_COLORS[(value || "").trim().toLocaleLowerCase("pt-BR")] ?? "#d8dde4";
 const WORKSHOP_SPOTS = [
-  { number: 1, left: 47.2, top: 10.1 },
-  { number: 2, left: 63.2, top: 10.1 },
-  { number: 3, left: 47.2, top: 28.8 },
-  { number: 4, left: 63.2, top: 28.8 },
-  { number: 5, left: 47.2, top: 47.6 },
-  { number: 6, left: 63.2, top: 47.6 },
-  { number: 7, left: 68.8, top: 65.5 },
-  { number: 8, left: 85.6, top: 65.5 },
-  { number: 9, left: 68.8, top: 76.4 },
-  { number: 10, left: 85.6, top: 76.4 },
-  { number: 11, left: 14.7, top: 88.4 },
+  { id: 1, label: "Posição 1", left: 47.2, top: 10.1, rotation: 90 },
+  { id: 2, label: "Posição 2", left: 63.2, top: 10.1, rotation: 90 },
+  { id: 3, label: "Posição 3", left: 47.2, top: 28.8, rotation: 90 },
+  { id: 4, label: "Posição 4", left: 63.2, top: 28.8, rotation: 90 },
+  { id: 5, label: "Posição 5", left: 47.2, top: 47.6, rotation: 90 },
+  { id: 6, label: "Posição 6", left: 63.2, top: 47.6, rotation: 90 },
+  { id: 7, label: "Posição 7", left: 68.8, top: 65.5, rotation: 90 },
+  { id: 8, label: "Posição 8", left: 85.6, top: 65.5, rotation: 90 },
+  { id: 9, label: "Posição 9", left: 68.8, top: 76.4, rotation: 90 },
+  { id: 10, label: "Posição 10", left: 85.6, top: 76.4, rotation: 90 },
+  { id: 11, label: "Posição 11", left: 14.7, top: 88.4, rotation: 90 },
+  { id: "elevador-1", label: "Elevador 1", left: 24.5, top: 13.5, rotation: 110 },
+  { id: "elevador-2", label: "Elevador 2", left: 24.5, top: 34.2, rotation: 110 },
+  { id: "elevador-3", label: "Elevador 3", left: 24.5, top: 54.8, rotation: 110 },
+  { id: "rampa-gabaritagem", label: "Rampa de gabaritagem", left: 85.3, top: 28.8, rotation: 90 },
+  { id: "rampa-alinhamento", label: "Rampa de alinhamento", left: 33.5, top: 66.1, rotation: 0 },
 ] as const;
 const SERVICES = [
   ["Alinhamento de direção 3D - Passeio", 100],
@@ -414,7 +419,7 @@ type Appt = {
   lastEditedAt?: string;
   startedAt?: string;
   inProgress?: boolean;
-  workshopPosition?: number;
+  workshopPosition?: number | string;
   workshopPositionUpdatedBy?: string;
   workshopPositionUpdatedAt?: string;
   statusBeforeNoShow?: Appt["status"];
@@ -590,7 +595,7 @@ function VehicleTopView({
       <div className="workshop-vehicle-label">
         <strong>{workshopServiceLabel(appointment)}</strong>
         <b>{appointment.plate || "Sem placa"}</b>
-        <small>
+        <small className="workshop-vehicle-model">
           {appointment.vehicle || "Modelo não informado"} · {brand}
         </small>
       </div>
@@ -4157,7 +4162,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 ),
               );
             }}
-            onSetWorkshopPosition={(id: number, position?: number) => {
+            onSetWorkshopPosition={(id: number, position?: number | string) => {
               const now = new Date().toISOString();
               syncBlockedUntil.current = Date.now() + 4000;
               setAppointments((list) =>
@@ -10083,7 +10088,7 @@ function Reports({
         {reportMode === "andamento" && (
           <div className="management-report-panel workshop-map-panel">
             <style>{`
-              .workshop-map-panel{overflow:hidden}.workshop-map-help{max-width:660px;color:#64748b;font-size:12px;line-height:1.45}.workshop-layout{display:grid;grid-template-columns:minmax(430px,1.5fr) minmax(300px,.8fr);gap:18px;align-items:start}.workshop-map{position:relative;width:100%;max-width:780px;margin:0 auto;border:1px solid #cbd5e1;border-radius:14px;background:#e5e7eb;box-shadow:0 8px 24px #0f172a18;overflow:hidden}.workshop-map>.workshop-floorplan{position:relative!important;display:block!important;width:100%!important;height:auto!important}.workshop-map-marker{position:absolute;z-index:3;width:16%;min-width:82px;transform:translate(-50%,-50%);border:0;background:transparent;padding:0;cursor:pointer}.workshop-vehicle{display:grid;justify-items:center;gap:2px}.workshop-vehicle-art{position:relative;width:94px;height:62px;margin:17px 0;transform:rotate(90deg);filter:drop-shadow(0 3px 4px #0008)}.workshop-vehicle-art>span{position:absolute;inset:0;background:var(--vehicle-color);-webkit-mask:url('/veiculo-vista-superior.png') center/contain no-repeat;mask:url('/veiculo-vista-superior.png') center/contain no-repeat}.workshop-vehicle-art img{object-fit:contain;mix-blend-mode:multiply}.workshop-vehicle-label{display:grid;width:100%;max-width:120px;padding:4px 5px;border:1px solid #ffffff80;border-radius:6px;background:#101923d9;color:#fff;box-shadow:0 2px 8px #0007;text-align:center;line-height:1.05;backdrop-filter:blur(3px)}.workshop-vehicle-label strong{overflow:hidden;color:#ffd43b;font-size:8px;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}.workshop-vehicle-label b{margin-top:2px;font-size:10px;letter-spacing:.5px}.workshop-vehicle-label small{overflow:hidden;margin-top:2px;font-size:7px;text-overflow:ellipsis;white-space:nowrap}.workshop-map-marker:focus-visible{outline:3px solid #168b4b;outline-offset:3px;border-radius:8px}.workshop-position-list{display:grid;gap:9px;max-height:980px;overflow:auto;padding-right:3px}.workshop-position-card{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:center;padding:10px;border:1px solid #d8e0e8;border-radius:11px;background:#fff}.workshop-position-card .workshop-vehicle-art{width:66px;height:43px;margin:0;transform:none}.workshop-position-card .workshop-vehicle-label{display:none}.workshop-position-info{display:grid;gap:4px;min-width:0}.workshop-position-info>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info small{color:#64748b}.workshop-position-info label{display:flex;align-items:center;gap:7px;margin-top:3px;color:#334155;font-size:11px;font-weight:900}.workshop-position-info select{min-width:0;flex:1;padding:7px;border:1px solid #aab6c4;border-radius:7px;background:#fff;font-weight:800}.workshop-position-actions{display:flex;gap:6px;margin-top:3px}.workshop-position-actions button{padding:6px 8px;font-size:10px}.workshop-position-updated{font-size:9px!important}.workshop-empty{padding:18px;border:1px dashed #aab6c4;border-radius:10px;background:#f8fafc;color:#64748b;text-align:center}.app.dark .workshop-position-card,.app.dark .workshop-position-info select{background:#111c29;color:#fff}.app.dark .workshop-map-help,.app.dark .workshop-position-info small{color:#aeb9c7}@media(max-width:1000px){.workshop-layout{grid-template-columns:1fr}.workshop-position-list{max-height:none}.workshop-position-card{grid-template-columns:80px 1fr}}@media(max-width:620px){.workshop-map-wrap{overflow-x:auto;padding-bottom:8px}.workshop-map{min-width:720px}.workshop-position-card{grid-template-columns:70px 1fr}.workshop-position-card .workshop-vehicle-art{width:58px;height:39px}}
+              .workshop-map-panel{overflow:hidden}.workshop-map-help{max-width:660px;color:#64748b;font-size:12px;line-height:1.45}.workshop-layout{display:grid;grid-template-columns:minmax(430px,1.5fr) minmax(300px,.8fr);gap:18px;align-items:start}.workshop-map{position:relative;width:100%;max-width:780px;margin:0 auto;border:1px solid #cbd5e1;border-radius:14px;background:#e5e7eb;box-shadow:0 8px 24px #0f172a18;overflow:hidden}.workshop-map>.workshop-floorplan{position:relative!important;display:block!important;width:100%!important;height:auto!important}.workshop-map-marker{position:absolute;z-index:3;width:16%;min-width:82px;transform:translate(-50%,-50%);border:0;background:transparent;padding:0;cursor:pointer}.workshop-vehicle{display:grid;justify-items:center;gap:2px}.workshop-vehicle-art{position:relative;width:94px;height:62px;margin:17px 0;transform:rotate(var(--car-rotation,90deg));filter:drop-shadow(0 3px 4px #0008)}.workshop-vehicle-art>span{position:absolute;inset:0;background:var(--vehicle-color);-webkit-mask:url('/veiculo-vista-superior.png') center/contain no-repeat;mask:url('/veiculo-vista-superior.png') center/contain no-repeat}.workshop-vehicle-art img{object-fit:contain;mix-blend-mode:multiply}.workshop-vehicle-label{display:grid;width:100%;max-width:126px;padding:5px 6px;border:1px solid #ffffff80;border-radius:6px;background:#101923d9;color:#fff;box-shadow:0 2px 8px #0007;text-align:center;line-height:1.1;backdrop-filter:blur(3px)}.workshop-vehicle-label strong{overflow:hidden;color:#ffd43b;font-size:8px;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}.workshop-vehicle-label b{margin-top:2px;font-size:10px;letter-spacing:.5px}.workshop-vehicle-label .workshop-vehicle-model{display:block;overflow:visible;margin-top:3px;color:#fff;font-size:8px;font-weight:900;line-height:1.15;white-space:normal}.workshop-map-marker:focus-visible{outline:3px solid #168b4b;outline-offset:3px;border-radius:8px}.workshop-position-list{display:grid;gap:9px;max-height:980px;overflow:auto;padding-right:3px}.workshop-position-card{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:center;padding:10px;border:1px solid #d8e0e8;border-radius:11px;background:#fff}.workshop-position-card .workshop-vehicle-art{width:66px;height:43px;margin:0;transform:none}.workshop-position-card .workshop-vehicle-label{display:none}.workshop-position-info{display:grid;gap:4px;min-width:0}.workshop-position-info>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info .workshop-card-vehicle{display:block;overflow:hidden;color:#111d2b;font-size:12px;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info small{color:#64748b}.workshop-position-info label{display:flex;align-items:center;gap:7px;margin-top:3px;color:#334155;font-size:11px;font-weight:900}.workshop-position-info select{min-width:0;flex:1;padding:7px;border:1px solid #aab6c4;border-radius:7px;background:#fff;font-weight:800}.workshop-position-actions{display:flex;gap:6px;margin-top:3px}.workshop-position-actions button{padding:6px 8px;font-size:10px}.workshop-position-updated{font-size:9px!important}.workshop-empty{padding:18px;border:1px dashed #aab6c4;border-radius:10px;background:#f8fafc;color:#64748b;text-align:center}.app.dark .workshop-position-card,.app.dark .workshop-position-info select{background:#111c29;color:#fff}.app.dark .workshop-position-info .workshop-card-vehicle{color:#fff}.app.dark .workshop-map-help,.app.dark .workshop-position-info small{color:#aeb9c7}@media(max-width:1000px){.workshop-layout{grid-template-columns:1fr}.workshop-position-list{max-height:none}.workshop-position-card{grid-template-columns:80px 1fr}}@media(max-width:620px){.workshop-map-wrap{overflow-x:auto;padding-bottom:8px}.workshop-map{min-width:720px}.workshop-position-card{grid-template-columns:70px 1fr}.workshop-position-card .workshop-vehicle-art{width:58px;height:39px}}
             `}</style>
             <div className="management-report-head">
               <span>
@@ -10112,7 +10117,7 @@ function Reports({
                     .filter((appointment) => appointment.workshopPosition)
                     .map((appointment) => {
                       const spot = WORKSHOP_SPOTS.find(
-                        ({ number }) => number === appointment.workshopPosition,
+                        ({ id }) => id === appointment.workshopPosition,
                       );
                       if (!spot) return null;
                       return (
@@ -10120,7 +10125,13 @@ function Reports({
                           type="button"
                           key={appointment.id}
                           className="workshop-map-marker"
-                          style={{ left: `${spot.left}%`, top: `${spot.top}%` }}
+                          style={
+                            {
+                              left: `${spot.left}%`,
+                              top: `${spot.top}%`,
+                              "--car-rotation": `${spot.rotation}deg`,
+                            } as CSSProperties
+                          }
                           onClick={() => open(appointment)}
                           title={`Abrir atendimento de ${appointment.client}`}
                         >
@@ -10133,11 +10144,22 @@ function Reports({
               <div className="workshop-position-list">
                 {inProgress.length ? (
                   inProgress.map((appointment) => {
+                    const catalog = findVehicle(appointment.vehicle || "");
+                    const brand =
+                      appointment.vehicleBrand ||
+                      catalog?.[1] ||
+                      "Marca não informada";
                     return (
                       <article className="workshop-position-card" key={appointment.id}>
                         <VehicleTopView appointment={appointment} />
                         <div className="workshop-position-info">
                           <b>{appointment.client}</b>
+                          <strong className="workshop-card-vehicle">
+                            {appointment.vehicle || "Modelo não informado"} · {brand}
+                            {appointment.vehicleColor
+                              ? ` · ${appointment.vehicleColor}`
+                              : ""}
+                          </strong>
                           <small>
                             {inProgressLabel(appointment)} · {appointment.plate || "Sem placa"}
                           </small>
@@ -10148,26 +10170,28 @@ function Reports({
                               onChange={(event) =>
                                 onSetWorkshopPosition(
                                   appointment.id,
-                                  event.target.value
-                                    ? Number(event.target.value)
-                                    : undefined,
+                                  !event.target.value
+                                    ? undefined
+                                    : /^\d+$/.test(event.target.value)
+                                      ? Number(event.target.value)
+                                      : event.target.value,
                                 )
                               }
                             >
                               <option value="">Sem posição</option>
-                              {WORKSHOP_SPOTS.map(({ number }) => (
+                              {WORKSHOP_SPOTS.map(({ id, label }) => (
                                 <option
-                                  key={number}
-                                  value={number}
+                                  key={id}
+                                  value={id}
                                   disabled={
-                                    !!workshopPositionOwners.get(number) &&
-                                    workshopPositionOwners.get(number) !==
+                                    !!workshopPositionOwners.get(id) &&
+                                    workshopPositionOwners.get(id) !==
                                       appointment.id
                                   }
                                 >
-                                  Posição {number}
-                                  {!!workshopPositionOwners.get(number) &&
-                                  workshopPositionOwners.get(number) !==
+                                  {label}
+                                  {!!workshopPositionOwners.get(id) &&
+                                  workshopPositionOwners.get(id) !==
                                     appointment.id
                                     ? " — ocupada"
                                     : ""}
