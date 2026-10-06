@@ -1,6 +1,6 @@
 "use client";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { CarFront } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import Image from "next/image";
 const ITEMS = [
   "Amortecedor Dianteiro Direito",
   "Amortecedor Dianteiro Esquerdo",
@@ -175,6 +175,19 @@ const findVehicle = (value: string) => {
 };
 const vehicleColorHex = (value?: string) =>
   VEHICLE_COLORS[(value || "").trim().toLocaleLowerCase("pt-BR")] ?? "#d8dde4";
+const WORKSHOP_SPOTS = [
+  { number: 1, left: 47.2, top: 10.1 },
+  { number: 2, left: 63.2, top: 10.1 },
+  { number: 3, left: 47.2, top: 28.8 },
+  { number: 4, left: 63.2, top: 28.8 },
+  { number: 5, left: 47.2, top: 47.6 },
+  { number: 6, left: 63.2, top: 47.6 },
+  { number: 7, left: 68.8, top: 65.5 },
+  { number: 8, left: 85.6, top: 65.5 },
+  { number: 9, left: 68.8, top: 76.4 },
+  { number: 10, left: 85.6, top: 76.4 },
+  { number: 11, left: 14.7, top: 88.4 },
+] as const;
 const SERVICES = [
   ["Alinhamento de direção 3D - Passeio", 100],
   ["Alinhamento de direção 3D - SUV", 120],
@@ -401,6 +414,9 @@ type Appt = {
   lastEditedAt?: string;
   startedAt?: string;
   inProgress?: boolean;
+  workshopPosition?: number;
+  workshopPositionUpdatedBy?: string;
+  workshopPositionUpdatedAt?: string;
   statusBeforeNoShow?: Appt["status"];
   inProgressBeforeNoShow?: boolean;
   geometryReport?: GeometryReportData;
@@ -534,22 +550,50 @@ const inProgressLabel = (a: Appt) => {
   return "Serviço em andamento";
 };
 
-function VehiclePicture({ appointment }: { appointment: Appt }) {
+const workshopServiceLabel = (appointment: Appt) => {
+  if (appointment.type === "revisao")
+    return appointment.reviewWithService
+      ? "Revisão 30 dias + serviço"
+      : "Revisão 30 dias";
+  if (appointment.type === "retorno") return "Retorno";
+  if (appointment.type === "garantia") return "Garantia";
+  if (appointment.status === "avaliou") return "Orçamento";
+  if (appointment.status === "servico") return "Serviço aprovado";
+  return "Avaliação";
+};
+
+function VehicleTopView({
+  appointment,
+  compact = false,
+}: {
+  appointment: Appt;
+  compact?: boolean;
+}) {
   const catalog = findVehicle(appointment.vehicle || "");
   const brand = appointment.vehicleBrand || catalog?.[1] || "Marca não informada";
-  const body = appointment.vehicleBody || catalog?.[2] || "Automóvel";
-  const color = appointment.vehicleColor || "Cor não informada";
+  const color = vehicleColorHex(appointment.vehicleColor);
   return (
-    <div className="vehicle-picture" aria-label={`${appointment.vehicle || "Veículo"}, ${color}`}>
-      <CarFront
-        aria-hidden="true"
-        size={68}
-        strokeWidth={1.8}
-        fill={vehicleColorHex(appointment.vehicleColor)}
-      />
-      <small>{body}</small>
-      <b>{brand}</b>
-      <span>{color}</span>
+    <div
+      className={`workshop-vehicle${compact ? " compact" : ""}`}
+      aria-label={`${appointment.vehicle || "Veículo"}, ${appointment.vehicleColor || "cor não informada"}`}
+    >
+      <div className="workshop-vehicle-art" style={{ "--vehicle-color": color } as CSSProperties}>
+        <span aria-hidden="true" />
+        <Image
+          src="/veiculo-vista-superior.png"
+          alt=""
+          fill
+          sizes={compact ? "90px" : "130px"}
+          priority={false}
+        />
+      </div>
+      <div className="workshop-vehicle-label">
+        <strong>{workshopServiceLabel(appointment)}</strong>
+        <b>{appointment.plate || "Sem placa"}</b>
+        <small>
+          {appointment.vehicle || "Modelo não informado"} · {brand}
+        </small>
+      </div>
     </div>
   );
 }
@@ -4111,6 +4155,33 @@ export default function App({ initialState, user, onLogout }: any) {
                       }
                     : appointment,
                 ),
+              );
+            }}
+            onSetWorkshopPosition={(id: number, position?: number) => {
+              const now = new Date().toISOString();
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((appointment) => {
+                  if (appointment.id === id)
+                    return {
+                      ...appointment,
+                      workshopPosition: position,
+                      workshopPositionUpdatedBy: user.displayName,
+                      workshopPositionUpdatedAt: now,
+                      lastEditedBy: user.displayName,
+                      lastEditedAt: now,
+                      _updatedAt: Date.now(),
+                    };
+                  if (position && appointment.workshopPosition === position)
+                    return {
+                      ...appointment,
+                      workshopPosition: undefined,
+                      workshopPositionUpdatedBy: user.displayName,
+                      workshopPositionUpdatedAt: now,
+                      _updatedAt: Date.now(),
+                    };
+                  return appointment;
+                }),
               );
             }}
             message={setMessage}
@@ -9411,6 +9482,7 @@ function Reports({
   edit,
   remove,
   updateQuoteFollowUp,
+  onSetWorkshopPosition,
   message,
 }: any) {
   const [query, setQuery] = useState(""),
@@ -9620,7 +9692,12 @@ function Reports({
         !isEmployeeAbsence(a) &&
         a.budget?.processStatus !== "Finalizado",
     )
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+  const workshopPositionOwners = new Map(
+    inProgress
+      .filter((appointment) => appointment.workshopPosition)
+      .map((appointment) => [appointment.workshopPosition, appointment.id]),
+  );
   const print = (a: Appt) => {
     setPrintRow(a);
     document.body.classList.add("print-report");
@@ -10004,60 +10081,128 @@ function Reports({
           </div>
         )}
         {reportMode === "andamento" && (
-          <div className="management-report-panel open-quotes-panel">
+          <div className="management-report-panel workshop-map-panel">
+            <style>{`
+              .workshop-map-panel{overflow:hidden}.workshop-map-help{max-width:660px;color:#64748b;font-size:12px;line-height:1.45}.workshop-layout{display:grid;grid-template-columns:minmax(430px,1.5fr) minmax(300px,.8fr);gap:18px;align-items:start}.workshop-map{position:relative;width:100%;max-width:780px;margin:0 auto;border:1px solid #cbd5e1;border-radius:14px;background:#e5e7eb;box-shadow:0 8px 24px #0f172a18;overflow:hidden}.workshop-map>.workshop-floorplan{position:relative!important;display:block!important;width:100%!important;height:auto!important}.workshop-map-marker{position:absolute;z-index:3;width:16%;min-width:82px;transform:translate(-50%,-50%);border:0;background:transparent;padding:0;cursor:pointer}.workshop-vehicle{display:grid;justify-items:center;gap:2px}.workshop-vehicle-art{position:relative;width:94px;height:62px;margin:17px 0;transform:rotate(90deg);filter:drop-shadow(0 3px 4px #0008)}.workshop-vehicle-art>span{position:absolute;inset:0;background:var(--vehicle-color);-webkit-mask:url('/veiculo-vista-superior.png') center/contain no-repeat;mask:url('/veiculo-vista-superior.png') center/contain no-repeat}.workshop-vehicle-art img{object-fit:contain;mix-blend-mode:multiply}.workshop-vehicle-label{display:grid;width:100%;max-width:120px;padding:4px 5px;border:1px solid #ffffff80;border-radius:6px;background:#101923d9;color:#fff;box-shadow:0 2px 8px #0007;text-align:center;line-height:1.05;backdrop-filter:blur(3px)}.workshop-vehicle-label strong{overflow:hidden;color:#ffd43b;font-size:8px;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}.workshop-vehicle-label b{margin-top:2px;font-size:10px;letter-spacing:.5px}.workshop-vehicle-label small{overflow:hidden;margin-top:2px;font-size:7px;text-overflow:ellipsis;white-space:nowrap}.workshop-map-marker:focus-visible{outline:3px solid #168b4b;outline-offset:3px;border-radius:8px}.workshop-position-list{display:grid;gap:9px;max-height:980px;overflow:auto;padding-right:3px}.workshop-position-card{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:center;padding:10px;border:1px solid #d8e0e8;border-radius:11px;background:#fff}.workshop-position-card .workshop-vehicle-art{width:66px;height:43px;margin:0;transform:none}.workshop-position-card .workshop-vehicle-label{display:none}.workshop-position-info{display:grid;gap:4px;min-width:0}.workshop-position-info>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info small{color:#64748b}.workshop-position-info label{display:flex;align-items:center;gap:7px;margin-top:3px;color:#334155;font-size:11px;font-weight:900}.workshop-position-info select{min-width:0;flex:1;padding:7px;border:1px solid #aab6c4;border-radius:7px;background:#fff;font-weight:800}.workshop-position-actions{display:flex;gap:6px;margin-top:3px}.workshop-position-actions button{padding:6px 8px;font-size:10px}.workshop-position-updated{font-size:9px!important}.workshop-empty{padding:18px;border:1px dashed #aab6c4;border-radius:10px;background:#f8fafc;color:#64748b;text-align:center}.app.dark .workshop-position-card,.app.dark .workshop-position-info select{background:#111c29;color:#fff}.app.dark .workshop-map-help,.app.dark .workshop-position-info small{color:#aeb9c7}@media(max-width:1000px){.workshop-layout{grid-template-columns:1fr}.workshop-position-list{max-height:none}.workshop-position-card{grid-template-columns:80px 1fr}}@media(max-width:620px){.workshop-map-wrap{overflow-x:auto;padding-bottom:8px}.workshop-map{min-width:720px}.workshop-position-card{grid-template-columns:70px 1fr}.workshop-position-card .workshop-vehicle-art{width:58px;height:39px}}
+            `}</style>
             <div className="management-report-head">
               <span>
                 <h2>Veículos na oficina</h2>
                 <p>
                   {inProgress.length} {inProgress.length === 1 ? "veículo" : "veículos"} aguardando avaliação ou conclusão
                 </p>
+                <small className="workshop-map-help">
+                  Escolha a posição de cada veículo na lista. A planta e as posições ficam salvas para toda a equipe.
+                </small>
               </span>
             </div>
-            <div className="open-quotes-list vehicle-progress-list">
-              {inProgress.length ? (
-                inProgress.map((a) => {
-                  const daysInProgress = Math.max(
-                    0,
-                    Math.floor(
-                      (Date.now() - new Date(a.date + "T12:00:00").getTime()) /
-                        86400000,
-                    ),
-                  );
-                  return (
-                    <article key={a.id} className="vehicle-progress-card">
-                      <VehiclePicture appointment={a} />
-                      <span>
-                        <strong className="vehicle-progress-status">
-                          {inProgressLabel(a)}
-                        </strong>
-                        <b className="vehicle-progress-model">
-                          {a.vehicle || "Modelo não informado"}
-                          {a.vehicleColor ? ` · ${a.vehicleColor}` : ""}
-                        </b>
-                        <small>
-                          Cliente: {a.client} · {a.plate || "Sem placa"}
-                        </small>
-                        <small>
-                          Iniciado em{" "}
-                          {new Date(a.date + "T12:00:00").toLocaleDateString(
-                            "pt-BR",
-                          )}{" "}
-                          · {daysInProgress}{" "}
-                          {daysInProgress === 1 ? "dia" : "dias"} em andamento
-                        </small>
-                        <small>Técnico: {a.tech || "não informado"}</small>
-                      </span>
-                      <div>
-                        <button onClick={() => open(a)}>
-                          Continuar atendimento
+            <div className="workshop-layout">
+              <div className="workshop-map-wrap">
+                <div className="workshop-map">
+                  <Image
+                    className="workshop-floorplan"
+                    src="/oficina-planta-real.jpg"
+                    alt="Planta real da oficina com posições numeradas de 1 a 11"
+                    width={1019}
+                    height={1543}
+                    sizes="(max-width: 1000px) 100vw, 65vw"
+                    priority
+                  />
+                  {inProgress
+                    .filter((appointment) => appointment.workshopPosition)
+                    .map((appointment) => {
+                      const spot = WORKSHOP_SPOTS.find(
+                        ({ number }) => number === appointment.workshopPosition,
+                      );
+                      if (!spot) return null;
+                      return (
+                        <button
+                          type="button"
+                          key={appointment.id}
+                          className="workshop-map-marker"
+                          style={{ left: `${spot.left}%`, top: `${spot.top}%` }}
+                          onClick={() => open(appointment)}
+                          title={`Abrir atendimento de ${appointment.client}`}
+                        >
+                          <VehicleTopView appointment={appointment} compact />
                         </button>
-                      </div>
-                    </article>
-                  );
-                })
-              ) : (
-                <p>Nenhum atendimento em andamento.</p>
-              )}
+                      );
+                    })}
+                </div>
+              </div>
+              <div className="workshop-position-list">
+                {inProgress.length ? (
+                  inProgress.map((appointment) => {
+                    return (
+                      <article className="workshop-position-card" key={appointment.id}>
+                        <VehicleTopView appointment={appointment} />
+                        <div className="workshop-position-info">
+                          <b>{appointment.client}</b>
+                          <small>
+                            {inProgressLabel(appointment)} · {appointment.plate || "Sem placa"}
+                          </small>
+                          <label>
+                            Posição
+                            <select
+                              value={appointment.workshopPosition || ""}
+                              onChange={(event) =>
+                                onSetWorkshopPosition(
+                                  appointment.id,
+                                  event.target.value
+                                    ? Number(event.target.value)
+                                    : undefined,
+                                )
+                              }
+                            >
+                              <option value="">Sem posição</option>
+                              {WORKSHOP_SPOTS.map(({ number }) => (
+                                <option
+                                  key={number}
+                                  value={number}
+                                  disabled={
+                                    !!workshopPositionOwners.get(number) &&
+                                    workshopPositionOwners.get(number) !==
+                                      appointment.id
+                                  }
+                                >
+                                  Posição {number}
+                                  {!!workshopPositionOwners.get(number) &&
+                                  workshopPositionOwners.get(number) !==
+                                    appointment.id
+                                    ? " — ocupada"
+                                    : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="workshop-position-actions">
+                            <button type="button" onClick={() => open(appointment)}>
+                              Continuar atendimento
+                            </button>
+                            {appointment.workshopPosition && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onSetWorkshopPosition(appointment.id, undefined)
+                                }
+                              >
+                                Retirar da planta
+                              </button>
+                            )}
+                          </div>
+                          {appointment.workshopPositionUpdatedBy && (
+                            <small className="workshop-position-updated">
+                              Movido por {appointment.workshopPositionUpdatedBy}
+                            </small>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <p className="workshop-empty">Nenhum atendimento em andamento.</p>
+                )}
+              </div>
             </div>
           </div>
         )}
