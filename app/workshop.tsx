@@ -296,6 +296,7 @@ type PurchaseOrderState = {
 type View =
   | "agenda"
   | "veiculos"
+  | "laudos"
   | "atendimento"
   | "avaliacao"
   | "orcamento"
@@ -307,6 +308,30 @@ type View =
   | "relatorios"
   | "historico"
   | "config";
+type GeometryReportData = {
+  schemaVersion?: number;
+  values: Record<string, any>;
+  technician: string;
+  notes: string;
+  sourceName?: string;
+  extraFields?: Record<string, any>;
+  savedAt: string;
+  savedBy?: string;
+};
+type StandaloneGeometryReport = {
+  id: number;
+  client: string;
+  vehicle: string;
+  plate: string;
+  km: string;
+  createdAt: string;
+  createdBy?: string;
+  updatedAt?: string;
+  linkedAppointmentId?: number;
+  linkedAt?: string;
+  linkedBy?: string;
+  report?: GeometryReportData;
+};
 type Appt = {
   id: number;
   workOrder?: string;
@@ -378,14 +403,7 @@ type Appt = {
   inProgress?: boolean;
   statusBeforeNoShow?: Appt["status"];
   inProgressBeforeNoShow?: boolean;
-  geometryReport?: {
-    values: Record<string, any>;
-    technician: string;
-    notes: string;
-    sourceName?: string;
-    savedAt: string;
-    savedBy?: string;
-  };
+  geometryReport?: GeometryReportData;
   noShowMarkedBy?: string;
   noShowMarkedAt?: string;
   _updatedAt?: number;
@@ -618,6 +636,9 @@ export default function App({ initialState, user, onLogout }: any) {
     [appointments, setAppointments] = useState<Appt[]>(
       shared.appointments ?? INITIAL,
     ),
+    [geometryDrafts, setGeometryDrafts] = useState<StandaloneGeometryReport[]>(
+      shared.geometryDrafts ?? [],
+    ),
     [deletedAppointmentIds, setDeletedAppointmentIds] = useState<number[]>(
       shared.deletedAppointmentIds ?? [],
     ),
@@ -765,6 +786,7 @@ export default function App({ initialState, user, onLogout }: any) {
     saveTimer.current = setTimeout(() => {
       const state = {
         appointments,
+        geometryDrafts,
         deletedAppointmentIds,
         footerSize,
         roundStep,
@@ -810,6 +832,7 @@ export default function App({ initialState, user, onLogout }: any) {
     };
   }, [
     appointments,
+    geometryDrafts,
     deletedAppointmentIds,
     footerSize,
     roundStep,
@@ -855,6 +878,7 @@ export default function App({ initialState, user, onLogout }: any) {
             }
           };
           apply(setAppointments, appointments, s.appointments);
+          apply(setGeometryDrafts, geometryDrafts, s.geometryDrafts);
           apply(
             setDeletedAppointmentIds,
             deletedAppointmentIds,
@@ -889,6 +913,7 @@ export default function App({ initialState, user, onLogout }: any) {
     };
   }, [
     appointments,
+    geometryDrafts,
     deletedAppointmentIds,
     techs,
     holidays,
@@ -1147,6 +1172,7 @@ export default function App({ initialState, user, onLogout }: any) {
   const nav: [View, string, string][] = [
     ["agenda", "Agenda", "▦"],
     ["veiculos", "Veículos na oficina", "▣"],
+    ["laudos", "Laudos de geometria", "▤"],
     ["avaliacao", "Avaliação", "✓"],
     ["orcamento", "Orçamento", "$"],
     ["proposta", "Proposta", "▤"],
@@ -1213,11 +1239,64 @@ export default function App({ initialState, user, onLogout }: any) {
         document.body.classList.remove("no-values");
       }, 500);
     },
-    saveGeometryReport = async (geometryReport: any) => {
-      if (!activeAppointment) throw new Error("Atendimento não localizado.");
+    geometrySharedState = (
+      nextAppointments: Appt[],
+      nextGeometryDrafts: StandaloneGeometryReport[],
+    ) => ({
+      appointments: nextAppointments,
+      geometryDrafts: nextGeometryDrafts,
+      deletedAppointmentIds,
+      footerSize,
+      roundStep,
+      status,
+      evaluationNotes,
+      checks,
+      custom,
+      techs,
+      holidays,
+      evaluator,
+      started,
+      templates,
+      parts,
+      selectedServices,
+      serviceQty,
+      servicePrices,
+      manualServices,
+      proposalPaymentOptions,
+      patioNotes,
+      processStatus,
+      purchaseChecks,
+      purchaseOrderStates,
+    }),
+    persistGeometryState = async (
+      nextAppointments: Appt[],
+      nextGeometryDrafts: StandaloneGeometryReport[],
+      action: string,
+      detail: string,
+    ) => {
+      syncBlockedUntil.current = Date.now() + 8000;
+      const response = await fetch("/api/state", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          state: geometrySharedState(nextAppointments, nextGeometryDrafts),
+          action,
+          entity: "Laudo de geometria",
+          detail,
+        }),
+      });
+      if (!response.ok)
+        throw new Error("A alteração ficou neste computador, mas não foi confirmada no banco compartilhado.");
+    },
+    saveGeometryReportForAppointment = async (
+      appointmentId: number,
+      geometryReport: any,
+    ) => {
+      const source = appointments.find((item) => item.id === appointmentId);
+      if (!source) throw new Error("Atendimento não localizado.");
       const savedAt = new Date().toISOString();
       const updated: Appt = {
-        ...activeAppointment,
+        ...source,
         geometryReport: {
           ...geometryReport,
           savedAt,
@@ -1230,49 +1309,112 @@ export default function App({ initialState, user, onLogout }: any) {
       const nextAppointments = appointments.map((item) =>
         item.id === updated.id ? updated : item,
       );
-      syncBlockedUntil.current = Date.now() + 8000;
       DISPLAY_APPT = updated;
-      setActiveAppointment(updated);
+      if (activeAppointment?.id === updated.id) setActiveAppointment(updated);
       setAppointments(nextAppointments);
-      const response = await fetch("/api/state", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          state: {
-            appointments: nextAppointments,
-            deletedAppointmentIds,
-            footerSize,
-            roundStep,
-            status,
-            evaluationNotes,
-            checks,
-            custom,
-            techs,
-            holidays,
-            evaluator,
-            started,
-            templates,
-            parts,
-            selectedServices,
-            serviceQty,
-            servicePrices,
-            manualServices,
-            proposalPaymentOptions,
-            patioNotes,
-            processStatus,
-            purchaseChecks,
-            purchaseOrderStates,
-          },
-          action: "Salvou laudo de geometria",
-          entity: "Laudo de geometria",
-          detail: `${updated.client} · ${updated.plate || "sem placa"}`,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error("O laudo ficou neste computador, mas não foi confirmado no banco compartilhado.");
-      }
+      await persistGeometryState(
+        nextAppointments,
+        geometryDrafts,
+        "Salvou laudo de geometria",
+        `${updated.client} · ${updated.plate || "sem placa"}`,
+      );
       setSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
       return updated;
+    },
+    saveGeometryReport = async (geometryReport: any) => {
+      if (!activeAppointment) throw new Error("Atendimento não localizado.");
+      return saveGeometryReportForAppointment(activeAppointment.id, geometryReport);
+    },
+    createGeometryDraft = async (data: Pick<StandaloneGeometryReport, "client" | "vehicle" | "plate" | "km">) => {
+      const now = new Date().toISOString();
+      const draft: StandaloneGeometryReport = {
+        id: Date.now(),
+        client: data.client.trim() || "Cliente avulso",
+        vehicle: data.vehicle.trim() || "Veículo não informado",
+        plate: data.plate.trim().toLocaleUpperCase("pt-BR"),
+        km: data.km.trim(),
+        createdAt: now,
+        createdBy: user.displayName,
+      };
+      const nextDrafts = [draft, ...geometryDrafts];
+      setGeometryDrafts(nextDrafts);
+      await persistGeometryState(
+        appointments,
+        nextDrafts,
+        "Criou laudo avulso",
+        `${draft.client} · ${draft.plate || "sem placa"}`,
+      );
+      return draft;
+    },
+    saveGeometryDraftReport = async (draftId: number, geometryReport: any) => {
+      const savedAt = new Date().toISOString();
+      const source = geometryDrafts.find((item) => item.id === draftId);
+      if (!source) throw new Error("Laudo avulso não localizado.");
+      const updated: StandaloneGeometryReport = {
+        ...source,
+        updatedAt: savedAt,
+        report: {
+          ...geometryReport,
+          savedAt,
+          savedBy: user.displayName,
+        },
+      };
+      const nextDrafts = geometryDrafts.map((item) =>
+        item.id === draftId ? updated : item,
+      );
+      setGeometryDrafts(nextDrafts);
+      await persistGeometryState(
+        appointments,
+        nextDrafts,
+        "Salvou laudo avulso",
+        `${updated.client} · ${updated.plate || "sem placa"}`,
+      );
+      return updated;
+    },
+    linkGeometryDraft = async (draftId: number, appointmentId: number) => {
+      const draft = geometryDrafts.find((item) => item.id === draftId);
+      const target = appointments.find((item) => item.id === appointmentId);
+      if (!draft?.report) throw new Error("Salve o laudo avulso antes de vinculá-lo.");
+      if (!target) throw new Error("Atendimento para vínculo não localizado.");
+      if (
+        target.geometryReport &&
+        !confirm(
+          `O atendimento de ${target.client} já possui um laudo salvo. Deseja substituir pelo laudo avulso selecionado?`,
+        )
+      ) {
+        throw new Error("Vínculo cancelado. O laudo já existente foi preservado.");
+      }
+      const linkedAt = new Date().toISOString();
+      const updatedAppointment: Appt = {
+        ...target,
+        geometryReport: draft.report,
+        lastEditedBy: user.displayName,
+        lastEditedAt: linkedAt,
+        _updatedAt: Date.now(),
+      };
+      const nextAppointments = appointments.map((item) =>
+        item.id === appointmentId ? updatedAppointment : item,
+      );
+      const nextDrafts = geometryDrafts.map((item) =>
+        item.id === draftId
+          ? {
+              ...item,
+              linkedAppointmentId: appointmentId,
+              linkedAt,
+              linkedBy: user.displayName,
+              updatedAt: linkedAt,
+            }
+          : item,
+      );
+      setAppointments(nextAppointments);
+      setGeometryDrafts(nextDrafts);
+      await persistGeometryState(
+        nextAppointments,
+        nextDrafts,
+        "Vinculou laudo avulso ao atendimento",
+        `${target.client} · ${target.plate || "sem placa"}`,
+      );
+      return updatedAppointment;
     },
     messageParts = groupMessageParts(parts, roundStep),
     messageServices = [
@@ -1559,6 +1701,17 @@ export default function App({ initialState, user, onLogout }: any) {
               setQuoteMessageFor(null);
               setMessage(text);
             }}
+          />
+        )}
+        {view === "laudos" && (
+          <GeometryReportsHub
+            appointments={appointments}
+            drafts={geometryDrafts}
+            currentUser={user}
+            onCreateDraft={createGeometryDraft}
+            onSaveDraft={saveGeometryDraftReport}
+            onSaveAppointment={saveGeometryReportForAppointment}
+            onLinkDraft={linkGeometryDraft}
           />
         )}
         {view === "revisao" && activeAppointment && (
@@ -8254,6 +8407,221 @@ const GEOMETRY_FIELDS = [
   ["Setback traseira", "", "", true],
 ];
 
+function GeometryReportsHub({
+  appointments,
+  drafts,
+  currentUser,
+  onCreateDraft,
+  onSaveDraft,
+  onSaveAppointment,
+  onLinkDraft,
+}: any) {
+  const inProgress = (appointments as Appt[])
+    .filter(
+      (appointment) =>
+        !isEmployeeAbsence(appointment) &&
+        appointment.budget?.processStatus !== "Finalizado" &&
+        (appointment.inProgress || appointment.status === "servico"),
+    )
+    .sort(
+      (first, second) =>
+        second.date.localeCompare(first.date) ||
+        first.time.localeCompare(second.time, "pt-BR", { numeric: true }),
+    );
+  const [workspace, setWorkspace] = useState<
+    { kind: "appointment" | "draft"; id: number } | null
+  >(null);
+  const [showStandaloneForm, setShowStandaloneForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [hubMessage, setHubMessage] = useState("");
+  const [linkTargets, setLinkTargets] = useState<Record<number, string>>({});
+  const [standaloneForm, setStandaloneForm] = useState({
+    client: "",
+    vehicle: "",
+    plate: "",
+    km: "",
+  });
+  const selectedAppointment = workspace?.kind === "appointment"
+    ? (appointments as Appt[]).find((item) => item.id === workspace.id)
+    : null;
+  const selectedDraft = workspace?.kind === "draft"
+    ? (drafts as StandaloneGeometryReport[]).find((item) => item.id === workspace.id)
+    : null;
+
+  if (selectedAppointment) {
+    return (
+      <div className="geometry-hub-workspace">
+        <div className="geometry-link-context">
+          <span><small>LAUDO VINCULADO AO ATENDIMENTO</small><b>{selectedAppointment.client}</b></span>
+          <span><small>VEÍCULO</small><b>{selectedAppointment.vehicle || "Não informado"}</b></span>
+          <span><small>PLACA</small><b>{selectedAppointment.plate || "Sem placa"}</b></span>
+        </div>
+        <GeometryTechnicalReport
+          key={`appointment-report-${selectedAppointment.id}`}
+          appointment={selectedAppointment}
+          currentUser={currentUser}
+          backLabel="Voltar aos laudos"
+          onBack={() => setWorkspace(null)}
+          onSave={(report: any) => onSaveAppointment(selectedAppointment.id, report)}
+        />
+      </div>
+    );
+  }
+
+  if (selectedDraft) {
+    const draftAppointment: Appt = {
+      ...EMPTY_APPT,
+      id: -Math.abs(selectedDraft.id),
+      date: selectedDraft.createdAt.slice(0, 10),
+      time: new Date(selectedDraft.createdAt).toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      client: selectedDraft.client,
+      vehicle: selectedDraft.vehicle,
+      plate: selectedDraft.plate,
+      km: selectedDraft.km,
+      status: "avaliou",
+      appointmentServiceType: "alinhamento_3d",
+      geometryReport: selectedDraft.report,
+    };
+    return (
+      <div className="geometry-hub-workspace">
+        <div className="geometry-link-context standalone">
+          <span><small>ORÇAMENTO AVULSO</small><b>{selectedDraft.client}</b></span>
+          <span><small>VEÍCULO</small><b>{selectedDraft.vehicle || "Não informado"}</b></span>
+          <span><small>PLACA</small><b>{selectedDraft.plate || "Sem placa"}</b></span>
+          <strong>Aguardando vínculo com atendimento</strong>
+        </div>
+        <GeometryTechnicalReport
+          key={`draft-report-${selectedDraft.id}`}
+          appointment={draftAppointment}
+          currentUser={currentUser}
+          backLabel="Voltar aos laudos"
+          onBack={() => setWorkspace(null)}
+          onSave={(report: any) => onSaveDraft(selectedDraft.id, report)}
+        />
+      </div>
+    );
+  }
+
+  const createStandalone = async (event: any) => {
+    event.preventDefault();
+    if (creating) return;
+    if (
+      !standaloneForm.client.trim() &&
+      !standaloneForm.vehicle.trim() &&
+      !standaloneForm.plate.trim()
+    ) {
+      setHubMessage("Informe ao menos o cliente, o veículo ou a placa para identificar o laudo avulso.");
+      return;
+    }
+    setCreating(true);
+    setHubMessage("Salvando o novo laudo avulso...");
+    try {
+      const created = await onCreateDraft(standaloneForm);
+      setStandaloneForm({ client: "", vehicle: "", plate: "", km: "" });
+      setShowStandaloneForm(false);
+      setHubMessage("");
+      setWorkspace({ kind: "draft", id: created.id });
+    } catch (error: any) {
+      setHubMessage(error?.message || "Não foi possível criar o laudo avulso.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const linkDraft = async (draft: StandaloneGeometryReport) => {
+    const appointmentId = Number(linkTargets[draft.id]);
+    if (!appointmentId) {
+      setHubMessage("Selecione o veículo em andamento que receberá este laudo.");
+      return;
+    }
+    setHubMessage("Vinculando o laudo ao atendimento...");
+    try {
+      const linked = await onLinkDraft(draft.id, appointmentId);
+      setHubMessage("Laudo vinculado e confirmado no sistema compartilhado.");
+      setWorkspace({ kind: "appointment", id: linked.id });
+    } catch (error: any) {
+      setHubMessage(error?.message || "Não foi possível vincular o laudo.");
+    }
+  };
+
+  return (
+    <section className="geometry-hub">
+      <style>{`
+        .geometry-hub{display:grid;gap:18px}.geometry-hub-intro{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 20px;border:1px solid var(--line,#d8e0e8);border-left:6px solid #e31b23;border-radius:13px;background:var(--card,#fff)}.geometry-hub-intro h2{margin:0 0 4px;font-size:20px}.geometry-hub-intro p{margin:0;color:var(--muted,#667085)}.geometry-hub-intro button{border:0;border-radius:9px;padding:11px 14px;background:#111d2b;color:#fff;font-weight:900;cursor:pointer;white-space:nowrap}.geometry-hub-message{margin:0;padding:11px 14px;border:1px solid #9dc0f8;border-radius:9px;background:#edf5ff;color:#174c91;font-weight:800}.geometry-standalone-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff)}.geometry-standalone-form h3{grid-column:1/-1;margin:0}.geometry-standalone-form label{display:grid;gap:5px;color:#475467;font-size:12px;font-weight:900}.geometry-standalone-form input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px;background:var(--card,#fff);color:inherit}.geometry-standalone-form footer{display:flex;justify-content:flex-end;gap:8px;grid-column:1/-1}.geometry-standalone-form button,.geometry-hub-card button{border:1px solid #bac6d4;border-radius:8px;padding:9px 11px;background:#fff;font-weight:900;cursor:pointer}.geometry-standalone-form .primary,.geometry-hub-card .primary{border-color:#16864b;background:#16864b;color:#fff}.geometry-hub-section{display:grid;gap:10px}.geometry-hub-section>header{display:flex;align-items:flex-end;justify-content:space-between;gap:15px}.geometry-hub-section h2{margin:0;font-size:18px}.geometry-hub-section header span{color:#64748b;font-size:12px}.geometry-hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.geometry-hub-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:14px;border:1px solid #d8e0e8;border-radius:11px;background:var(--card,#fff)}.geometry-hub-card>span{display:grid;gap:3px;min-width:0}.geometry-hub-card h3{margin:0;font-size:16px}.geometry-hub-card p{margin:0;color:#526274;font-size:13px}.geometry-hub-card small{color:#64748b}.geometry-hub-card .plate{color:#b3151d;font-weight:900;letter-spacing:.05em}.geometry-hub-card>aside{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:7px}.geometry-hub-card select{max-width:260px;border:1px solid #9fb0c3;border-radius:7px;padding:8px;background:var(--card,#fff);color:inherit}.geometry-hub-card .saved-badge,.geometry-hub-card .pending-badge,.geometry-hub-card .linked-badge{width:max-content;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:900;text-transform:uppercase}.geometry-hub-card .saved-badge{background:#def7e8;color:#08723c}.geometry-hub-card .pending-badge{background:#fff2c7;color:#7a5200}.geometry-hub-card .linked-badge{background:#e8eef5;color:#334155}.geometry-hub-empty{margin:0;padding:20px;border:1px dashed #bec9d5;border-radius:10px;color:#64748b;text-align:center}.geometry-link-context{display:grid;grid-template-columns:1.2fr 1fr .6fr;gap:1px;margin:0 auto 12px;max-width:1180px;overflow:hidden;border:1px solid #c8d3df;border-radius:10px;background:#c8d3df}.geometry-link-context>span{display:grid;gap:3px;padding:10px 12px;background:#fff}.geometry-link-context small{color:#64748b;font-size:10px;font-weight:900}.geometry-link-context.standalone{grid-template-columns:1.2fr 1fr .6fr auto}.geometry-link-context>strong{display:grid;place-items:center;padding:10px 14px;background:#fff2c7;color:#7a5200;font-size:11px;text-align:center}.dark .geometry-hub-intro,.dark .geometry-standalone-form,.dark .geometry-hub-card,.dark .geometry-link-context>span{background:#172231}.dark .geometry-hub-intro button{background:#e31b23}@media(max-width:950px){.geometry-standalone-form{grid-template-columns:repeat(2,minmax(0,1fr))}.geometry-hub-grid{grid-template-columns:1fr}.geometry-link-context,.geometry-link-context.standalone{grid-template-columns:1fr 1fr}}@media(max-width:620px){.geometry-hub-intro{align-items:stretch;flex-direction:column}.geometry-standalone-form{grid-template-columns:1fr}.geometry-hub-card{grid-template-columns:1fr}.geometry-hub-card>aside{align-items:stretch}.geometry-hub-card select{max-width:none}.geometry-link-context,.geometry-link-context.standalone{grid-template-columns:1fr}}
+      `}</style>
+      <div className="geometry-hub-intro">
+        <span>
+          <h2>Importar laudo diretamente</h2>
+          <p>Escolha um veículo que está na oficina ou crie um orçamento avulso para vincular depois.</p>
+        </span>
+        <button type="button" onClick={() => setShowStandaloneForm((current) => !current)}>
+          {showStandaloneForm ? "Fechar cadastro avulso" : "+ Novo laudo avulso"}
+        </button>
+      </div>
+      {hubMessage && <p className="geometry-hub-message">{hubMessage}</p>}
+      {showStandaloneForm && (
+        <form className="geometry-standalone-form" onSubmit={createStandalone}>
+          <h3>Identificação do orçamento avulso</h3>
+          <label>Cliente<input value={standaloneForm.client} onChange={(event) => setStandaloneForm({...standaloneForm,client:event.target.value})} placeholder="Pode preencher depois"/></label>
+          <label>Veículo<input value={standaloneForm.vehicle} onChange={(event) => setStandaloneForm({...standaloneForm,vehicle:event.target.value})} placeholder="Modelo do veículo"/></label>
+          <label>Placa<input value={standaloneForm.plate} onChange={(event) => setStandaloneForm({...standaloneForm,plate:event.target.value.toLocaleUpperCase("pt-BR")})} placeholder="ABC1D23"/></label>
+          <label>KM<input value={standaloneForm.km} onChange={(event) => setStandaloneForm({...standaloneForm,km:event.target.value})} inputMode="numeric" placeholder="Quilometragem"/></label>
+          <footer><button type="button" onClick={() => setShowStandaloneForm(false)}>Cancelar</button><button type="submit" className="primary" disabled={creating}>{creating ? "Criando..." : "Criar e importar PDF"}</button></footer>
+        </form>
+      )}
+      <div className="geometry-hub-section">
+        <header><h2>Veículos em andamento na oficina</h2><span>{inProgress.length} {inProgress.length === 1 ? "veículo" : "veículos"}</span></header>
+        {inProgress.length === 0 ? <p className="geometry-hub-empty">Nenhum veículo está marcado como em andamento neste momento.</p> : (
+          <div className="geometry-hub-grid">
+            {inProgress.map((appointment) => (
+              <article className="geometry-hub-card" key={appointment.id}>
+                <span>
+                  <h3>{appointment.client}</h3>
+                  <p>{appointment.vehicle || "Veículo não informado"} · <b className="plate">{appointment.plate || "SEM PLACA"}</b></p>
+                  <small>Entrada: {fmt(appointment.date)} · {appointment.time}</small>
+                  <b className={appointment.geometryReport ? "saved-badge" : "pending-badge"}>{appointment.geometryReport ? "Laudo salvo" : "Aguardando laudo"}</b>
+                </span>
+                <aside><button type="button" className="primary" onClick={() => setWorkspace({kind:"appointment",id:appointment.id})}>{appointment.geometryReport ? "Abrir laudo" : "Importar PDF"}</button></aside>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="geometry-hub-section">
+        <header><h2>Laudos avulsos</h2><span>{drafts.length} {drafts.length === 1 ? "laudo" : "laudos"}</span></header>
+        {drafts.length === 0 ? <p className="geometry-hub-empty">Nenhum laudo avulso foi criado.</p> : (
+          <div className="geometry-hub-grid">
+            {(drafts as StandaloneGeometryReport[]).map((draft) => {
+              const linkedAppointment = draft.linkedAppointmentId
+                ? (appointments as Appt[]).find((item) => item.id === draft.linkedAppointmentId)
+                : null;
+              return (
+                <article className="geometry-hub-card" key={draft.id}>
+                  <span>
+                    <h3>{draft.client}</h3>
+                    <p>{draft.vehicle || "Veículo não informado"} · <b className="plate">{draft.plate || "SEM PLACA"}</b></p>
+                    <small>Criado em {new Date(draft.createdAt).toLocaleString("pt-BR")}{draft.createdBy ? ` por ${draft.createdBy}` : ""}</small>
+                    <b className={linkedAppointment ? "linked-badge" : draft.report ? "saved-badge" : "pending-badge"}>{linkedAppointment ? `Vinculado a ${linkedAppointment.client}` : draft.report ? "Pronto para vincular" : "Aguardando importação"}</b>
+                  </span>
+                  <aside>
+                    <button type="button" onClick={() => setWorkspace(linkedAppointment ? {kind:"appointment",id:linkedAppointment.id} : {kind:"draft",id:draft.id})}>{linkedAppointment ? "Abrir atendimento vinculado" : draft.report ? "Abrir laudo" : "Importar PDF"}</button>
+                    {!linkedAppointment && draft.report && (
+                      <><select value={linkTargets[draft.id] || ""} onChange={(event) => setLinkTargets({...linkTargets,[draft.id]:event.target.value})}><option value="">Selecionar veículo para vincular</option>{inProgress.map((appointment) => <option key={appointment.id} value={appointment.id}>{appointment.client} · {appointment.vehicle} · {appointment.plate || "sem placa"}</option>)}</select><button type="button" className="primary" onClick={() => linkDraft(draft)}>Vincular ao atendimento</button></>
+                    )}
+                  </aside>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, rightToe, rear = false }: any) {
   return (
     <div className="axle-illustration">
@@ -8279,7 +8647,7 @@ function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, ri
   );
 }
 
-function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue, onSave }: any) {
+function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue, onSave, backLabel = "Voltar à proposta" }: any) {
   const storageKey = `geometry-report-${appointment.id ?? appointment.plate ?? appointment.name}`;
   const extraStorageKey = `${storageKey}-extra-fields`;
   const recommendedReviewKm = (() => {
@@ -8720,8 +9088,8 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V26</span>
-        <button type="button" onClick={onBack}>← Voltar à proposta</button>
+        <span className="geometry-version">Laudo A4 V27</span>
+        <button type="button" onClick={onBack}>← {backLabel}</button>
         <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
         <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
         <button type="button" className="primary print-geometry-button" onClick={printGeometry}>Imprimir / compartilhar PDF</button>
@@ -9879,6 +10247,10 @@ const TITLES: Record<View, [string, string]> = {
   veiculos: [
     "Veículos na oficina",
     "Modelos aguardando avaliação, revisão ou conclusão do serviço.",
+  ],
+  laudos: [
+    "Laudos de geometria",
+    "Importe o PDF, vincule a um veículo na oficina ou salve como orçamento avulso.",
   ],
   atendimento: [
     "Atendimento concluído",
