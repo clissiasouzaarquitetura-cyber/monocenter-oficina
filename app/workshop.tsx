@@ -572,8 +572,15 @@ const workshopServiceLabel = (appointment: Appt) => {
       : "Revisão 30 dias";
   if (appointment.type === "retorno") return "Retorno";
   if (appointment.type === "garantia") return "Garantia";
-  if (appointment.status === "avaliou") return "Orçamento";
   if (appointment.status === "servico") return "Serviço aprovado";
+  if (appointment.appointmentServiceType === "gabaritagem")
+    return "Gabaritagem";
+  if (
+    appointment.appointmentServiceType === "alinhamento_balanceamento" ||
+    appointment.appointmentServiceType === "alinhamento_3d"
+  )
+    return "Alinhamento e balanceamento";
+  if (appointment.status === "avaliou") return "Orçamento";
   return "Avaliação";
 };
 
@@ -602,7 +609,7 @@ function VehicleTopView({
           priority={false}
         />
       </div>
-      <div className="workshop-vehicle-label">
+      <div className={`workshop-vehicle-label ${apptClass(appointment)}`}>
         <strong>{workshopServiceLabel(appointment)}</strong>
         <b>{appointment.plate || "Sem placa"}</b>
         <small className="workshop-vehicle-model">
@@ -625,25 +632,29 @@ const employeeAbsenceReason = (a: Appt) => {
 };
 const employeeAbsencePeriod = (a: Appt) =>
   a.absenceEndTime ? `${a.time}–${a.absenceEndTime}` : `${a.time} em diante`;
-const apptClass = (a: Appt) =>
-  isEmployeeAbsence(a)
-    ? "block"
-    : a.status === "faltou"
-      ? "faltou"
-      : (a.serviceScheduled && a.status === "agendado") ||
-        !!a.serviceAppointmentId
-      ? "scheduled-service"
-      : a.type === "retorno"
-        ? "retorno"
-        : a.type === "garantia"
-          ? "garantia"
-          : a.type === "revisao" && !a.review
-            ? "revisao"
-            : a.status === "servico" && conferenceStarted(a)
-              ? "conference"
-              : a.inProgress && a.status !== "servico"
-                ? "inprogress"
-                : a.status;
+function apptClass(a: Appt) {
+  if (isEmployeeAbsence(a)) return "block";
+  if (a.status === "faltou") return "faltou";
+  if (a.type === "retorno") return "retorno";
+  if (a.type === "garantia") return "garantia";
+  if (a.type === "revisao") return "revisao";
+  if (a.status === "servico" && conferenceStarted(a)) return "conference";
+  if (a.status === "servico") return "servico";
+  if (a.appointmentServiceType === "gabaritagem") return "gabaritagem";
+  if (
+    a.appointmentServiceType === "alinhamento_balanceamento" ||
+    a.appointmentServiceType === "alinhamento_3d"
+  )
+    return "alinhamento-balanceamento";
+  if (a.status === "avaliou") return "orcamento";
+  if (
+    (a.serviceScheduled && a.status === "agendado") ||
+    !!a.serviceAppointmentId
+  )
+    return "scheduled-service";
+  if (a.inProgress) return "inprogress";
+  return a.status;
+}
 const agendaStatusLabel = (a: Appt) => {
   if (isEmployeeAbsence(a)) return "AUSENTE";
   if (a.budget?.processStatus === "Finalizado")
@@ -5124,7 +5135,15 @@ function Agenda({
         .day article .appointment-internal-note b{font-weight:900}
         .day article .appointment-customer-note{display:block;white-space:pre-wrap}
         .app.dark .day article .appointment-internal-note{background:#493713;color:#ffe29a!important}
-        .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        .week-appointment.avaliou{border-left-color:#d6a000;background:#fff9dc}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#6d28d9;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.garantia{border-left-color:#b45309;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        .week-appointment.servico,.days span.servico,.day article.servico{border-color:#159447!important;border-left-color:#159447!important;background:#e6f7ec!important;color:#14532d!important}
+        .week-appointment.revisao,.days span.revisao,.day article.revisao{border-color:#9b5de5!important;border-left-color:#9b5de5!important;background:#f3e8ff!important;color:#4c1d75!important}
+        .week-appointment.retorno,.days span.retorno,.day article.retorno{border-color:#f97316!important;border-left-color:#f97316!important;background:#fff0e5!important;color:#7c2d12!important}
+        .week-appointment.orcamento,.days span.orcamento,.day article.orcamento{border-color:#d6a000!important;border-left-color:#d6a000!important;background:#fff8cf!important;color:#713f12!important}
+        .week-appointment.gabaritagem,.days span.gabaritagem,.day article.gabaritagem{border-color:#db2777!important;border-left-color:#db2777!important;background:#fce7f3!important;color:#831843!important}
+        .week-appointment.alinhamento-balanceamento,.days span.alinhamento-balanceamento,.day article.alinhamento-balanceamento{border-color:#0891b2!important;border-left-color:#0891b2!important;background:#e6f8fb!important;color:#164e63!important}
+        .week-appointment.scheduled-service,.days span.scheduled-service,.day article.scheduled-service{border-color:#2563eb!important;border-left-color:#2563eb!important;background:#eaf2ff!important;color:#1e3a8a!important}
+        .dot.approved-dot{background:#159447}.dot.review-dot{background:#9b5de5}.dot.return-dot{background:#f97316}.dot.quote-dot{background:#d6a000}.dot.gabaritagem-dot{background:#db2777}.dot.alignment-dot{background:#0891b2}
         .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}
         .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:#4d171b!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
@@ -5139,11 +5158,13 @@ function Agenda({
         <b>Agenda Monocenter</b>
         <span>
           <i className="dot yellow" /> Aguardando orçamento{" "}
-          <i className="dot green" /> Serviço aprovado{" "}
+          <i className="dot approved-dot" /> Serviço aprovado{" "}
           <i className="dot conference-dot" /> Conferência{" "}
-          <i className="dot red" /> Faltou <i className="dot purple" /> Retorno{" "}
-          <i className="dot orange" /> Garantia <i className="dot blue" />{" "}
-          Revisão 30 dias
+          <i className="dot red" /> Faltou <i className="dot return-dot" /> Retorno{" "}
+          <i className="dot orange" /> Garantia <i className="dot review-dot" />{" "}
+          Revisão 30 dias <i className="dot quote-dot" /> Orçamento{" "}
+          <i className="dot gabaritagem-dot" /> Gabaritagem{" "}
+          <i className="dot alignment-dot" /> Alinhamento e balanceamento{" "}
           <i className="dot completed" /> Concluído
           <i className="dot scheduled-service-dot" /> Serviço agendado
           <i className="shop-line" /> Na oficina
@@ -10115,7 +10136,7 @@ function Reports({
               .workshop-map-panel{overflow:hidden}.workshop-map-help{max-width:660px;color:#64748b;font-size:12px;line-height:1.45}.workshop-layout{display:grid;grid-template-columns:minmax(430px,1.5fr) minmax(300px,.8fr);gap:18px;align-items:start}.workshop-map{position:relative;width:100%;max-width:780px;margin:0 auto;border:1px solid #cbd5e1;border-radius:14px;background:#e5e7eb;box-shadow:0 8px 24px #0f172a18;overflow:hidden}.workshop-map>.workshop-floorplan{position:relative!important;display:block!important;width:100%!important;height:auto!important}.workshop-map-marker{position:absolute;z-index:3;width:18%;min-width:98px;height:120px;transform:translate(-50%,-50%);border:0;background:transparent;padding:0;cursor:pointer}.workshop-vehicle{display:grid;justify-items:center;gap:2px}.workshop-vehicle-art{position:relative;width:var(--car-width,122px);height:var(--car-height,78px);margin:26px 0;transform:rotate(var(--car-rotation,90deg));filter:drop-shadow(0 4px 5px #0009)}.workshop-vehicle-art>span{position:absolute;inset:0;background:var(--vehicle-color);-webkit-mask:url('/veiculo-vista-superior.png') center/contain no-repeat;mask:url('/veiculo-vista-superior.png') center/contain no-repeat}.workshop-vehicle-art img{object-fit:contain;mix-blend-mode:multiply}.workshop-vehicle-label{display:grid;width:100%;max-width:136px;padding:5px 6px;border:1px solid #ffffff80;border-radius:6px;background:#101923d9;color:#fff;box-shadow:0 2px 8px #0007;text-align:center;line-height:1.1;backdrop-filter:blur(3px)}.workshop-vehicle-label strong{overflow:hidden;color:#ffd43b;font-size:8px;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}.workshop-vehicle-label b{margin-top:2px;font-size:10px;letter-spacing:.5px}.workshop-vehicle-label .workshop-vehicle-model{display:block;overflow:visible;margin-top:3px;color:#fff;font-size:8px;font-weight:900;line-height:1.15;white-space:normal}.workshop-map-marker .workshop-vehicle{position:relative;width:100%;height:100%}.workshop-map-marker .workshop-vehicle-art{position:absolute;left:50%;top:50%;margin:0;transform:translate(-50%,-50%) rotate(var(--car-rotation,90deg))}.workshop-map-marker .workshop-vehicle-label{position:absolute;left:50%;top:calc(50% + var(--label-offset,64px));transform:translateX(-50%)}.workshop-map-marker:focus-visible{outline:3px solid #168b4b;outline-offset:3px;border-radius:8px}.workshop-position-list{display:grid;gap:9px;max-height:980px;overflow:auto;padding-right:3px}.workshop-position-card{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:center;padding:10px;border:1px solid #d8e0e8;border-radius:11px;background:#fff}.workshop-position-card .workshop-vehicle-art{width:66px;height:43px;margin:0;transform:none}.workshop-position-card .workshop-vehicle-label{display:none}.workshop-position-info{display:grid;gap:4px;min-width:0}.workshop-position-info>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info .workshop-card-vehicle{display:block;overflow:hidden;color:#111d2b;font-size:12px;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info small{color:#64748b}.workshop-position-info label{display:flex;align-items:center;gap:7px;margin-top:3px;color:#334155;font-size:11px;font-weight:900}.workshop-position-info select{min-width:0;flex:1;padding:7px;border:1px solid #aab6c4;border-radius:7px;background:#fff;font-weight:800}.workshop-position-actions{display:flex;gap:6px;margin-top:3px}.workshop-position-actions button{padding:6px 8px;font-size:10px}.workshop-position-updated{font-size:9px!important}.workshop-empty{padding:18px;border:1px dashed #aab6c4;border-radius:10px;background:#f8fafc;color:#64748b;text-align:center}.app.dark .workshop-position-card,.app.dark .workshop-position-info select{background:#111c29;color:#fff}.app.dark .workshop-position-info .workshop-card-vehicle{color:#fff}.app.dark .workshop-map-help,.app.dark .workshop-position-info small{color:#aeb9c7}@media(max-width:1000px){.workshop-layout{grid-template-columns:1fr}.workshop-position-list{max-height:none}.workshop-position-card{grid-template-columns:80px 1fr}}@media(max-width:620px){.workshop-map-wrap{overflow-x:auto;padding-bottom:8px}.workshop-map{min-width:720px}.workshop-position-card{grid-template-columns:70px 1fr}.workshop-position-card .workshop-vehicle-art{width:58px;height:39px}}
             `}</style>
             <style>{`
-              .workshop-page{height:calc(100vh - 80px);padding:8px 12px!important;overflow:hidden}.workshop-page .report-screen{width:100%!important;max-width:none!important;margin:0!important}.workshop-page .workshop-map-panel{margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}.workshop-page .workshop-map-panel>.management-report-head{display:none!important}.workshop-page .workshop-layout{position:relative;display:grid!important;grid-template-columns:1fr!important;place-items:start center;min-height:calc(100vh - 100px);gap:0!important}.workshop-page .workshop-map-wrap{display:flex;width:100%;justify-content:center;overflow:visible}.workshop-page .workshop-map{width:min(100%,calc((100vh - 112px)*1.5142));max-width:none;margin:0 auto}.workshop-vehicle-drawer{position:absolute;z-index:30;top:8px;right:8px;width:min(430px,42vw);max-height:calc(100vh - 135px);border:1px solid #b8c4d1;border-radius:12px;background:#fffffff2;box-shadow:0 12px 35px #0f172a38;overflow:hidden;backdrop-filter:blur(8px)}.workshop-vehicle-drawer:not([open]){width:auto}.workshop-vehicle-drawer>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:205px;padding:11px 14px;background:#111d2b;color:#fff;font-size:13px;font-weight:900;cursor:pointer;list-style:revert}.workshop-vehicle-drawer>summary b{display:grid;place-items:center;min-width:25px;height:25px;border-radius:999px;background:#e31b23}.workshop-vehicle-drawer .workshop-position-list{max-height:calc(100vh - 190px);padding:10px;overflow:auto}.app.dark .workshop-vehicle-drawer{background:#111c29f2}@media(max-width:760px){.workshop-page{overflow:auto}.workshop-page .workshop-map{width:100%;min-width:720px}.workshop-vehicle-drawer{position:fixed;top:92px;right:10px;width:calc(100vw - 20px);max-height:calc(100vh - 110px)}}
+              .workshop-page{height:calc(100vh - 80px);padding:8px 12px!important;overflow:hidden}.workshop-page .report-screen{width:100%!important;max-width:none!important;margin:0!important}.workshop-page .workshop-map-panel{margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}.workshop-page .workshop-map-panel>.management-report-head{display:none!important}.workshop-page .workshop-layout{position:relative;display:grid!important;grid-template-columns:1fr!important;place-items:start center;min-height:calc(100vh - 100px);gap:0!important}.workshop-page .workshop-map-wrap{display:flex;width:100%;justify-content:center;overflow:visible}.workshop-page .workshop-map{width:min(100%,calc((100vh - 112px)*1.5142));max-width:none;margin:0 auto}.workshop-vehicle-drawer{position:absolute;z-index:30;top:8px;right:8px;width:min(430px,42vw);max-height:calc(100vh - 135px);border:1px solid #b8c4d1;border-radius:12px;background:#fffffff2;box-shadow:0 12px 35px #0f172a38;overflow:hidden;backdrop-filter:blur(8px)}.workshop-vehicle-drawer:not([open]){width:auto}.workshop-vehicle-drawer>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:205px;padding:11px 14px;background:#111d2b;color:#fff;font-size:13px;font-weight:900;cursor:pointer;list-style:revert}.workshop-vehicle-drawer>summary b{display:grid;place-items:center;min-width:25px;height:25px;border-radius:999px;background:#e31b23}.workshop-vehicle-drawer .workshop-position-list{max-height:calc(100vh - 190px);padding:10px;overflow:auto}.workshop-vehicle-label strong{color:#fff}.workshop-vehicle-label.servico{background:#116b37e8}.workshop-vehicle-label.revisao{background:#7040a7e8}.workshop-vehicle-label.retorno{background:#c6530be8}.workshop-vehicle-label.orcamento,.workshop-vehicle-label.avaliou{background:#9a7200e8}.workshop-vehicle-label.gabaritagem{background:#a8175de8}.workshop-vehicle-label.alinhamento-balanceamento{background:#08758fe8}.workshop-vehicle-label.scheduled-service{background:#1d4ed8e8}.workshop-position-card.servico{border-left:5px solid #159447}.workshop-position-card.revisao{border-left:5px solid #9b5de5}.workshop-position-card.retorno{border-left:5px solid #f97316}.workshop-position-card.orcamento,.workshop-position-card.avaliou{border-left:5px solid #d6a000}.workshop-position-card.gabaritagem{border-left:5px solid #db2777}.workshop-position-card.alinhamento-balanceamento{border-left:5px solid #0891b2}.workshop-position-card.scheduled-service{border-left:5px solid #2563eb}.app.dark .workshop-vehicle-drawer{background:#111c29f2}@media(max-width:760px){.workshop-page{overflow:auto}.workshop-page .workshop-map{width:100%;min-width:720px}.workshop-vehicle-drawer{position:fixed;top:92px;right:10px;width:calc(100vw - 20px);max-height:calc(100vh - 110px)}}
             `}</style>
             <div className="management-report-head">
               <span>
@@ -10188,7 +10209,10 @@ function Reports({
                       catalog?.[1] ||
                       "Marca não informada";
                     return (
-                      <article className="workshop-position-card" key={appointment.id}>
+                      <article
+                        className={`workshop-position-card ${apptClass(appointment)}`}
+                        key={appointment.id}
+                      >
                         <VehicleTopView appointment={appointment} />
                         <div className="workshop-position-info">
                           <b>{appointment.client}</b>
