@@ -8039,7 +8039,7 @@ function PurchaseOrders({
         <div className="purchase-os-list">
           {groups.map((group: any) => {
             const isClosed = group.savedState.closed,
-              isExpanded = expanded[group.ownerId] ?? !isClosed,
+              isExpanded = expanded[group.ownerId] ?? false,
               pendingToClose = group.rows.filter(
                 (row: any) => !checks[row.key]?.received,
               ).length;
