@@ -7776,7 +7776,23 @@ function PurchaseOrders({
   currentUser,
 }: any) {
   const [filter, setFilter] = useState<"all" | "open" | "closed">("all"),
-    [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    [expanded, setExpanded] = useState<Record<string, boolean>>({}),
+    [printGroup, setPrintGroup] = useState<any>(null);
+  useEffect(() => {
+    if (!printGroup) return;
+    document.body.classList.add("print-purchase-order");
+    const timer = window.setTimeout(() => window.print(), 80),
+      finish = () => {
+        document.body.classList.remove("print-purchase-order");
+        setPrintGroup(null);
+      };
+    window.addEventListener("afterprint", finish, { once: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("afterprint", finish);
+      document.body.classList.remove("print-purchase-order");
+    };
+  }, [printGroup]);
   const rows = useMemo(() => {
     const unique = new Map<string, any>();
     for (const appointment of appointments as Appt[]) {
@@ -7917,6 +7933,68 @@ function PurchaseOrders({
     };
   return (
     <section className="page purchase-page">
+      <style>{`
+        .purchase-print-sheet{display:none}
+        .purchase-order-actions .print-order{border-color:#2563eb;background:#eef5ff;color:#174ea6}
+        @media print{
+          @page{size:A5 portrait;margin:7mm}
+          body.print-purchase-order{margin:0!important;background:#fff!important;color:#111!important}
+          body.print-purchase-order *{visibility:hidden!important}
+          body.print-purchase-order .purchase-print-sheet,
+          body.print-purchase-order .purchase-print-sheet *{visibility:visible!important}
+          body.print-purchase-order .purchase-print-sheet{display:block!important;position:absolute;inset:0;width:134mm;min-height:196mm;margin:0;padding:0;background:#fff;color:#111;font-family:Arial,sans-serif}
+          .purchase-print-head{display:grid;grid-template-columns:1fr auto;gap:4mm;align-items:start;padding-bottom:3mm;border-bottom:1.5px solid #111}
+          .purchase-print-brand{display:grid;gap:1mm}.purchase-print-brand b{font-size:15px;letter-spacing:.04em}.purchase-print-brand small{font-size:8px;text-transform:uppercase}
+          .purchase-print-title{text-align:right}.purchase-print-title b{display:block;font-size:14px}.purchase-print-title span{font-size:9px}
+          .purchase-print-meta{display:grid;grid-template-columns:1fr 1fr;gap:2mm 5mm;padding:3mm 0;font-size:9px}.purchase-print-meta span{display:grid;gap:.5mm}.purchase-print-meta small{font-size:7px;font-weight:700;text-transform:uppercase}.purchase-print-meta b{font-size:9px}
+          .purchase-print-table{width:100%;border-collapse:collapse;font-size:8px}.purchase-print-table th,.purchase-print-table td{padding:2mm 1.5mm;border:1px solid #888;vertical-align:top}.purchase-print-table th{background:#eceff3!important;font-size:7px;text-align:left;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}.purchase-print-table .number{text-align:right;white-space:nowrap}.purchase-print-table small{display:block;margin-top:.5mm;color:#444;font-size:7px}
+          .purchase-print-total{display:flex;justify-content:flex-end;gap:5mm;padding:3mm 1mm;border-bottom:1px solid #999;font-size:11px}.purchase-print-total strong{min-width:28mm;text-align:right}
+          .purchase-print-note{min-height:19mm;padding:3mm 0;border-bottom:1px solid #999;font-size:8px}.purchase-print-note b{display:block;margin-bottom:2mm;text-transform:uppercase}.purchase-print-note p{margin:0;white-space:pre-wrap}
+          .purchase-print-signatures{display:grid;grid-template-columns:1fr 1fr;gap:10mm;margin-top:14mm;font-size:8px;text-align:center}.purchase-print-signatures span{padding-top:2mm;border-top:1px solid #333}
+          .purchase-print-footer{position:absolute;right:0;bottom:0;left:0;display:flex;justify-content:space-between;border-top:1px solid #bbb;padding-top:2mm;color:#555;font-size:7px}
+        }
+      `}</style>
+      {printGroup && (
+        <article className="purchase-print-sheet">
+          <header className="purchase-print-head">
+            <span className="purchase-print-brand">
+              <b>MONOCENTER</b>
+              <small>Alinhamento Técnico</small>
+            </span>
+            <span className="purchase-print-title">
+              <b>PEDIDO DE COMPRA</b>
+              <span>OS {printGroup.appointment.workOrder || "Sem número"}</span>
+            </span>
+          </header>
+          <section className="purchase-print-meta">
+            <span><small>Cliente</small><b>{printGroup.appointment.client}</b></span>
+            <span><small>Data do serviço</small><b>{printGroup.serviceDate ? new Date(`${printGroup.serviceDate}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"}</b></span>
+            <span><small>Veículo</small><b>{printGroup.appointment.vehicle || "Não informado"}</b></span>
+            <span><small>Placa</small><b>{printGroup.appointment.plate || "Não informada"}</b></span>
+          </section>
+          <table className="purchase-print-table">
+            <thead><tr><th>Peça / marca</th><th>Fornecedor / código</th><th>Qtd.</th><th>Custo unit.</th><th>Total</th></tr></thead>
+            <tbody>
+              {printGroup.rows.map(({ key, part }: any) => (
+                <tr key={key}>
+                  <td><b>{part.item}</b><small>{part.brand || "Marca não informada"}</small></td>
+                  <td><b>{part.supplier || "Não informado"}</b><small>Cód. {part.code || "não informado"}</small></td>
+                  <td className="number">{part.qty}</td>
+                  <td className="number">{brl(Number(part.cost) || 0)}</td>
+                  <td className="number"><b>{brl((Number(part.qty) || 0) * (Number(part.cost) || 0))}</b></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="purchase-print-total">
+            <b>Total do pedido</b>
+            <strong>{brl(printGroup.rows.reduce((total: number, row: any) => total + (Number(row.part.qty) || 0) * (Number(row.part.cost) || 0), 0))}</strong>
+          </div>
+          <div className="purchase-print-note"><b>Observações</b><p>{printGroup.rows.map(({ key }: any) => checks[key]?.note).filter(Boolean).join("\n") || ""}</p></div>
+          <div className="purchase-print-signatures"><span>Responsável pela compra</span><span>Conferência / recebimento</span></div>
+          <footer className="purchase-print-footer"><span>Impresso em {new Date().toLocaleString("pt-BR")}</span><span>Formato A5 · meia folha A4</span></footer>
+        </article>
+      )}
       <div className="purchase-summary">
         <button
           className={filter === "all" ? "active" : ""}
@@ -8129,6 +8207,13 @@ function PurchaseOrders({
                 })}
               </div>
               <footer className="purchase-order-actions">
+                <button
+                  type="button"
+                  className="print-order"
+                  onClick={() => setPrintGroup(group)}
+                >
+                  Imprimir pedido
+                </button>
                 {isClosed ? (
                   <>
                     <span className="purchase-order-saved">
