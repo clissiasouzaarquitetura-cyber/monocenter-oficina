@@ -326,6 +326,16 @@ type View =
   | "relatorios"
   | "historico"
   | "config";
+const RESTORABLE_VIEWS = new Set<View>([
+  "agenda",
+  "veiculos",
+  "laudos",
+  "compras",
+  "relatorios",
+  "historico",
+  "config",
+]);
+const LAST_VIEW_STORAGE_KEY = "monocenter:last-main-view:v1";
 type GeometryReportData = {
   schemaVersion?: number;
   values: Record<string, any>;
@@ -678,6 +688,7 @@ let DISPLAY_APPT: Appt = EMPTY_APPT;
 export default function App({ initialState, user, onLogout }: any) {
   const shared = initialState ?? {};
   const [view, setView] = useState<View>("agenda"),
+    [viewRestored, setViewRestored] = useState(false),
     [reportStartMode, setReportStartMode] = useState<
       "registros" | "abertos" | "andamento"
     >("registros"),
@@ -775,6 +786,15 @@ export default function App({ initialState, user, onLogout }: any) {
   useEffect(() => {
     localStorage.setItem("monocenter-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
+  useEffect(() => {
+    const savedView = localStorage.getItem(LAST_VIEW_STORAGE_KEY) as View | null;
+    if (savedView && RESTORABLE_VIEWS.has(savedView)) setView(savedView);
+    setViewRestored(true);
+  }, []);
+  useEffect(() => {
+    if (viewRestored && RESTORABLE_VIEWS.has(view))
+      localStorage.setItem(LAST_VIEW_STORAGE_KEY, view);
+  }, [view, viewRestored]);
   const defaultTemplates = {
     lembrete:
       "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!",
