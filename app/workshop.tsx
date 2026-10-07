@@ -7937,26 +7937,29 @@ function PurchaseOrders({
         .purchase-print-sheet{display:none}
         .purchase-order-actions .print-order{border-color:#2563eb;background:#eef5ff;color:#174ea6}
         @media print{
-          @page{size:A5 portrait;margin:7mm}
-          body.print-purchase-order{margin:0!important;background:#fff!important;color:#111!important}
+          @page{size:A4 portrait;margin:0}
+          html:has(body.print-purchase-order),body.print-purchase-order{width:210mm!important;height:148.5mm!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important;color:#111!important}
           body.print-purchase-order *{visibility:hidden!important}
           body.print-purchase-order .purchase-print-sheet,
           body.print-purchase-order .purchase-print-sheet *{visibility:visible!important}
-          body.print-purchase-order .purchase-print-sheet{display:block!important;position:absolute;inset:0;width:134mm;min-height:196mm;margin:0;padding:0;background:#fff;color:#111;font-family:Arial,sans-serif}
-          .purchase-print-head{display:grid;grid-template-columns:1fr auto;gap:4mm;align-items:start;padding-bottom:3mm;border-bottom:1.5px solid #111}
+          body.print-purchase-order .purchase-page{position:static!important;width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:visible!important}
+          body.print-purchase-order .purchase-page>*:not(.purchase-print-sheet):not(style){display:none!important}
+          body.print-purchase-order .purchase-print-sheet{display:block!important;position:fixed!important;z-index:999999;top:0!important;left:0!important;width:210mm!important;height:148.5mm!important;min-height:0!important;box-sizing:border-box;margin:0!important;padding:7mm 9mm 6mm!important;overflow:hidden!important;background:#fff!important;color:#111!important;font-family:Arial,sans-serif}
+          .purchase-print-head{display:grid!important;grid-template-columns:1fr auto;gap:4mm;align-items:start;padding-bottom:2mm;border-bottom:1.5px solid #111}
           .purchase-print-brand{display:grid;gap:1mm}.purchase-print-brand b{font-size:15px;letter-spacing:.04em}.purchase-print-brand small{font-size:8px;text-transform:uppercase}
           .purchase-print-title{text-align:right}.purchase-print-title b{display:block;font-size:14px}.purchase-print-title span{font-size:9px}
-          .purchase-print-meta{display:grid;grid-template-columns:1fr 1fr;gap:2mm 5mm;padding:3mm 0;font-size:9px}.purchase-print-meta span{display:grid;gap:.5mm}.purchase-print-meta small{font-size:7px;font-weight:700;text-transform:uppercase}.purchase-print-meta b{font-size:9px}
-          .purchase-print-table{width:100%;border-collapse:collapse;font-size:8px}.purchase-print-table th,.purchase-print-table td{padding:2mm 1.5mm;border:1px solid #888;vertical-align:top}.purchase-print-table th{background:#eceff3!important;font-size:7px;text-align:left;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}.purchase-print-table .number{text-align:right;white-space:nowrap}.purchase-print-table small{display:block;margin-top:.5mm;color:#444;font-size:7px}
-          .purchase-print-total{display:flex;justify-content:flex-end;gap:5mm;padding:3mm 1mm;border-bottom:1px solid #999;font-size:11px}.purchase-print-total strong{min-width:28mm;text-align:right}
-          .purchase-print-note{min-height:19mm;padding:3mm 0;border-bottom:1px solid #999;font-size:8px}.purchase-print-note b{display:block;margin-bottom:2mm;text-transform:uppercase}.purchase-print-note p{margin:0;white-space:pre-wrap}
-          .purchase-print-signatures{display:grid;grid-template-columns:1fr 1fr;gap:10mm;margin-top:14mm;font-size:8px;text-align:center}.purchase-print-signatures span{padding-top:2mm;border-top:1px solid #333}
+          .purchase-print-meta{display:grid;grid-template-columns:1.2fr .8fr 1.2fr .8fr;gap:5mm;padding:2.5mm 0;font-size:9px}.purchase-print-meta span{display:grid;gap:.5mm}.purchase-print-meta small{font-size:7px;font-weight:700;text-transform:uppercase}.purchase-print-meta b{font-size:9px}
+          .purchase-print-table{width:100%;border-collapse:collapse;font-size:8px}.purchase-print-table th,.purchase-print-table td{padding:1.4mm 1.5mm;border:1px solid #888;vertical-align:top}.purchase-print-table th{background:#eceff3!important;font-size:7px;text-align:left;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}.purchase-print-table .number{text-align:right;white-space:nowrap}.purchase-print-table small{display:block;margin-top:.3mm;color:#444;font-size:7px}
+          .purchase-print-total{display:flex;justify-content:flex-end;gap:5mm;padding:2mm 1mm;border-bottom:1px solid #999;font-size:10px}.purchase-print-total strong{min-width:28mm;text-align:right}
+          .purchase-print-note{min-height:10mm;padding:2mm 0;border-bottom:1px solid #999;font-size:8px}.purchase-print-note b{display:block;margin-bottom:1mm;text-transform:uppercase}.purchase-print-note p{margin:0;white-space:pre-wrap}
+          .purchase-print-signatures{display:grid;grid-template-columns:1fr 1fr;gap:14mm;margin-top:8mm;font-size:8px;text-align:center}.purchase-print-signatures span{padding-top:1.5mm;border-top:1px solid #333}
           .purchase-print-footer{position:absolute;right:0;bottom:0;left:0;display:flex;justify-content:space-between;border-top:1px solid #bbb;padding-top:2mm;color:#555;font-size:7px}
+          .purchase-print-cut-line{position:fixed!important;z-index:999999;top:148.5mm!important;left:0!important;width:210mm!important;border-top:1px dashed #777!important;visibility:visible!important}
         }
       `}</style>
       {printGroup && (
         <article className="purchase-print-sheet">
-          <header className="purchase-print-head">
+          <div className="purchase-print-head">
             <span className="purchase-print-brand">
               <b>MONOCENTER</b>
               <small>Alinhamento Técnico</small>
@@ -7965,7 +7968,7 @@ function PurchaseOrders({
               <b>PEDIDO DE COMPRA</b>
               <span>OS {printGroup.appointment.workOrder || "Sem número"}</span>
             </span>
-          </header>
+          </div>
           <section className="purchase-print-meta">
             <span><small>Cliente</small><b>{printGroup.appointment.client}</b></span>
             <span><small>Data do serviço</small><b>{printGroup.serviceDate ? new Date(`${printGroup.serviceDate}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"}</b></span>
@@ -7992,7 +7995,8 @@ function PurchaseOrders({
           </div>
           <div className="purchase-print-note"><b>Observações</b><p>{printGroup.rows.map(({ key }: any) => checks[key]?.note).filter(Boolean).join("\n") || ""}</p></div>
           <div className="purchase-print-signatures"><span>Responsável pela compra</span><span>Conferência / recebimento</span></div>
-          <footer className="purchase-print-footer"><span>Impresso em {new Date().toLocaleString("pt-BR")}</span><span>Formato A5 · meia folha A4</span></footer>
+          <div className="purchase-print-footer"><span>Impresso em {new Date().toLocaleString("pt-BR")}</span><span>Metade superior da folha A4</span></div>
+          <div className="purchase-print-cut-line" aria-hidden="true" />
         </article>
       )}
       <div className="purchase-summary">
