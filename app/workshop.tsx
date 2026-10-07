@@ -9746,9 +9746,12 @@ function Reports({
           ? "Troca urgente"
           : "Não avaliado";
   return (
-    <section className="page reports-page">
+    <section
+      className={`page reports-page${initialMode === "andamento" ? " workshop-page" : ""}`}
+    >
       <div className="report-screen">
-        <div className="management-report-tabs">
+        {initialMode !== "andamento" && (
+          <div className="management-report-tabs">
           <button
             className={reportMode === "registros" ? "active" : ""}
             onClick={() => setReportMode("registros")}
@@ -9784,7 +9787,8 @@ function Reports({
           >
             Veículos em andamento
           </button>
-        </div>
+          </div>
+        )}
         {isClissia && reportMode === "semana" && (
           <div className="management-report-panel weekly-report-panel">
             <div className="management-report-head">
@@ -10110,6 +10114,9 @@ function Reports({
             <style>{`
               .workshop-map-panel{overflow:hidden}.workshop-map-help{max-width:660px;color:#64748b;font-size:12px;line-height:1.45}.workshop-layout{display:grid;grid-template-columns:minmax(430px,1.5fr) minmax(300px,.8fr);gap:18px;align-items:start}.workshop-map{position:relative;width:100%;max-width:780px;margin:0 auto;border:1px solid #cbd5e1;border-radius:14px;background:#e5e7eb;box-shadow:0 8px 24px #0f172a18;overflow:hidden}.workshop-map>.workshop-floorplan{position:relative!important;display:block!important;width:100%!important;height:auto!important}.workshop-map-marker{position:absolute;z-index:3;width:18%;min-width:98px;height:120px;transform:translate(-50%,-50%);border:0;background:transparent;padding:0;cursor:pointer}.workshop-vehicle{display:grid;justify-items:center;gap:2px}.workshop-vehicle-art{position:relative;width:var(--car-width,122px);height:var(--car-height,78px);margin:26px 0;transform:rotate(var(--car-rotation,90deg));filter:drop-shadow(0 4px 5px #0009)}.workshop-vehicle-art>span{position:absolute;inset:0;background:var(--vehicle-color);-webkit-mask:url('/veiculo-vista-superior.png') center/contain no-repeat;mask:url('/veiculo-vista-superior.png') center/contain no-repeat}.workshop-vehicle-art img{object-fit:contain;mix-blend-mode:multiply}.workshop-vehicle-label{display:grid;width:100%;max-width:136px;padding:5px 6px;border:1px solid #ffffff80;border-radius:6px;background:#101923d9;color:#fff;box-shadow:0 2px 8px #0007;text-align:center;line-height:1.1;backdrop-filter:blur(3px)}.workshop-vehicle-label strong{overflow:hidden;color:#ffd43b;font-size:8px;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}.workshop-vehicle-label b{margin-top:2px;font-size:10px;letter-spacing:.5px}.workshop-vehicle-label .workshop-vehicle-model{display:block;overflow:visible;margin-top:3px;color:#fff;font-size:8px;font-weight:900;line-height:1.15;white-space:normal}.workshop-map-marker .workshop-vehicle{position:relative;width:100%;height:100%}.workshop-map-marker .workshop-vehicle-art{position:absolute;left:50%;top:50%;margin:0;transform:translate(-50%,-50%) rotate(var(--car-rotation,90deg))}.workshop-map-marker .workshop-vehicle-label{position:absolute;left:50%;top:calc(50% + var(--label-offset,64px));transform:translateX(-50%)}.workshop-map-marker:focus-visible{outline:3px solid #168b4b;outline-offset:3px;border-radius:8px}.workshop-position-list{display:grid;gap:9px;max-height:980px;overflow:auto;padding-right:3px}.workshop-position-card{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:center;padding:10px;border:1px solid #d8e0e8;border-radius:11px;background:#fff}.workshop-position-card .workshop-vehicle-art{width:66px;height:43px;margin:0;transform:none}.workshop-position-card .workshop-vehicle-label{display:none}.workshop-position-info{display:grid;gap:4px;min-width:0}.workshop-position-info>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info .workshop-card-vehicle{display:block;overflow:hidden;color:#111d2b;font-size:12px;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info small{color:#64748b}.workshop-position-info label{display:flex;align-items:center;gap:7px;margin-top:3px;color:#334155;font-size:11px;font-weight:900}.workshop-position-info select{min-width:0;flex:1;padding:7px;border:1px solid #aab6c4;border-radius:7px;background:#fff;font-weight:800}.workshop-position-actions{display:flex;gap:6px;margin-top:3px}.workshop-position-actions button{padding:6px 8px;font-size:10px}.workshop-position-updated{font-size:9px!important}.workshop-empty{padding:18px;border:1px dashed #aab6c4;border-radius:10px;background:#f8fafc;color:#64748b;text-align:center}.app.dark .workshop-position-card,.app.dark .workshop-position-info select{background:#111c29;color:#fff}.app.dark .workshop-position-info .workshop-card-vehicle{color:#fff}.app.dark .workshop-map-help,.app.dark .workshop-position-info small{color:#aeb9c7}@media(max-width:1000px){.workshop-layout{grid-template-columns:1fr}.workshop-position-list{max-height:none}.workshop-position-card{grid-template-columns:80px 1fr}}@media(max-width:620px){.workshop-map-wrap{overflow-x:auto;padding-bottom:8px}.workshop-map{min-width:720px}.workshop-position-card{grid-template-columns:70px 1fr}.workshop-position-card .workshop-vehicle-art{width:58px;height:39px}}
             `}</style>
+            <style>{`
+              .workshop-page{height:calc(100vh - 80px);padding:8px 12px!important;overflow:hidden}.workshop-page .report-screen{width:100%!important;max-width:none!important;margin:0!important}.workshop-page .workshop-map-panel{margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}.workshop-page .workshop-map-panel>.management-report-head{display:none!important}.workshop-page .workshop-layout{position:relative;display:grid!important;grid-template-columns:1fr!important;place-items:start center;min-height:calc(100vh - 100px);gap:0!important}.workshop-page .workshop-map-wrap{display:flex;width:100%;justify-content:center;overflow:visible}.workshop-page .workshop-map{width:min(100%,calc((100vh - 112px)*.6604));max-width:none;margin:0 auto}.workshop-vehicle-drawer{position:absolute;z-index:30;top:8px;right:8px;width:min(430px,42vw);max-height:calc(100vh - 135px);border:1px solid #b8c4d1;border-radius:12px;background:#fffffff2;box-shadow:0 12px 35px #0f172a38;overflow:hidden;backdrop-filter:blur(8px)}.workshop-vehicle-drawer:not([open]){width:auto}.workshop-vehicle-drawer>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:205px;padding:11px 14px;background:#111d2b;color:#fff;font-size:13px;font-weight:900;cursor:pointer;list-style:revert}.workshop-vehicle-drawer>summary b{display:grid;place-items:center;min-width:25px;height:25px;border-radius:999px;background:#e31b23}.workshop-vehicle-drawer .workshop-position-list{max-height:calc(100vh - 190px);padding:10px;overflow:auto}.app.dark .workshop-vehicle-drawer{background:#111c29f2}@media(max-width:760px){.workshop-page{overflow:auto}.workshop-page .workshop-map{width:min(100%,calc((100vh - 125px)*.6604));min-width:0}.workshop-vehicle-drawer{position:fixed;top:92px;right:10px;width:calc(100vw - 20px);max-height:calc(100vh - 110px)}}
+            `}</style>
             <div className="management-report-head">
               <span>
                 <h2>Veículos na oficina</h2>
@@ -10167,7 +10174,12 @@ function Reports({
                     })}
                 </div>
               </div>
-              <div className="workshop-position-list">
+              <details className="workshop-vehicle-drawer">
+                <summary>
+                  <span>Veículos e posições</span>
+                  <b>{inProgress.length}</b>
+                </summary>
+                <div className="workshop-position-list">
                 {inProgress.length ? (
                   inProgress.map((appointment) => {
                     const catalog = findVehicle(appointment.vehicle || "");
@@ -10252,7 +10264,8 @@ function Reports({
                 ) : (
                   <p className="workshop-empty">Nenhum atendimento em andamento.</p>
                 )}
-              </div>
+                </div>
+              </details>
             </div>
           </div>
         )}
