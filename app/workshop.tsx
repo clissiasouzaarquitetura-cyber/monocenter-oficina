@@ -323,6 +323,7 @@ type View =
   | "torque"
   | "revisao"
   | "compras"
+  | "orcamentos_abertos"
   | "relatorios"
   | "historico"
   | "config";
@@ -331,6 +332,7 @@ const RESTORABLE_VIEWS = new Set<View>([
   "veiculos",
   "laudos",
   "compras",
+  "orcamentos_abertos",
   "relatorios",
   "historico",
   "config",
@@ -1258,6 +1260,7 @@ export default function App({ initialState, user, onLogout }: any) {
     ["proposta", "Proposta", "▤"],
     ["torque", "Conferência", "◇"],
     ["compras", "Pedido de compra", "☑"],
+    ["orcamentos_abertos", "Orçamentos em aberto", "◫"],
     ["relatorios", "Relatórios", "▥"],
     ["historico", "Histórico", "↺"],
     ["config", "Configurações", "⚙"],
@@ -1614,7 +1617,7 @@ export default function App({ initialState, user, onLogout }: any) {
             add={() => setModal(true)}
             showOpenQuotes={() => {
               setReportStartMode("abertos");
-              setView("relatorios");
+              setView("orcamentos_abertos");
               scrollTo(0, 0);
             }}
             showInProgress={() => {
@@ -4102,11 +4105,19 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
-        {(view === "relatorios" || view === "veiculos") && (
+        {(view === "relatorios" ||
+          view === "veiculos" ||
+          view === "orcamentos_abertos") && (
           <Reports
             data={appointments}
             user={user}
-            initialMode={view === "veiculos" ? "andamento" : reportStartMode}
+            initialMode={
+              view === "veiculos"
+                ? "andamento"
+                : view === "orcamentos_abertos"
+                  ? "abertos"
+                  : "registros"
+            }
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
@@ -4280,7 +4291,11 @@ export default function App({ initialState, user, onLogout }: any) {
         )}
         <div className="bottom">
           {nav
-            .filter((n) => !["proposta", "config", "relatorios"].includes(n[0]))
+            .filter((n) =>
+              !["proposta", "config", "relatorios", "orcamentos_abertos"].includes(
+                n[0],
+              ),
+            )
             .map((n) => (
               <button
                 className={view === n[0] ? "on" : ""}
@@ -5188,7 +5203,7 @@ function Agenda({
         .week-appointment.alinhamento-balanceamento,.days span.alinhamento-balanceamento,.day article.alinhamento-balanceamento{border-color:#0891b2!important;border-left-color:#0891b2!important;background:#e6f8fb!important;color:#164e63!important}
         .week-appointment.scheduled-service,.days span.scheduled-service,.day article.scheduled-service{border-color:#2563eb!important;border-left-color:#2563eb!important;background:#eaf2ff!important;color:#1e3a8a!important}
         .dot.approved-dot{background:#159447}.dot.review-dot{background:#9b5de5}.dot.return-dot{background:#f97316}.dot.quote-dot{background:#d6a000}.dot.gabaritagem-dot{background:#db2777}.dot.alignment-dot{background:#0891b2}
-        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}
+        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}.day article .open-quote-badge{display:inline-flex;width:max-content;margin-top:4px;padding:3px 8px;border-radius:999px;background:#9a7200;color:#fff!important;font-size:9px;font-weight:900;letter-spacing:.2px}
         .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:#4d171b!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
@@ -5896,6 +5911,15 @@ function Agenda({
                     a.budget?.processStatus !== "Finalizado" && (
                       <small className="quote-waiting">
                         {quoteWaitingLabel(a)}
+                      </small>
+                    )}
+                  {a.type === "cliente" &&
+                    a.status === "avaliou" &&
+                    a.quoteFollowUpDecision !== "declined" &&
+                    !a.serviceAppointmentId &&
+                    a.budget?.processStatus !== "Finalizado" && (
+                      <small className="open-quote-badge">
+                        ORÇAMENTO EM ABERTO
                       </small>
                     )}
                   {a.quoteFollowUpDecision === "declined" && (
@@ -10035,7 +10059,7 @@ function Reports({
       className={`page reports-page${initialMode === "andamento" ? " workshop-page" : ""}`}
     >
       <div className="report-screen">
-        {initialMode !== "andamento" && (
+        {initialMode !== "andamento" && initialMode !== "abertos" && (
           <div className="management-report-tabs">
           <button
             className={reportMode === "registros" ? "active" : ""}
@@ -10183,6 +10207,29 @@ function Reports({
           </div>
         )}
         {reportMode === "abertos" && (
+          <>
+          <div className="open-quotes-print-sheet" aria-hidden="true">
+            <div className="open-quotes-print-header">
+              <span><b>MONOCENTER</b><small>Centro Automotivo</small></span>
+              <div>
+                <h1>Orçamentos em aberto</h1>
+                <p>Emitido em {new Date().toLocaleDateString("pt-BR")} · {openQuotes.length} registros</p>
+              </div>
+            </div>
+            <table>
+              <thead><tr><th>Cliente / contato</th><th>Veículo</th><th>Entrada</th><th>Lembrete</th><th>Situação</th></tr></thead>
+              <tbody>{openQuotes.map((a) => {
+                const reminderDue = !!a.quoteFollowUpDueDate && a.quoteFollowUpDueDate <= iso(new Date());
+                return <tr key={`print-${a.id}`}>
+                  <td><b>{a.client}</b><small>{a.phone || "Contato não informado"}</small></td>
+                  <td><b>{a.vehicle || "Veículo não informado"}</b><small>{a.plate || "Sem placa"}</small></td>
+                  <td>{new Date(`${a.date}T12:00:00`).toLocaleDateString("pt-BR")}</td>
+                  <td className={reminderDue ? "due" : ""}>{a.quoteFollowUpDueDate ? new Date(`${a.quoteFollowUpDueDate}T12:00:00`).toLocaleDateString("pt-BR") : "Não programado"}</td>
+                  <td>{a.quoteFollowUpDecision === "message" ? "Enviar mensagem" : "Aguardando retorno"}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>
           <div className="management-report-panel open-quotes-panel">
             <style>{`
               .compact-quotes-wrap{overflow-x:auto;border:1px solid #d9e1ea;border-radius:10px;background:#fff}
@@ -10198,6 +10245,7 @@ function Reports({
               .compact-reminder-control{display:flex;align-items:center;gap:5px}
               .compact-reminder-control input{width:56px!important;min-width:56px;padding:5px 6px;text-align:center}
               .compact-reminder-control button{padding:6px 8px;font-size:10px}
+              .compact-reminder-exact{display:flex;align-items:center;gap:6px}.compact-reminder-exact input{width:136px!important;padding:5px 6px;font-size:10px}.compact-reminder-exact small{font-weight:800}
               .compact-reminder-date{font-weight:800}
               .compact-reminder-date.due{color:#c51d25}
               .compact-quote-decision{display:grid;gap:5px}
@@ -10212,6 +10260,8 @@ function Reports({
               .declined-quote-row span{display:grid;gap:2px}.declined-quote-row small{color:#64748b}
               .declined-quote-row button{padding:6px 9px;font-size:10px}
               .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
+              .open-quotes-print-sheet{display:none}.open-quotes-reminder-alert{margin:0 0 12px;padding:10px 12px;border:1px solid #efb2b6;border-radius:9px;background:#fff0f1;color:#a3131c;font-size:12px;font-weight:900}.management-report-head .print-open-quotes-button{background:#111d2b;color:#fff}
+              @media print{body.print-open-quotes *{visibility:hidden!important}body.print-open-quotes .open-quotes-print-sheet,body.print-open-quotes .open-quotes-print-sheet *{visibility:visible!important}body.print-open-quotes .open-quotes-print-sheet{display:block!important;position:fixed!important;inset:0!important;width:297mm!important;height:210mm!important;padding:10mm!important;background:#fff!important;color:#111!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.open-quotes-print-header{display:grid;grid-template-columns:52mm 1fr;align-items:center;margin-bottom:6mm;border:1px solid #ced6df;border-bottom:2mm solid #e31b23}.open-quotes-print-header>span{display:grid;padding:5mm;color:#e31b23;font-size:19pt}.open-quotes-print-header>span small{color:#111;font-size:8pt}.open-quotes-print-header>div{padding:4mm;border-left:1px solid #ced6df}.open-quotes-print-header h1{margin:0;font-size:18pt}.open-quotes-print-header p{margin:1mm 0 0;color:#526274;font-size:8pt}.open-quotes-print-sheet table{width:100%;border-collapse:collapse;font-size:8pt}.open-quotes-print-sheet th{padding:2.5mm;background:#111d2b;color:#fff;text-align:left}.open-quotes-print-sheet td{padding:2.2mm;border:1px solid #d8e0e8;vertical-align:top}.open-quotes-print-sheet td b,.open-quotes-print-sheet td small{display:block}.open-quotes-print-sheet td small{margin-top:.8mm;color:#526274}.open-quotes-print-sheet td.due{background:#ffe5e7;color:#a3131c;font-weight:900}@page{size:A4 landscape;margin:0}}
             `}</style>
             <div className="management-report-head">
               <span>
@@ -10223,7 +10273,14 @@ function Reports({
                     : ""}
                 </p>
               </span>
+              <button className="print-open-quotes-button" onClick={() => {
+                document.body.classList.add("print-open-quotes");
+                window.addEventListener("afterprint", () => document.body.classList.remove("print-open-quotes"), { once: true });
+                setTimeout(() => window.print(), 50);
+                setTimeout(() => document.body.classList.remove("print-open-quotes"), 1200);
+              }}>Imprimir listagem</button>
             </div>
+            {dueQuoteReminders > 0 && <div className="open-quotes-reminder-alert">⚠ {dueQuoteReminders} {dueQuoteReminders === 1 ? "cliente precisa" : "clientes precisam"} de contato hoje.</div>}
             <div className="compact-quotes-wrap">
               <div className="compact-quotes-table">
                 <div className="compact-quotes-head">
@@ -10290,6 +10347,18 @@ function Reports({
                           <button onClick={() => scheduleQuoteReminder(a)}>
                             Programar
                           </button>
+                        </span>
+                        <span className="compact-reminder-exact">
+                          <small>ou data:</small>
+                          <input
+                            type="date"
+                            value={a.quoteFollowUpDueDate || ""}
+                            onChange={(event) => updateQuoteFollowUp(a.id, {
+                              quoteFollowUpDueDate: event.target.value || undefined,
+                              quoteFollowUpDecision: event.target.value ? "message" : undefined,
+                            })}
+                            aria-label={`Data exata do lembrete para ${a.client}`}
+                          />
                         </span>
                         <small
                           className={`compact-reminder-date${reminderDue ? " due" : ""}`}
@@ -10393,6 +10462,7 @@ function Reports({
               </details>
             )}
           </div>
+          </>
         )}
         {reportMode === "andamento" && (
           <div className="management-report-panel workshop-map-panel">
@@ -10776,6 +10846,10 @@ const TITLES: Record<View, [string, string]> = {
   compras: [
     "Pedido de compra",
     "Acompanhe as peças compradas, recebidas e conferidas.",
+  ],
+  orcamentos_abertos: [
+    "Orçamentos em aberto",
+    "Acompanhe retornos, programe lembretes e imprima a listagem.",
   ],
   relatorios: [
     "Relatórios de avaliações",
