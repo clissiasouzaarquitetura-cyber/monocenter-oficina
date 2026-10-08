@@ -5106,14 +5106,14 @@ function Agenda({
         .agenda-grid-semana>.day{position:relative;top:auto;height:auto;max-height:none;overflow-y:visible}
         .calendar-semana{overflow-x:auto!important;padding:0!important}
         .week-timeline{min-width:760px;overflow:hidden;border-radius:11px}
-        .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
+        .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;min-height:82px;border-bottom:1px solid #cfd8e3;background:#fff}
         .week-time-zone{display:flex;align-items:flex-end;justify-content:center;padding:0 4px 9px;color:#64748b;font-size:9px;font-weight:800}
         .week-timeline-head button{display:flex!important;min-width:0;border:0!important;border-left:1px solid #e1e7ee!important;border-radius:0!important;background:#fff!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#172033!important}
         .week-timeline-head button small{text-transform:uppercase;font-size:9px;font-weight:800}
         .week-timeline-head button b{display:grid;width:34px;height:34px;place-items:center;border-radius:50%;font-size:20px}
         .week-timeline-head button.today b{background:#2563eb;color:#fff}
         .week-timeline-head button.selected:not(.today){background:#fff6f6!important}
-        .week-timeline-head button em{max-width:100%;overflow:hidden;color:#c51d25;font-size:8px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
+        .week-timeline-head button em{display:block;max-width:calc(100% - 8px);min-height:18px;overflow:visible;color:#c51d25;font-size:8px;font-style:normal;font-weight:900;line-height:1.1;text-align:center;white-space:normal;overflow-wrap:anywhere}
         .week-timeline-head button.holiday{background:#fff0f2!important;box-shadow:inset 0 -4px #d71920}.week-timeline-head button.holiday small,.week-timeline-head button.holiday em{color:#a50f18!important;font-weight:900}.week-timeline-head button.holiday b{color:#a50f18}.week-timeline-head button.holiday.today b{background:#d71920;color:#fff}.week-timeline-head button.holiday.selected{outline:2px solid #d71920;outline-offset:-2px}
         .week-timeline-body{position:relative!important;min-width:760px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 115px,#dbe3ec 115px,#dbe3ec 116px)}
         .week-time-column{position:absolute!important;inset:0 auto 0 0;width:54px;background:#fff}
