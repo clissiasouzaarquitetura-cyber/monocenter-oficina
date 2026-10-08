@@ -9454,7 +9454,8 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     try {
       const imageUrl = URL.createObjectURL(file);
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const element = new Image();
+        // Usa o elemento nativo: "Image" já é usado pelo componente do Next.
+        const element = document.createElement("img");
         element.onload = () => resolve(element);
         element.onerror = () => reject(new Error("Não foi possível abrir a imagem."));
         element.src = imageUrl;
