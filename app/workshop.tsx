@@ -9227,44 +9227,93 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     ];
     const next: any = {};
     let recognized = 0;
-    definitions.forEach(([index, pattern, single]) => {
-      const line = findGeometryLine(text, pattern);
-      const angles = line.match(/[+-]?\d+[°º]\s*\d*[\'’′\"”″]?/g) || [];
+    const angleValues = (line: string) =>
+      line.match(/[+-]?\d+\s*[°º]\s*\d*[\'’′\"”″]?/g) || [];
+    const applyRow = (index: number, angles: string[], single = false) => {
       if (!single && angles.length >= 6) {
         next[index] = {
           ...(values[index] || {}),
           min: formatAngle(angles[0]),
           max: formatAngle(angles[1]),
-          beforeLeft: formatAngle(angles[angles.length - 4]),
-          afterLeft: formatAngle(angles[angles.length - 3]),
-          beforeRight: formatAngle(angles[angles.length - 2]),
-          afterRight: formatAngle(angles[angles.length - 1]),
+          beforeLeft: formatAngle(angles[2]),
+          beforeRight: formatAngle(angles[3]),
+          afterLeft: formatAngle(angles[4]),
+          afterRight: formatAngle(angles[5]),
         };
         recognized += 4;
-      } else if (single && angles.length >= 4) {
+        return true;
+      }
+      if (single && angles.length >= 4) {
         next[index] = {
           ...(values[index] || {}),
           min: formatAngle(angles[0]),
           max: formatAngle(angles[1]),
-          beforeLeft: formatAngle(angles[angles.length - 2]),
+          beforeLeft: formatAngle(angles[2]),
           beforeRight: "",
-          afterLeft: formatAngle(angles[angles.length - 1]),
+          afterLeft: formatAngle(angles[3]),
           afterRight: "",
         };
         recognized += 2;
-      } else if (!single && angles.length >= 4) {
+        return true;
+      }
+      if (!single && angles.length >= 4) {
         next[index] = {
           ...(values[index] || {}),
           min: formatAngle(angles[0]),
           max: formatAngle(angles[1]),
           beforeLeft: "",
           beforeRight: "",
-          afterLeft: formatAngle(angles[angles.length - 2]),
-          afterRight: formatAngle(angles[angles.length - 1]),
+          afterLeft: formatAngle(angles[2]),
+          afterRight: formatAngle(angles[3]),
         };
         recognized += 2;
+        return true;
       }
+      return false;
+    };
+    definitions.forEach(([index, pattern, single]) => {
+      const line = findGeometryLine(text, pattern);
+      const angles = angleValues(line);
+      if (!single && angles.length >= 6) {
+        applyRow(index, angles, single);
+      } else applyRow(index, angles, single);
     });
+    // Fotos do alinhador geralmente trazem os títulos apenas como "Camber",
+    // "Convergência" etc. Esta segunda leitura usa as seções dianteira/traseira.
+    const plain = text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\r/g, "")
+      .split("\n")
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    const frontAt = plain.findIndex((line) => /roda\s*dianteir|eixo\s*dianteir/i.test(line));
+    const rearAt = plain.findIndex((line) => /roda\s*traseir|eixo\s*traseir/i.test(line));
+    const frontLines = frontAt >= 0 ? plain.slice(frontAt, rearAt >= 0 ? rearAt : undefined) : [];
+    const rearLines = rearAt >= 0 ? plain.slice(rearAt) : [];
+    const readSection = (lines: string[], rows: Array<[number, RegExp, boolean]>) => {
+      rows.forEach(([index, matcher, single]) => {
+        if (next[index]) return;
+        const line = lines.find((candidate) => matcher.test(candidate));
+        if (line) applyRow(index, angleValues(line), single);
+      });
+    };
+    readSection(frontLines, [
+      [3, /converg.*total/i, true],
+      [2, /converg/i, false],
+      [0, /camber|cambagem/i, false],
+      [1, /caster/i, false],
+      [4, /\bkpi\b/i, false],
+      [5, /inclus/i, false],
+      [6, /setback/i, true],
+    ]);
+    readSection(rearLines, [
+      [9, /converg.*total/i, true],
+      [8, /converg/i, false],
+      [7, /camber|cambagem/i, false],
+      [11, /setback/i, true],
+      [10, /impuls|empurr/i, true],
+    ]);
     return { next, recognized };
   };
   const readGeometryMetadata = (text: string) => {
@@ -9401,12 +9450,36 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
   };
   const scanImage = async (file: File) => {
     setReadingPdf(true);
-    setReadMessage("Lendo textos e medidas da imagem do alinhador...");
+    setReadMessage("Melhorando a imagem e lendo textos e medidas do alinhador...");
     try {
+      const imageUrl = URL.createObjectURL(file);
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const element = new Image();
+        element.onload = () => resolve(element);
+        element.onerror = () => reject(new Error("Não foi possível abrir a imagem."));
+        element.src = imageUrl;
+      });
+      const scale = Math.min(4, Math.max(2, 2600 / Math.max(image.naturalWidth, 1)));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.naturalWidth * scale);
+      canvas.height = Math.round(image.naturalHeight * scale);
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("Não foi possível preparar a imagem para leitura.");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+      for (let index = 0; index < pixels.data.length; index += 4) {
+        const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
+        const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.65 + 128));
+        pixels.data[index] = contrast;
+        pixels.data[index + 1] = contrast;
+        pixels.data[index + 2] = contrast;
+      }
+      context.putImageData(pixels, 0, 0);
       const { createWorker }: any = await import("tesseract.js");
       const worker = await createWorker("por");
-      const result = await worker.recognize(file);
+      const result = await worker.recognize(canvas);
       await worker.terminate();
+      URL.revokeObjectURL(imageUrl);
       const text = result.data.text || "";
       const { next, recognized } = readGeometryText(text);
       applyGeometryMetadata(readGeometryMetadata(text));
