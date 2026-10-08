@@ -9200,7 +9200,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       };
     });
   const formatAngle = (raw: string) => {
-    const cleaned = raw.replace(/\s/g, "").replace(",", ".");
+    const cleaned = raw.replace(/\s/g, "").replace(/[oO]/g, "°").replace(",", ".");
     const match = cleaned.match(/([+-]?\d+)[°º](?:(\d+)[\'’′\"”″])?/);
     if (!match) return cleaned;
     const sign = match[1].startsWith("-") ? "-" : "";
@@ -9215,20 +9215,20 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       [0, /camber dianteir|cambagem dianteir/i, false],
       [1, /caster/i, false],
       [2, /converg.ncia dianteira(?! total)/i, false],
-      [3, /converg.ncia total dianteir/i, true],
+      [3, /converg.ncia total dianteir/i, false],
       [4, /\bkpi\b|sai/i, false],
       [5, /angulo de inclusao/i, false],
       [6, /setback dianteir/i, true],
       [7, /camber traseir|cambagem traseir/i, false],
       [8, /converg.ncia traseira(?! total)/i, false],
-      [9, /converg.ncia total traseir/i, true],
+      [9, /converg.ncia total traseir/i, false],
       [10, /angulo de (impulsao|empurrao)/i, true],
       [11, /setback traseir/i, true],
     ];
     const next: any = {};
     let recognized = 0;
     const angleValues = (line: string) =>
-      line.match(/[+-]?\d+\s*[°º]\s*\d*[\'’′\"”″]?/g) || [];
+      line.match(/[+-]?\d+\s*[°ºoO]\s*\d*[\'’′\"”″]?/g) || [];
     const applyRow = (index: number, angles: string[], single = false) => {
       if (!single && angles.length >= 6) {
         next[index] = {
@@ -9251,6 +9251,17 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
           beforeLeft: formatAngle(angles[2]),
           beforeRight: "",
           afterLeft: formatAngle(angles[3]),
+          afterRight: "",
+        };
+        recognized += 2;
+        return true;
+      }
+      if (single && angles.length >= 2) {
+        next[index] = {
+          ...(values[index] || {}),
+          beforeLeft: formatAngle(angles[0]),
+          beforeRight: "",
+          afterLeft: formatAngle(angles[1]),
           afterRight: "",
         };
         recognized += 2;
@@ -9299,7 +9310,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       });
     };
     readSection(frontLines, [
-      [3, /converg.*total/i, true],
+      [3, /converg.*total/i, false],
       [2, /converg/i, false],
       [0, /camber|cambagem/i, false],
       [1, /caster/i, false],
@@ -9308,7 +9319,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       [6, /setback/i, true],
     ]);
     readSection(rearLines, [
-      [9, /converg.*total/i, true],
+      [9, /converg.*total/i, false],
       [8, /converg/i, false],
       [7, /camber|cambagem/i, false],
       [11, /setback/i, true],
@@ -9479,10 +9490,46 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       const { createWorker }: any = await import("tesseract.js");
       const worker = await createWorker("por");
       const result = await worker.recognize(canvas);
-      await worker.terminate();
       URL.revokeObjectURL(imageUrl);
       const text = result.data.text || "";
-      const { next, recognized } = readGeometryText(text);
+      let { next, recognized } = readGeometryText(text);
+      // Segunda passagem: lê cada faixa de números da tabela. Em fotos como a
+      // enviada, os traços da grade fazem o OCR perder os rótulos das linhas.
+      if (recognized < 8 && image.naturalWidth / image.naturalHeight > 1.25) {
+        await worker.setParameters({ tessedit_pageseg_mode: "7" });
+        const rowDefinitions: Array<[string, number]> = [
+          ["Convergência", 0.239], ["Convergência total", 0.296],
+          ["Camber", 0.352], ["Caster", 0.408], ["KPI", 0.465],
+          ["Ângulo de inclusão", 0.522], ["Setback", 0.578],
+          ["__traseira__", 0.665], ["Convergência", 0.752],
+          ["Camber", 0.808], ["Setback", 0.864], ["Ângulo de impulsão", 0.920],
+        ];
+        let syntheticText = "Roda dianteira\n";
+        for (const [label, middle] of rowDefinitions) {
+          if (label === "__traseira__") {
+            syntheticText += "\nRoda traseira\n";
+            continue;
+          }
+          const crop = document.createElement("canvas");
+          crop.width = Math.round(canvas.width * 0.74);
+          crop.height = Math.round(canvas.height * 0.064);
+          const cropContext = crop.getContext("2d");
+          if (!cropContext) continue;
+          const sourceX = Math.round(canvas.width * 0.255);
+          const sourceY = Math.max(0, Math.round(canvas.height * (middle - 0.032)));
+          const sourceWidth = canvas.width - sourceX;
+          const sourceHeight = Math.min(Math.round(canvas.height * 0.064), canvas.height - sourceY);
+          cropContext.drawImage(canvas, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, crop.width, crop.height);
+          const rowResult = await worker.recognize(crop);
+          syntheticText += `${label} ${rowResult.data.text || ""}\n`;
+        }
+        const croppedReading = readGeometryText(syntheticText);
+        if (croppedReading.recognized > recognized) {
+          next = croppedReading.next;
+          recognized = croppedReading.recognized;
+        }
+      }
+      await worker.terminate();
       applyGeometryMetadata(readGeometryMetadata(text));
       setPendingValues(recognized ? next : null);
       setReadMessage(
@@ -9643,10 +9690,10 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       </details>
       {readMessage && <div className={`ocr-message ${readingPdf ? "reading" : ""}`}>{readMessage}</div>}
       {pendingValues && (
-        <section className="geometry-import-review" role="dialog" aria-modal="true" aria-label="Confirmar medidas lidas do PDF">
+        <section className="geometry-import-review" role="dialog" aria-modal="true" aria-label="Confirmar medidas lidas do laudo">
           <div className="geometry-import-card">
             <header>
-              <div><small>LEITURA DO PDF</small><h2>Confirme as medidas antes de importar</h2></div>
+              <div><small>LEITURA DO LAUDO</small><h2>Confirme as medidas antes de importar</h2></div>
               <button onClick={() => setPendingValues(null)} aria-label="Fechar conferência">×</button>
             </header>
             <p>Confira os valores lidos no relatório do alinhador. Eles só serão aplicados ao laudo depois da confirmação.</p>
