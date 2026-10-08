@@ -4799,7 +4799,10 @@ function Agenda({
     [showSaturday, setShowSaturday] = useState(false),
     [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]),
-    [appointmentSearch, setAppointmentSearch] = useState("");
+    [appointmentSearch, setAppointmentSearch] = useState(""),
+    [calendarPrintMode, setCalendarPrintMode] = useState<"semana" | "mes">(
+      "semana",
+    );
   useEffect(() => {
     localStorage.setItem("monocenter-calendar-mode", mode);
   }, [mode]);
@@ -4861,7 +4864,28 @@ function Agenda({
         d.setDate(start.getDate() + i);
         return d;
       });
-    }, [cursor, date, mode]);
+    }, [cursor, date, mode]),
+    printWeekDays = (() => {
+      const chosen = new Date(`${date}T12:00:00`),
+        monday = new Date(chosen),
+        weekday = chosen.getDay();
+      monday.setDate(chosen.getDate() - (weekday === 0 ? 6 : weekday - 1));
+      return Array.from({ length: 6 }, (_, index) => {
+        const day = new Date(monday);
+        day.setDate(monday.getDate() + index);
+        return day;
+      });
+    })(),
+    printMonthDays = (() => {
+      const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1),
+        start = new Date(first);
+      start.setDate(1 - first.getDay());
+      return Array.from({ length: 42 }, (_, index) => {
+        const day = new Date(start);
+        day.setDate(start.getDate() + index);
+        return day;
+      });
+    })();
   const isOngoingVehicle = (appointment: Appt) =>
       !isEmployeeAbsence(appointment) &&
       !!appointment.inProgress &&
@@ -5103,6 +5127,13 @@ function Agenda({
       setDate(iso(next));
       setCursor(new Date(next.getFullYear(), next.getMonth(), 1));
     },
+    printCalendar = () => {
+      document.body.classList.add("print-calendar-page");
+      const cleanup = () =>
+        document.body.classList.remove("print-calendar-page");
+      window.addEventListener("afterprint", cleanup, { once: true });
+      window.setTimeout(() => window.print(), 60);
+    },
     changeMode = (value: "dia" | "semana" | "mes") => {
       setMode(value);
       const chosen = new Date(date + "T12:00:00");
@@ -5162,11 +5193,124 @@ function Agenda({
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
         .appointment-history-search{position:relative;margin:0 0 14px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff);box-shadow:0 5px 16px rgba(15,23,42,.06)}.appointment-history-search>label{display:grid;grid-template-columns:auto minmax(240px,1fr) auto;align-items:center;gap:10px;padding:12px 14px}.appointment-history-search>label>b{font-size:13px;white-space:nowrap}.appointment-history-search input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px 12px;background:var(--card,#fff);color:inherit;font-size:14px}.appointment-history-search .clear-search{border:0;background:transparent;color:#b3151d;font-weight:900;cursor:pointer}.appointment-search-hint{display:block;padding:0 14px 12px;color:#64748b;font-size:11px}.appointment-search-results{display:grid;gap:8px;max-height:430px;overflow:auto;padding:0 12px 12px}.appointment-search-results>header{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;color:#526274;font-size:12px}.appointment-search-result{display:grid;grid-template-columns:105px minmax(190px,1.2fr) minmax(180px,1fr) auto;align-items:center;gap:12px;padding:11px 12px;border:1px solid #d9e1ea;border-left:5px solid #df1823;border-radius:9px;background:#fff}.appointment-search-result time{display:grid;gap:2px;font-size:12px}.appointment-search-result time b{font-size:14px}.appointment-search-result .result-client,.appointment-search-result .result-vehicle{display:grid;gap:3px;min-width:0}.appointment-search-result strong,.appointment-search-result span{overflow-wrap:anywhere}.appointment-search-result small{color:#64748b}.appointment-search-result .result-plate{font-weight:900;letter-spacing:.04em}.appointment-search-result .result-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.appointment-search-result .result-actions button{border:1px solid #bac6d4;border-radius:7px;padding:8px 10px;background:#fff;font-size:11px;font-weight:900;cursor:pointer}.appointment-search-result .result-actions .primary{border-color:#16864b;background:#16864b;color:#fff}.appointment-search-empty{margin:0;padding:14px;border:1px dashed #c8d3df;border-radius:8px;color:#64748b;text-align:center}.dark .appointment-search-result{background:#172231}.dark .appointment-search-result .result-actions button{background:#223044;color:#fff}
+        .calendar-print-controls{display:flex;align-items:center;gap:6px}.calendar-print-controls select{min-width:92px}.calendar-print-controls button{border-color:#172b44!important;background:#172b44!important;color:#fff!important}.calendar-print-sheet{display:none}
+        @media print{
+          @page{size:A4 landscape;margin:0}
+          html:has(body.print-calendar-page),body.print-calendar-page{width:297mm!important;height:210mm!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important;color:#111!important}
+          body.print-calendar-page *{visibility:hidden!important}
+          body.print-calendar-page .app,body.print-calendar-page main{display:block!important;width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:visible!important}
+          body.print-calendar-page .app>aside,body.print-calendar-page main>header{display:none!important}
+          body.print-calendar-page .agenda{position:static!important;width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:visible!important}
+          body.print-calendar-page .agenda>*:not(.calendar-print-sheet):not(style){display:none!important}
+          body.print-calendar-page .calendar-print-sheet,body.print-calendar-page .calendar-print-sheet *{visibility:visible!important}
+          body.print-calendar-page .calendar-print-sheet{display:block!important;position:fixed!important;z-index:999999;inset:0!important;width:297mm!important;height:210mm!important;box-sizing:border-box;padding:7mm 8mm 6mm!important;overflow:hidden!important;background:#fff!important;color:#111!important;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+          .calendar-print-header{display:flex!important;align-items:flex-end;justify-content:space-between;padding-bottom:3mm;border-bottom:2px solid #d71920}.calendar-print-header span{display:grid;gap:1mm}.calendar-print-header b{font-size:17px}.calendar-print-header strong{font-size:13px}.calendar-print-header small{font-size:8px}
+          .calendar-print-week{display:grid!important;grid-template-columns:repeat(6,1fr);gap:2mm;margin-top:3mm;height:176mm}.calendar-print-day{overflow:hidden;border:1px solid #9aa7b5;border-radius:2mm}.calendar-print-day>.day-head{display:grid!important;padding:2mm;background:#172b44!important;color:#fff;text-align:center}.calendar-print-day>.day-head.holiday{background:#b3131b!important}.calendar-print-day>.day-head b{font-size:11px;text-transform:uppercase}.calendar-print-day>.day-head span{font-size:15px;font-weight:900}.calendar-print-day>.day-head small{font-size:7px}.calendar-print-day-list{display:grid;gap:1mm;padding:1.5mm}.calendar-print-entry{display:grid;grid-template-columns:10mm 1fr;gap:.8mm;padding:1.2mm;border-left:2mm solid #64748b;border-radius:1mm;background:#f5f7f9!important;font-size:7px;line-height:1.15}.calendar-print-entry>time{font-weight:900}.calendar-print-entry>span{display:grid;gap:.4mm;min-width:0}.calendar-print-entry b,.calendar-print-entry small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.calendar-print-entry.servico{border-color:#159447;background:#e6f7ec!important}.calendar-print-entry.revisao{border-color:#9b5de5;background:#f3e8ff!important}.calendar-print-entry.retorno{border-color:#f97316;background:#fff0e5!important}.calendar-print-entry.orcamento,.calendar-print-entry.avaliou{border-color:#d6a000;background:#fff8cf!important}.calendar-print-entry.gabaritagem{border-color:#db2777;background:#fce7f3!important}.calendar-print-entry.alinhamento-balanceamento{border-color:#0891b2;background:#e6f8fb!important}.calendar-print-entry.faltou{border-color:#d71920;background:#ffe5e7!important}
+          .calendar-print-month{display:grid!important;grid-template-columns:repeat(7,1fr);grid-template-rows:8mm repeat(6,28mm);margin-top:3mm;border-top:1px solid #8a96a3;border-left:1px solid #8a96a3}.calendar-print-month>strong{display:grid;place-items:center;border-right:1px solid #8a96a3;border-bottom:1px solid #8a96a3;background:#172b44!important;color:#fff;font-size:8px;text-transform:uppercase}.calendar-print-month-day{min-width:0;overflow:hidden;padding:1mm;border-right:1px solid #8a96a3;border-bottom:1px solid #8a96a3}.calendar-print-month-day.outside{background:#eef1f4!important;color:#7b8794}.calendar-print-month-day.holiday{background:#fff0f2!important}.calendar-print-month-day>.month-day-head{display:flex!important;justify-content:space-between;gap:1mm;margin-bottom:.7mm;font-size:7px}.calendar-print-month-day>.month-day-head b{font-size:10px}.calendar-print-month-day>.month-day-head em{overflow:hidden;color:#a50f18;font-size:6px;font-style:normal;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.calendar-print-month-entry{display:block;overflow:hidden;margin-bottom:.5mm;padding:.5mm 1mm;border-left:1.2mm solid #64748b;border-radius:.5mm;background:#f4f6f8!important;font-size:6px;font-weight:700;line-height:1.1;text-overflow:ellipsis;white-space:nowrap}.calendar-print-month-entry.servico{border-color:#159447}.calendar-print-month-entry.revisao{border-color:#9b5de5}.calendar-print-month-entry.retorno{border-color:#f97316}.calendar-print-month-entry.orcamento,.calendar-print-month-entry.avaliou{border-color:#d6a000}.calendar-print-month-entry.gabaritagem{border-color:#db2777}.calendar-print-month-entry.alinhamento-balanceamento{border-color:#0891b2}.calendar-print-month-entry.faltou{border-color:#d71920}
+        }
         @media(min-width:1600px){.agenda{max-width:1600px!important}.agenda-grid-semana{grid-template-columns:minmax(0,1fr) 460px!important}.week-time-zone,.week-timeline-head button small{font-size:10px}.week-timeline-head button b{font-size:22px}.week-appointment{font-size:10px}.week-appointment>b{font-size:10px}.week-appointment>strong{font-size:12px}.week-appointment>small{font-size:10px}.week-appointment>.week-appointment-status,.week-appointment>.week-budget-type{font-size:9px}.week-time-column span{font-size:11px}.agenda-grid-semana .day article time>b{font-size:12px}.agenda-grid-semana .day article h3{font-size:13px}.agenda-grid-semana .day article p,.agenda-grid-semana .day article span>small{font-size:10px}.agenda-grid-semana .day article .appointment-toggle{font-size:11px!important}}
         @media(max-width:1500px){.agenda-grid-semana .agenda-finalization.compact{padding:6px 7px}.agenda-grid-semana .agenda-finalization.compact>b{display:block;font-size:11px!important;line-height:1.2;letter-spacing:-.04em;white-space:nowrap!important}}
         @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}.appointment-search-result{grid-template-columns:90px minmax(170px,1fr) minmax(150px,1fr)}.appointment-search-result .result-actions{grid-column:1/-1}}
         @media(max-width:700px){.appointment-history-search>label{grid-template-columns:1fr}.appointment-history-search>label>b{white-space:normal}.appointment-history-search .clear-search{justify-self:start}.appointment-search-result{grid-template-columns:1fr}.appointment-search-result .result-actions{grid-column:auto;justify-content:flex-start}}
       `}</style>
+      <section className="calendar-print-sheet" aria-hidden="true">
+        <div className="calendar-print-header">
+          <span>
+            <b>MONOCENTER · AGENDA</b>
+            <small>Av. Itavuvu, 5341 · Jardim Santa Cecília · Sorocaba/SP</small>
+          </span>
+          <strong>
+            {calendarPrintMode === "semana"
+              ? `Semana de ${printWeekDays[0].toLocaleDateString("pt-BR")} a ${printWeekDays[5].toLocaleDateString("pt-BR")}`
+              : cursor.toLocaleDateString("pt-BR", {
+                  month: "long",
+                  year: "numeric",
+                })}
+          </strong>
+        </div>
+        {calendarPrintMode === "semana" ? (
+          <div className="calendar-print-week">
+            {printWeekDays.map((day) => {
+              const dayIso = iso(day),
+                holiday = holidays.find((item: any) => item.date === dayIso),
+                dayAppointments = (data as Appt[])
+                  .filter((appointment) => appointment.date === dayIso)
+                  .sort((first, second) =>
+                    first.time.localeCompare(second.time),
+                  );
+              return (
+                <article className="calendar-print-day" key={`print-${dayIso}`}>
+                  <div className={`day-head${holiday ? " holiday" : ""}`}>
+                    <b>{day.toLocaleDateString("pt-BR", { weekday: "long" })}</b>
+                    <span>{day.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>
+                    {holiday && <small>{holiday.name}</small>}
+                  </div>
+                  <div className="calendar-print-day-list">
+                    {dayAppointments.map((appointment) => (
+                      <div
+                        className={`calendar-print-entry ${apptClass(appointment)}`}
+                        key={`print-week-${appointment.id}`}
+                      >
+                        <time>{appointment.time}</time>
+                        <span>
+                          <b>{isEmployeeAbsence(appointment) ? `Funcionário ausente · ${employeeAbsenceName(appointment)}` : appointment.client}</b>
+                          <small>
+                            {isEmployeeAbsence(appointment)
+                              ? employeeAbsencePeriod(appointment)
+                              : `${appointment.vehicle || "Veículo não informado"} · ${appointment.plate || "Sem placa"}`}
+                          </small>
+                          {!isEmployeeAbsence(appointment) && (
+                            <small>{appointmentKindLabel(appointment)}</small>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="calendar-print-month">
+            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((label) => (
+              <strong key={label}>{label}</strong>
+            ))}
+            {printMonthDays.map((day) => {
+              const dayIso = iso(day),
+                holiday = holidays.find((item: any) => item.date === dayIso),
+                dayAppointments = (data as Appt[])
+                  .filter((appointment) => appointment.date === dayIso)
+                  .sort((first, second) =>
+                    first.time.localeCompare(second.time),
+                  );
+              return (
+                <article
+                  className={`calendar-print-month-day${day.getMonth() !== cursor.getMonth() ? " outside" : ""}${holiday ? " holiday" : ""}`}
+                  key={`print-month-${dayIso}`}
+                >
+                  <div className="month-day-head">
+                    <b>{day.getDate()}</b>
+                    {holiday && <em>{holiday.name}</em>}
+                  </div>
+                  {dayAppointments.slice(0, 6).map((appointment) => (
+                    <span
+                      className={`calendar-print-month-entry ${apptClass(appointment)}`}
+                      key={`print-month-entry-${appointment.id}`}
+                    >
+                      {appointment.time} · {isEmployeeAbsence(appointment) ? employeeAbsenceName(appointment) : appointment.client}
+                    </span>
+                  ))}
+                  {dayAppointments.length > 6 && (
+                    <span className="calendar-print-month-entry">
+                      + {dayAppointments.length - 6} agendamentos
+                    </span>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
         <span>
@@ -5251,6 +5395,23 @@ function Agenda({
             <option value="semana">Semana</option>
             <option value="mes">Mês</option>
           </select>
+          <span className="calendar-print-controls">
+            <select
+              value={calendarPrintMode}
+              onChange={(event) =>
+                setCalendarPrintMode(
+                  event.target.value as "semana" | "mes",
+                )
+              }
+              aria-label="Período para impressão do calendário"
+            >
+              <option value="semana">Imprimir semana</option>
+              <option value="mes">Imprimir mês</option>
+            </select>
+            <button type="button" onClick={printCalendar}>
+              Imprimir calendário
+            </button>
+          </span>
           {mode === "semana" && (
             <button
               type="button"
