@@ -9853,7 +9853,8 @@ function Reports({
       iso(new Date()).slice(0, 7),
     ),
     [quotePrintFrom, setQuotePrintFrom] = useState(""),
-    [quotePrintTo, setQuotePrintTo] = useState(iso(new Date()));
+    [quotePrintTo, setQuotePrintTo] = useState(iso(new Date())),
+    [quoteSummary, setQuoteSummary] = useState<Appt | null>(null);
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -10024,6 +10025,35 @@ function Reports({
               { month: "long", year: "numeric" },
             )
           : `${quotePrintFrom ? new Date(`${quotePrintFrom}T12:00:00`).toLocaleDateString("pt-BR") : "início"} a ${quotePrintTo ? new Date(`${quotePrintTo}T12:00:00`).toLocaleDateString("pt-BR") : "hoje"}`;
+  const quoteSummaryParts = (quoteSummary?.budget?.parts ?? []).filter(
+      (part: any) => String(part?.item ?? part?.name ?? "").trim(),
+    ),
+    quoteSummaryServices = quoteSummary
+      ? [
+          ...(quoteSummary.budget?.selectedServices ?? []).map(
+            (index: number) => ({
+              name: SERVICES[index]?.[0] ?? "Serviço",
+              qty: quoteSummary.budget?.serviceQty?.[index] ?? 1,
+            }),
+          ),
+          ...(quoteSummary.budget?.manualServices ?? [])
+            .filter((service: any) => String(service?.name ?? "").trim())
+            .map((service: any) => ({
+              name: service.name,
+              qty: Number(service.qty) || 1,
+            })),
+        ]
+      : [],
+    quoteSummaryFindings = quoteSummary
+      ? [...ITEMS, ...(quoteSummary.evaluation?.custom ?? [])]
+          .map((name, index) => ({
+            name,
+            state: quoteSummary.evaluation?.status?.[index + 1],
+            note: quoteSummary.evaluation?.notes?.[index + 1],
+            quoted: !!quoteSummary.evaluation?.quoteItems?.[index + 1],
+          }))
+          .filter((item) => item.state || item.note || item.quoted)
+      : [];
   const reminderDaysFor = (appointment: Appt) =>
       reminderDayDrafts[appointment.id] ??
       appointment.quoteFollowUpDays ??
@@ -10305,6 +10335,7 @@ function Reports({
               .declined-quote-row button{padding:6px 9px;font-size:10px}
               .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
               .open-quotes-print-sheet{display:none}.open-quotes-reminder-alert{margin:0 0 12px;padding:10px 12px;border:1px solid #efb2b6;border-radius:9px;background:#fff0f1;color:#a3131c;font-size:12px;font-weight:900}.quote-print-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:10px;border:1px solid #d8e0e8;border-radius:9px;background:#f8fafc}.quote-print-controls label{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.quote-print-controls select,.quote-print-controls input{min-width:145px;padding:8px;border:1px solid #aeb9c7;border-radius:7px;background:#fff}.quote-print-controls button{padding:9px 12px;background:#111d2b;color:#fff}.quote-print-count{align-self:center;color:#526274;font-size:11px;font-weight:800}
+              .quote-summary-backdrop{position:fixed;z-index:1200;inset:0;display:grid;place-items:center;padding:20px;background:#07111dcc}.quote-summary-modal{width:min(940px,96vw);max-height:92vh;overflow:auto;border-radius:15px;background:#fff;color:#111d2b;box-shadow:0 24px 80px #0008}.quote-summary-modal>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:5px solid #e31b23;background:#111d2b;color:#fff}.quote-summary-modal h2{margin:2px 0 3px;font-size:21px}.quote-summary-modal header small{color:#cbd5e1}.quote-summary-close{border:0;background:transparent!important;color:#fff!important;font-size:28px;line-height:1}.quote-summary-body{display:grid;gap:14px;padding:18px}.quote-summary-customer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.quote-summary-customer span{display:grid;gap:3px;padding:10px;border:1px solid #d8e0e8;border-radius:8px;background:#f8fafc}.quote-summary-customer small{color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase}.quote-summary-section{border:1px solid #d8e0e8;border-radius:10px;overflow:hidden}.quote-summary-section h3{margin:0;padding:10px 12px;background:#eef2f6;font-size:13px}.quote-summary-list{display:grid}.quote-summary-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:9px 12px;border-top:1px solid #e4e9ef;font-size:12px}.quote-summary-row:first-child{border-top:0}.quote-summary-row span{display:grid;gap:2px}.quote-summary-row small{color:#64748b}.quote-summary-state{align-self:center;border-radius:999px;padding:4px 8px;background:#eef2f6;font-size:9px;font-weight:900}.quote-summary-state.g{background:#e6f7ec;color:#08783b}.quote-summary-state.y{background:#fff8cf;color:#8a6200}.quote-summary-state.r{background:#ffe5e7;color:#b3131b}.quote-summary-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px}.quote-summary-note{padding:11px;border:1px solid #d8e0e8;border-radius:9px;background:#fff}.quote-summary-note b{display:block;margin-bottom:5px;font-size:11px}.quote-summary-empty{margin:0;padding:12px;color:#64748b;font-size:12px}.quote-summary-footer{display:flex;justify-content:flex-end;padding:0 18px 18px}.quote-summary-footer button{padding:9px 14px;background:#111d2b;color:#fff}.app.dark .quote-summary-modal{background:#111c29;color:#fff}.app.dark .quote-summary-customer span,.app.dark .quote-summary-note{background:#172231}.app.dark .quote-summary-section h3{background:#1c2938}@media(max-width:700px){.quote-summary-customer{grid-template-columns:1fr 1fr}.quote-summary-notes{grid-template-columns:1fr}}
               @media print{body.print-open-quotes *{visibility:hidden!important}body.print-open-quotes .open-quotes-print-sheet,body.print-open-quotes .open-quotes-print-sheet *{visibility:visible!important}body.print-open-quotes .open-quotes-print-sheet{display:block!important;position:static!important;width:297mm!important;min-height:210mm!important;height:auto!important;box-sizing:border-box;padding:8mm!important;background:#fff!important;color:#111!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.open-quotes-print-header{display:grid;grid-template-columns:68mm 1fr;align-items:center;margin-bottom:5mm;border:1px solid #ced6df;border-bottom:2mm solid #e31b23;break-inside:avoid}.open-quotes-print-header>span{display:grid;box-sizing:border-box;min-width:0;padding:4mm 5mm;color:#e31b23;font-size:17pt;line-height:1.05;white-space:nowrap}.open-quotes-print-header>span b{display:block;letter-spacing:-.25mm}.open-quotes-print-header>span small{margin-top:1mm;color:#111;font-size:7pt}.open-quotes-print-header>div{padding:4mm;border-left:1px solid #ced6df}.open-quotes-print-header h1{margin:0;font-size:18pt}.open-quotes-print-header p{margin:1mm 0 0;color:#526274;font-size:8pt;text-transform:capitalize}.open-quotes-print-sheet table{width:100%;border-collapse:collapse;font-size:8pt}.open-quotes-print-sheet thead{display:table-header-group}.open-quotes-print-sheet tr{break-inside:avoid}.open-quotes-print-sheet th{padding:2.5mm;background:#111d2b;color:#fff;text-align:left}.open-quotes-print-sheet td{padding:2.2mm;border:1px solid #d8e0e8;vertical-align:top}.open-quotes-print-sheet td b,.open-quotes-print-sheet td small{display:block}.open-quotes-print-sheet td small{margin-top:.8mm;color:#526274}.open-quotes-print-sheet td.due{background:#ffe5e7;color:#a3131c;font-weight:900}@page{size:A4 landscape;margin:0}}
             `}</style>
             <div className="management-report-head">
@@ -10474,7 +10505,9 @@ function Reports({
                         </label>
                       </span>
                       <div className="compact-quote-actions">
-                        <button onClick={() => open(a)}>Abrir orçamento</button>
+                        <button onClick={() => setQuoteSummary(a)}>
+                          Abrir orçamento
+                        </button>
                         <button
                           className="wa"
                           onClick={() => prepareQuoteFollowUp(a)}
@@ -10524,6 +10557,71 @@ function Reports({
               </details>
             )}
           </div>
+          {quoteSummary && (
+            <div
+              className="quote-summary-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Resumo do atendimento de ${quoteSummary.client}`}
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setQuoteSummary(null);
+              }}
+            >
+              <div className="quote-summary-modal">
+                <header>
+                  <span>
+                    <small>RESUMO DO ATENDIMENTO</small>
+                    <h2>{quoteSummary.client}</h2>
+                    <small>{quoteSummary.vehicle || "Veículo não informado"} · {quoteSummary.plate || "Sem placa"}</small>
+                  </span>
+                  <button className="quote-summary-close" onClick={() => setQuoteSummary(null)} aria-label="Fechar resumo">×</button>
+                </header>
+                <div className="quote-summary-body">
+                  <div className="quote-summary-customer">
+                    <span><small>Data do atendimento</small><b>{new Date(`${quoteSummary.date}T12:00:00`).toLocaleDateString("pt-BR")} · {quoteSummary.time}</b></span>
+                    <span><small>Contato</small><b>{quoteSummary.phone || "Não informado"}</b></span>
+                    <span><small>Quilometragem</small><b>{quoteSummary.km || "Não informada"}</b></span>
+                    <span><small>Avaliador</small><b>{quoteSummary.tech || "Não informado"}</b></span>
+                  </div>
+                  <section className="quote-summary-section">
+                    <h3>Itens encontrados na avaliação</h3>
+                    <div className="quote-summary-list">
+                      {quoteSummaryFindings.length ? quoteSummaryFindings.map((item, index) => (
+                        <div className="quote-summary-row" key={`${item.name}-${index}`}>
+                          <span><b>{item.name}</b>{item.note && <small>{item.note}</small>}{item.quoted && <small>Selecionado para orçamento</small>}</span>
+                          <strong className={`quote-summary-state ${item.state || ""}`}>{item.state === "g" ? "Bom estado" : item.state === "y" ? "Atenção" : item.state === "r" ? "Troca urgente" : "Orçar"}</strong>
+                        </div>
+                      )) : <p className="quote-summary-empty">Nenhum item registrado na avaliação.</p>}
+                    </div>
+                  </section>
+                  <section className="quote-summary-section">
+                    <h3>Peças incluídas no orçamento</h3>
+                    <div className="quote-summary-list">
+                      {quoteSummaryParts.length ? quoteSummaryParts.map((part: any, index: number) => (
+                        <div className="quote-summary-row" key={`${part.item || part.name}-${index}`}>
+                          <span><b>{part.item || part.name}</b><small>{[part.brand, part.code].filter(Boolean).join(" · ") || "Sem marca/código informado"}</small></span>
+                          <strong>{Number(part.qty) || 1}x</strong>
+                        </div>
+                      )) : <p className="quote-summary-empty">Nenhuma peça incluída.</p>}
+                    </div>
+                  </section>
+                  <section className="quote-summary-section">
+                    <h3>Serviços incluídos no orçamento</h3>
+                    <div className="quote-summary-list">
+                      {quoteSummaryServices.length ? quoteSummaryServices.map((service: any, index: number) => (
+                        <div className="quote-summary-row" key={`${service.name}-${index}`}><b>{service.name}</b><strong>{service.qty}x</strong></div>
+                      )) : <p className="quote-summary-empty">Nenhum serviço incluído.</p>}
+                    </div>
+                  </section>
+                  <div className="quote-summary-notes">
+                    <div className="quote-summary-note"><b>Relato do cliente</b>{quoteSummary.note || "Nenhum relato registrado."}</div>
+                    <div className="quote-summary-note"><b>Observações técnicas</b>{quoteSummary.budget?.patioNotes || quoteSummary.internalNote || "Nenhuma observação registrada."}</div>
+                  </div>
+                </div>
+                <div className="quote-summary-footer"><button onClick={() => setQuoteSummary(null)}>Fechar resumo</button></div>
+              </div>
+            </div>
+          )}
           </>
         )}
         {reportMode === "andamento" && (
