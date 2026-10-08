@@ -10034,6 +10034,9 @@ function Reports({
             (index: number) => ({
               name: SERVICES[index]?.[0] ?? "Serviço",
               qty: quoteSummary.budget?.serviceQty?.[index] ?? 1,
+              value:
+                servicePrice(index, quoteSummary.budget?.servicePrices) *
+                (quoteSummary.budget?.serviceQty?.[index] ?? 1),
             }),
           ),
           ...(quoteSummary.budget?.manualServices ?? [])
@@ -10041,6 +10044,7 @@ function Reports({
             .map((service: any) => ({
               name: service.name,
               qty: Number(service.qty) || 1,
+              value: (Number(service.qty) || 1) * (Number(service.value) || 0),
             })),
         ]
       : [],
@@ -10053,7 +10057,17 @@ function Reports({
             quoted: !!quoteSummary.evaluation?.quoteItems?.[index + 1],
           }))
           .filter((item) => item.state || item.note || item.quoted)
-      : [];
+      : [],
+    quoteSummaryPartsTotal = quoteSummaryParts.reduce(
+      (total: number, part: any) =>
+        total + (Number(part.qty) || 1) * saleOf(part, 5),
+      0,
+    ),
+    quoteSummaryServicesTotal = quoteSummaryServices.reduce(
+      (total: number, service: any) => total + (Number(service.value) || 0),
+      0,
+    ),
+    quoteSummaryTotal = quoteSummaryPartsTotal + quoteSummaryServicesTotal;
   const reminderDaysFor = (appointment: Appt) =>
       reminderDayDrafts[appointment.id] ??
       appointment.quoteFollowUpDays ??
@@ -10338,7 +10352,7 @@ function Reports({
               .declined-quote-row button{padding:6px 9px;font-size:10px}
               .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
               .open-quotes-print-sheet{display:none}.open-quotes-reminder-alert{margin:0 0 12px;padding:10px 12px;border:1px solid #efb2b6;border-radius:9px;background:#fff0f1;color:#a3131c;font-size:12px;font-weight:900}.quote-print-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:10px;border:1px solid #d8e0e8;border-radius:9px;background:#f8fafc}.quote-print-controls label{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.quote-print-controls select,.quote-print-controls input{min-width:145px;padding:8px;border:1px solid #aeb9c7;border-radius:7px;background:#fff}.quote-print-controls button{padding:9px 12px;background:#111d2b;color:#fff}.quote-print-count{align-self:center;color:#526274;font-size:11px;font-weight:800}
-              .quote-summary-backdrop{position:fixed;z-index:1200;inset:0;display:grid;place-items:center;padding:20px;background:#07111dcc}.quote-summary-modal{width:min(940px,96vw);max-height:92vh;overflow:auto;border-radius:15px;background:#fff;color:#111d2b;box-shadow:0 24px 80px #0008}.quote-summary-modal>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:5px solid #e31b23;background:#111d2b;color:#fff}.quote-summary-modal h2{margin:2px 0 3px;font-size:21px}.quote-summary-modal header small{color:#cbd5e1}.quote-summary-close{border:0;background:transparent!important;color:#fff!important;font-size:28px;line-height:1}.quote-summary-body{display:grid;gap:14px;padding:18px}.quote-summary-customer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.quote-summary-customer span{display:grid;gap:3px;padding:10px;border:1px solid #d8e0e8;border-radius:8px;background:#f8fafc}.quote-summary-customer small{color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase}.quote-summary-section{border:1px solid #d8e0e8;border-radius:10px;overflow:hidden}.quote-summary-section h3{margin:0;padding:10px 12px;background:#eef2f6;font-size:13px}.quote-summary-list{display:grid}.quote-summary-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:9px 12px;border-top:1px solid #e4e9ef;font-size:12px}.quote-summary-row:first-child{border-top:0}.quote-summary-row span{display:grid;gap:2px}.quote-summary-row small{color:#64748b}.quote-summary-state{align-self:center;border-radius:999px;padding:4px 8px;background:#eef2f6;font-size:9px;font-weight:900}.quote-summary-state.g{background:#e6f7ec;color:#08783b}.quote-summary-state.y{background:#fff8cf;color:#8a6200}.quote-summary-state.r{background:#ffe5e7;color:#b3131b}.quote-summary-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px}.quote-summary-note{padding:11px;border:1px solid #d8e0e8;border-radius:9px;background:#fff}.quote-summary-note b{display:block;margin-bottom:5px;font-size:11px}.quote-summary-empty{margin:0;padding:12px;color:#64748b;font-size:12px}.quote-summary-footer{display:flex;justify-content:flex-end;padding:0 18px 18px}.quote-summary-footer button{padding:9px 14px;background:#111d2b;color:#fff}.app.dark .quote-summary-modal{background:#111c29;color:#fff}.app.dark .quote-summary-customer span,.app.dark .quote-summary-note{background:#172231}.app.dark .quote-summary-section h3{background:#1c2938}@media(max-width:700px){.quote-summary-customer{grid-template-columns:1fr 1fr}.quote-summary-notes{grid-template-columns:1fr}}
+              .quote-summary-backdrop{position:fixed;z-index:1200;inset:0;display:grid;place-items:center;padding:20px;background:#07111dcc}.quote-summary-modal{width:min(940px,96vw);max-height:92vh;overflow:auto;border-radius:15px;background:#fff;color:#111d2b;box-shadow:0 24px 80px #0008}.quote-summary-modal>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:5px solid #e31b23;background:#111d2b;color:#fff}.quote-summary-modal h2{margin:2px 0 3px;font-size:21px}.quote-summary-modal header small{color:#cbd5e1}.quote-summary-close{border:0;background:transparent!important;color:#fff!important;font-size:28px;line-height:1}.quote-summary-body{display:grid;gap:14px;padding:18px}.quote-summary-customer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.quote-summary-customer span{display:grid;gap:3px;min-width:0;padding:10px;border:1px solid #d8e0e8;border-radius:8px;background:#f8fafc}.quote-summary-customer small{color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase}.quote-summary-customer b{overflow-wrap:anywhere}.quote-summary-section{border:1px solid #d8e0e8;border-radius:10px;overflow:hidden}.quote-summary-section h3{display:flex;justify-content:space-between;gap:12px;margin:0;padding:10px 12px;background:#eef2f6;font-size:13px}.quote-summary-list{display:grid}.quote-summary-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:9px 12px;border-top:1px solid #e4e9ef;font-size:12px}.quote-summary-row:first-child{border-top:0}.quote-summary-row span{display:grid;gap:2px}.quote-summary-row small{color:#64748b}.quote-summary-value{display:grid;justify-items:end;align-content:center;gap:2px;white-space:nowrap}.quote-summary-value small{font-size:9px}.quote-summary-state{align-self:center;border-radius:999px;padding:4px 8px;background:#eef2f6;font-size:9px;font-weight:900}.quote-summary-state.g{background:#e6f7ec;color:#08783b}.quote-summary-state.y{background:#fff8cf;color:#8a6200}.quote-summary-state.r{background:#ffe5e7;color:#b3131b}.quote-summary-total{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:13px 15px;border-radius:10px;background:#111d2b;color:#fff}.quote-summary-total span{display:grid;gap:2px}.quote-summary-total small{color:#cbd5e1}.quote-summary-total strong{color:#5ee18c;font-size:23px}.quote-summary-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px}.quote-summary-note{padding:11px;border:1px solid #d8e0e8;border-radius:9px;background:#fff}.quote-summary-note b{display:block;margin-bottom:5px;font-size:11px}.quote-summary-empty{margin:0;padding:12px;color:#64748b;font-size:12px}.quote-summary-footer{display:flex;justify-content:flex-end;padding:0 18px 18px}.quote-summary-footer button{padding:9px 14px;background:#111d2b;color:#fff}.app.dark .quote-summary-modal{background:#111c29;color:#fff}.app.dark .quote-summary-customer span,.app.dark .quote-summary-note{background:#172231}.app.dark .quote-summary-section h3{background:#1c2938}@media(max-width:700px){.quote-summary-customer{grid-template-columns:1fr 1fr}.quote-summary-notes{grid-template-columns:1fr}}
               @media print{html:has(body.print-open-quotes),body.print-open-quotes{width:297mm!important;height:210mm!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}body.print-open-quotes .app,body.print-open-quotes main,body.print-open-quotes .reports-page,body.print-open-quotes .report-screen{display:block!important;position:fixed!important;inset:0!important;width:297mm!important;height:210mm!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}body.print-open-quotes .app>aside,body.print-open-quotes main>header{display:none!important}body.print-open-quotes .report-screen>*:not(.open-quotes-print-sheet):not(style){display:none!important}body.print-open-quotes *{visibility:hidden!important}body.print-open-quotes .open-quotes-print-sheet,body.print-open-quotes .open-quotes-print-sheet *{visibility:visible!important}body.print-open-quotes .open-quotes-print-sheet{display:block!important;position:absolute!important;z-index:999999!important;inset:0!important;width:297mm!important;height:210mm!important;box-sizing:border-box;padding:7mm 8mm!important;background:#fff!important;color:#111!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.open-quotes-print-header{display:grid;grid-template-columns:68mm 1fr;align-items:center;margin-bottom:4mm;border:1px solid #ced6df;border-bottom:2mm solid #e31b23}.open-quotes-print-header>span{display:grid;box-sizing:border-box;min-width:0;padding:3.5mm 5mm;color:#e31b23;font-size:17pt;line-height:1.05;white-space:nowrap}.open-quotes-print-header>span b{display:block;letter-spacing:-.25mm}.open-quotes-print-header>span small{margin-top:1mm;color:#111;font-size:7pt}.open-quotes-print-header>div{padding:3mm 4mm;border-left:1px solid #ced6df}.open-quotes-print-header h1{margin:0;font-size:17pt}.open-quotes-print-header p{margin:1mm 0 0;color:#526274;font-size:7.5pt;text-transform:capitalize}.open-quotes-print-total{display:inline-block;margin-top:1.5mm;padding:1mm 2mm;border-radius:1mm;background:#e31b23!important;color:#fff!important;font-size:8pt}.open-quotes-print-sheet table{width:100%;border-collapse:collapse;font-size:7.5pt;table-layout:fixed}.open-quotes-print-sheet thead{display:table-header-group}.open-quotes-print-sheet tr{break-inside:avoid}.open-quotes-print-sheet th{padding:2mm;background:#111d2b!important;color:#fff!important;text-align:left}.open-quotes-print-sheet td{padding:1.7mm 2mm;border:1px solid #d8e0e8;vertical-align:top;line-height:1.15}.open-quotes-print-sheet td b,.open-quotes-print-sheet td small{display:block}.open-quotes-print-sheet td small{margin-top:.5mm;color:#526274;font-size:6.5pt}.open-quotes-print-sheet td.due{background:#ffe5e7!important;color:#a3131c;font-weight:900}@page{size:A4 landscape;margin:0}}
             `}</style>
             <div className="management-report-head">
@@ -10575,16 +10589,18 @@ function Reports({
                   <span>
                     <small>RESUMO DO ATENDIMENTO</small>
                     <h2>{quoteSummary.client}</h2>
-                    <small>{quoteSummary.vehicle || "Veículo não informado"} · {quoteSummary.plate || "Sem placa"}</small>
                   </span>
                   <button className="quote-summary-close" onClick={() => setQuoteSummary(null)} aria-label="Fechar resumo">×</button>
                 </header>
                 <div className="quote-summary-body">
                   <div className="quote-summary-customer">
+                    <span><small>Veículo / modelo</small><b>{quoteSummary.vehicle || "Não informado"}</b></span>
+                    <span><small>Marca</small><b>{quoteSummary.vehicleBrand || "Não informada"}</b></span>
+                    <span><small>Placa</small><b>{quoteSummary.plate || "Não informada"}</b></span>
                     <span><small>Data do atendimento</small><b>{new Date(`${quoteSummary.date}T12:00:00`).toLocaleDateString("pt-BR")} · {quoteSummary.time}</b></span>
                     <span><small>Contato</small><b>{quoteSummary.phone || "Não informado"}</b></span>
                     <span><small>Quilometragem</small><b>{quoteSummary.km || "Não informada"}</b></span>
-                    <span><small>Avaliador</small><b>{quoteSummary.tech || "Não informado"}</b></span>
+                    <span><small>Avaliador</small><b>{quoteSummary.tech || quoteSummary.evaluationRecordedBy || "Não informado"}</b></span>
                   </div>
                   <section className="quote-summary-section">
                     <h3>Itens encontrados na avaliação</h3>
@@ -10598,24 +10614,25 @@ function Reports({
                     </div>
                   </section>
                   <section className="quote-summary-section">
-                    <h3>Peças incluídas no orçamento</h3>
+                    <h3><span>Peças incluídas no orçamento</span><strong>{brl(quoteSummaryPartsTotal)}</strong></h3>
                     <div className="quote-summary-list">
                       {quoteSummaryParts.length ? quoteSummaryParts.map((part: any, index: number) => (
                         <div className="quote-summary-row" key={`${part.item || part.name}-${index}`}>
                           <span><b>{part.item || part.name}</b><small>{[part.brand, part.code].filter(Boolean).join(" · ") || "Sem marca/código informado"}</small></span>
-                          <strong>{Number(part.qty) || 1}x</strong>
+                          <span className="quote-summary-value"><b>{brl((Number(part.qty) || 1) * saleOf(part, 5))}</b><small>{Number(part.qty) || 1}x · {brl(saleOf(part, 5))} cada</small></span>
                         </div>
                       )) : <p className="quote-summary-empty">Nenhuma peça incluída.</p>}
                     </div>
                   </section>
                   <section className="quote-summary-section">
-                    <h3>Serviços incluídos no orçamento</h3>
+                    <h3><span>Serviços incluídos no orçamento</span><strong>{brl(quoteSummaryServicesTotal)}</strong></h3>
                     <div className="quote-summary-list">
                       {quoteSummaryServices.length ? quoteSummaryServices.map((service: any, index: number) => (
-                        <div className="quote-summary-row" key={`${service.name}-${index}`}><b>{service.name}</b><strong>{service.qty}x</strong></div>
+                        <div className="quote-summary-row" key={`${service.name}-${index}`}><b>{service.name}</b><span className="quote-summary-value"><b>{brl(service.value)}</b><small>{service.qty}x</small></span></div>
                       )) : <p className="quote-summary-empty">Nenhum serviço incluído.</p>}
                     </div>
                   </section>
+                  <div className="quote-summary-total"><span><b>TOTAL DO ORÇAMENTO</b><small>Peças e serviços</small></span><strong>{brl(quoteSummaryTotal)}</strong></div>
                   <div className="quote-summary-notes">
                     <div className="quote-summary-note"><b>Relato do cliente</b>{quoteSummary.note || "Nenhum relato registrado."}</div>
                     <div className="quote-summary-note"><b>Observações técnicas</b>{quoteSummary.budget?.patioNotes || quoteSummary.internalNote || "Nenhuma observação registrada."}</div>
