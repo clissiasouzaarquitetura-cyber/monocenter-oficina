@@ -4885,11 +4885,14 @@ function Agenda({
         monday = new Date(chosen),
         weekday = chosen.getDay();
       monday.setDate(chosen.getDate() - (weekday === 0 ? 6 : weekday - 1));
-      return Array.from({ length: 6 }, (_, index) => {
+      return Array.from(
+        { length: mode === "semana" && !showSaturday ? 5 : 6 },
+        (_, index) => {
         const day = new Date(monday);
         day.setDate(monday.getDate() + index);
         return day;
-      });
+        },
+      );
     })(),
     printMonthDays = (() => {
       const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1),
@@ -5219,8 +5222,8 @@ function Agenda({
           body.print-calendar-page .agenda>*:not(.calendar-print-sheet):not(style){display:none!important}
           body.print-calendar-page .calendar-print-sheet,body.print-calendar-page .calendar-print-sheet *{visibility:visible!important}
           body.print-calendar-page .calendar-print-sheet{display:block!important;position:fixed!important;z-index:999999;inset:0!important;width:297mm!important;height:210mm!important;box-sizing:border-box;padding:7mm 8mm 6mm!important;overflow:hidden!important;background:#fff!important;color:#111!important;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-          .calendar-print-header{display:flex!important;align-items:flex-end;justify-content:space-between;padding-bottom:3mm;border-bottom:2px solid #d71920}.calendar-print-header span{display:grid;gap:1mm}.calendar-print-header b{font-size:17px}.calendar-print-header strong{font-size:13px}.calendar-print-header small{font-size:8px}
-          .calendar-print-week{display:grid!important;grid-template-columns:repeat(6,1fr);gap:2mm;margin-top:3mm;height:176mm}.calendar-print-day{overflow:hidden;border:1px solid #9aa7b5;border-radius:2mm}.calendar-print-day>.day-head{display:grid!important;padding:2mm;background:#172b44!important;color:#fff;text-align:center}.calendar-print-day>.day-head.holiday{background:#b3131b!important}.calendar-print-day>.day-head b{font-size:11px;text-transform:uppercase}.calendar-print-day>.day-head span{font-size:15px;font-weight:900}.calendar-print-day>.day-head small{font-size:7px}.calendar-print-day-list{display:grid;gap:1mm;padding:1.5mm}.calendar-print-entry{display:grid;grid-template-columns:10mm 1fr;gap:.8mm;padding:1.2mm;border-left:2mm solid #64748b;border-radius:1mm;background:#f5f7f9!important;font-size:7px;line-height:1.15}.calendar-print-entry>time{font-weight:900}.calendar-print-entry>span{display:grid;gap:.4mm;min-width:0}.calendar-print-entry b,.calendar-print-entry small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.calendar-print-entry.servico{border-color:#159447;background:#e6f7ec!important}.calendar-print-entry.revisao{border-color:#9b5de5;background:#f3e8ff!important}.calendar-print-entry.retorno{border-color:#f97316;background:#fff0e5!important}.calendar-print-entry.orcamento,.calendar-print-entry.avaliou{border-color:#d6a000;background:#fff8cf!important}.calendar-print-entry.gabaritagem{border-color:#db2777;background:#fce7f3!important}.calendar-print-entry.alinhamento-balanceamento{border-color:#0891b2;background:#e6f8fb!important}.calendar-print-entry.faltou{border-color:#d71920;background:#ffe5e7!important}
+          .calendar-print-header{display:flex!important;align-items:flex-end;justify-content:space-between;padding-bottom:2mm;border-bottom:2px solid #d71920}.calendar-print-header span{display:grid;gap:1mm}.calendar-print-header b{font-size:17px}.calendar-print-header strong{font-size:13px}.calendar-print-header small{font-size:8px}.calendar-print-legend{display:flex!important;align-items:center;justify-content:center;flex-wrap:wrap;gap:1.5mm 3mm;margin-top:2mm;color:#344054;font-size:6.5px;font-weight:800}.calendar-print-legend span{display:flex;align-items:center;gap:1mm}.calendar-print-legend i{display:block;width:3mm;height:2mm;border-radius:.6mm;background:var(--legend-color)}
+          .calendar-print-week{display:grid!important;grid-template-columns:repeat(var(--print-week-days),1fr);gap:2mm;margin-top:2mm;height:166mm}.calendar-print-day{overflow:hidden;border:1px solid #9aa7b5;border-radius:2mm}.calendar-print-day>.day-head{display:grid!important;padding:2mm;background:#172b44!important;color:#fff;text-align:center}.calendar-print-day>.day-head.holiday{background:#b3131b!important}.calendar-print-day>.day-head b{font-size:11px;text-transform:uppercase}.calendar-print-day>.day-head span{font-size:15px;font-weight:900}.calendar-print-day>.day-head small{font-size:7px}.calendar-print-day-list{display:grid;gap:1mm;padding:1.5mm}.calendar-print-entry{display:grid;grid-template-columns:10mm 1fr;gap:.8mm;padding:1.2mm;border-left:2mm solid #64748b;border-radius:1mm;background:#f5f7f9!important;font-size:7px;line-height:1.15}.calendar-print-entry>time{font-weight:900}.calendar-print-entry>span{display:grid;gap:.4mm;min-width:0}.calendar-print-entry b,.calendar-print-entry small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.calendar-print-entry.servico{border-color:#159447;background:#e6f7ec!important}.calendar-print-entry.revisao{border-color:#9b5de5;background:#f3e8ff!important}.calendar-print-entry.retorno{border-color:#f97316;background:#fff0e5!important}.calendar-print-entry.orcamento,.calendar-print-entry.avaliou{border-color:#d6a000;background:#fff8cf!important}.calendar-print-entry.gabaritagem{border-color:#db2777;background:#fce7f3!important}.calendar-print-entry.alinhamento-balanceamento{border-color:#0891b2;background:#e6f8fb!important}.calendar-print-entry.faltou{border-color:#d71920;background:#ffe5e7!important}
           .calendar-print-month{display:grid!important;grid-template-columns:repeat(7,1fr);grid-template-rows:8mm repeat(6,28mm);margin-top:3mm;border-top:1px solid #8a96a3;border-left:1px solid #8a96a3}.calendar-print-month>strong{display:grid;place-items:center;border-right:1px solid #8a96a3;border-bottom:1px solid #8a96a3;background:#172b44!important;color:#fff;font-size:8px;text-transform:uppercase}.calendar-print-month-day{min-width:0;overflow:hidden;padding:1mm;border-right:1px solid #8a96a3;border-bottom:1px solid #8a96a3}.calendar-print-month-day.outside{background:#eef1f4!important;color:#7b8794}.calendar-print-month-day.holiday{background:#fff0f2!important}.calendar-print-month-day>.month-day-head{display:flex!important;justify-content:space-between;gap:1mm;margin-bottom:.7mm;font-size:7px}.calendar-print-month-day>.month-day-head b{font-size:10px}.calendar-print-month-day>.month-day-head em{overflow:hidden;color:#a50f18;font-size:6px;font-style:normal;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.calendar-print-month-entry{display:block;overflow:hidden;margin-bottom:.5mm;padding:.5mm 1mm;border-left:1.2mm solid #64748b;border-radius:.5mm;background:#f4f6f8!important;font-size:6px;font-weight:700;line-height:1.1;text-overflow:ellipsis;white-space:nowrap}.calendar-print-month-entry.servico{border-color:#159447}.calendar-print-month-entry.revisao{border-color:#9b5de5}.calendar-print-month-entry.retorno{border-color:#f97316}.calendar-print-month-entry.orcamento,.calendar-print-month-entry.avaliou{border-color:#d6a000}.calendar-print-month-entry.gabaritagem{border-color:#db2777}.calendar-print-month-entry.alinhamento-balanceamento{border-color:#0891b2}.calendar-print-month-entry.faltou{border-color:#d71920}
         }
         @media(min-width:1600px){.agenda{max-width:1600px!important}.agenda-grid-semana{grid-template-columns:minmax(0,1fr) 460px!important}.week-time-zone,.week-timeline-head button small{font-size:10px}.week-timeline-head button b{font-size:22px}.week-appointment{font-size:10px}.week-appointment>b{font-size:10px}.week-appointment>strong{font-size:12px}.week-appointment>small{font-size:10px}.week-appointment>.week-appointment-status,.week-appointment>.week-budget-type{font-size:9px}.week-time-column span{font-size:11px}.agenda-grid-semana .day article time>b{font-size:12px}.agenda-grid-semana .day article h3{font-size:13px}.agenda-grid-semana .day article p,.agenda-grid-semana .day article span>small{font-size:10px}.agenda-grid-semana .day article .appointment-toggle{font-size:11px!important}}
@@ -5236,15 +5239,25 @@ function Agenda({
           </span>
           <strong>
             {calendarPrintMode === "semana"
-              ? `Semana de ${printWeekDays[0].toLocaleDateString("pt-BR")} a ${printWeekDays[5].toLocaleDateString("pt-BR")}`
+              ? `Semana de ${printWeekDays[0].toLocaleDateString("pt-BR")} a ${printWeekDays[printWeekDays.length - 1].toLocaleDateString("pt-BR")}`
               : cursor.toLocaleDateString("pt-BR", {
                   month: "long",
                   year: "numeric",
                 })}
           </strong>
         </div>
+        <div className="calendar-print-legend">
+          <span><i style={{ "--legend-color": "#159447" } as CSSProperties} /> Serviço aprovado</span>
+          <span><i style={{ "--legend-color": "#9b5de5" } as CSSProperties} /> Revisão 30 dias</span>
+          <span><i style={{ "--legend-color": "#f97316" } as CSSProperties} /> Retorno</span>
+          <span><i style={{ "--legend-color": "#d6a000" } as CSSProperties} /> Orçamento</span>
+          <span><i style={{ "--legend-color": "#db2777" } as CSSProperties} /> Gabaritagem</span>
+          <span><i style={{ "--legend-color": "#0891b2" } as CSSProperties} /> Alinhamento e balanceamento</span>
+          <span><i style={{ "--legend-color": "#d71920" } as CSSProperties} /> Faltou</span>
+          <span><i style={{ "--legend-color": "#2563eb" } as CSSProperties} /> Serviço agendado</span>
+        </div>
         {calendarPrintMode === "semana" ? (
-          <div className="calendar-print-week">
+          <div className="calendar-print-week" style={{ "--print-week-days": printWeekDays.length } as CSSProperties}>
             {printWeekDays.map((day) => {
               const dayIso = iso(day),
                 holiday = holidays.find((item: any) => item.date === dayIso),
@@ -9832,7 +9845,15 @@ function Reports({
     [weekDate, setWeekDate] = useState(iso(new Date())),
     [reminderDayDrafts, setReminderDayDrafts] = useState<
       Record<number, number>
-    >({});
+    >({}),
+    [quotePrintRange, setQuotePrintRange] = useState<
+      "current" | "month" | "period"
+    >("current"),
+    [quotePrintMonth, setQuotePrintMonth] = useState(
+      iso(new Date()).slice(0, 7),
+    ),
+    [quotePrintFrom, setQuotePrintFrom] = useState(""),
+    [quotePrintTo, setQuotePrintTo] = useState(iso(new Date()));
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -9980,6 +10001,29 @@ function Reports({
       !!appointment.quoteFollowUpDueDate &&
       appointment.quoteFollowUpDueDate <= iso(new Date()),
   ).length;
+  const currentQuoteMonth = iso(new Date()).slice(0, 7),
+    printableOpenQuotes = openQuotes.filter((appointment) => {
+      if (quotePrintRange === "current")
+        return appointment.date.startsWith(currentQuoteMonth);
+      if (quotePrintRange === "month")
+        return appointment.date.startsWith(quotePrintMonth);
+      return (
+        (!quotePrintFrom || appointment.date >= quotePrintFrom) &&
+        (!quotePrintTo || appointment.date <= quotePrintTo)
+      );
+    }),
+    quotePrintPeriodLabel =
+      quotePrintRange === "current"
+        ? new Date(`${currentQuoteMonth}-01T12:00:00`).toLocaleDateString(
+            "pt-BR",
+            { month: "long", year: "numeric" },
+          )
+        : quotePrintRange === "month"
+          ? new Date(`${quotePrintMonth}-01T12:00:00`).toLocaleDateString(
+              "pt-BR",
+              { month: "long", year: "numeric" },
+            )
+          : `${quotePrintFrom ? new Date(`${quotePrintFrom}T12:00:00`).toLocaleDateString("pt-BR") : "início"} a ${quotePrintTo ? new Date(`${quotePrintTo}T12:00:00`).toLocaleDateString("pt-BR") : "hoje"}`;
   const reminderDaysFor = (appointment: Appt) =>
       reminderDayDrafts[appointment.id] ??
       appointment.quoteFollowUpDays ??
@@ -10213,12 +10257,12 @@ function Reports({
               <span><b>MONOCENTER</b><small>Centro Automotivo</small></span>
               <div>
                 <h1>Orçamentos em aberto</h1>
-                <p>Emitido em {new Date().toLocaleDateString("pt-BR")} · {openQuotes.length} registros</p>
+                <p>{quotePrintPeriodLabel} · Emitido em {new Date().toLocaleDateString("pt-BR")} · {printableOpenQuotes.length} registros</p>
               </div>
             </div>
             <table>
               <thead><tr><th>Cliente / contato</th><th>Veículo</th><th>Entrada</th><th>Lembrete</th><th>Situação</th></tr></thead>
-              <tbody>{openQuotes.map((a) => {
+              <tbody>{printableOpenQuotes.map((a) => {
                 const reminderDue = !!a.quoteFollowUpDueDate && a.quoteFollowUpDueDate <= iso(new Date());
                 return <tr key={`print-${a.id}`}>
                   <td><b>{a.client}</b><small>{a.phone || "Contato não informado"}</small></td>
@@ -10260,8 +10304,8 @@ function Reports({
               .declined-quote-row span{display:grid;gap:2px}.declined-quote-row small{color:#64748b}
               .declined-quote-row button{padding:6px 9px;font-size:10px}
               .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
-              .open-quotes-print-sheet{display:none}.open-quotes-reminder-alert{margin:0 0 12px;padding:10px 12px;border:1px solid #efb2b6;border-radius:9px;background:#fff0f1;color:#a3131c;font-size:12px;font-weight:900}.management-report-head .print-open-quotes-button{background:#111d2b;color:#fff}
-              @media print{body.print-open-quotes *{visibility:hidden!important}body.print-open-quotes .open-quotes-print-sheet,body.print-open-quotes .open-quotes-print-sheet *{visibility:visible!important}body.print-open-quotes .open-quotes-print-sheet{display:block!important;position:fixed!important;inset:0!important;width:297mm!important;height:210mm!important;padding:10mm!important;background:#fff!important;color:#111!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.open-quotes-print-header{display:grid;grid-template-columns:52mm 1fr;align-items:center;margin-bottom:6mm;border:1px solid #ced6df;border-bottom:2mm solid #e31b23}.open-quotes-print-header>span{display:grid;padding:5mm;color:#e31b23;font-size:19pt}.open-quotes-print-header>span small{color:#111;font-size:8pt}.open-quotes-print-header>div{padding:4mm;border-left:1px solid #ced6df}.open-quotes-print-header h1{margin:0;font-size:18pt}.open-quotes-print-header p{margin:1mm 0 0;color:#526274;font-size:8pt}.open-quotes-print-sheet table{width:100%;border-collapse:collapse;font-size:8pt}.open-quotes-print-sheet th{padding:2.5mm;background:#111d2b;color:#fff;text-align:left}.open-quotes-print-sheet td{padding:2.2mm;border:1px solid #d8e0e8;vertical-align:top}.open-quotes-print-sheet td b,.open-quotes-print-sheet td small{display:block}.open-quotes-print-sheet td small{margin-top:.8mm;color:#526274}.open-quotes-print-sheet td.due{background:#ffe5e7;color:#a3131c;font-weight:900}@page{size:A4 landscape;margin:0}}
+              .open-quotes-print-sheet{display:none}.open-quotes-reminder-alert{margin:0 0 12px;padding:10px 12px;border:1px solid #efb2b6;border-radius:9px;background:#fff0f1;color:#a3131c;font-size:12px;font-weight:900}.quote-print-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:10px;border:1px solid #d8e0e8;border-radius:9px;background:#f8fafc}.quote-print-controls label{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.quote-print-controls select,.quote-print-controls input{min-width:145px;padding:8px;border:1px solid #aeb9c7;border-radius:7px;background:#fff}.quote-print-controls button{padding:9px 12px;background:#111d2b;color:#fff}.quote-print-count{align-self:center;color:#526274;font-size:11px;font-weight:800}
+              @media print{body.print-open-quotes *{visibility:hidden!important}body.print-open-quotes .open-quotes-print-sheet,body.print-open-quotes .open-quotes-print-sheet *{visibility:visible!important}body.print-open-quotes .open-quotes-print-sheet{display:block!important;position:static!important;width:297mm!important;min-height:210mm!important;height:auto!important;box-sizing:border-box;padding:8mm!important;background:#fff!important;color:#111!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.open-quotes-print-header{display:grid;grid-template-columns:68mm 1fr;align-items:center;margin-bottom:5mm;border:1px solid #ced6df;border-bottom:2mm solid #e31b23;break-inside:avoid}.open-quotes-print-header>span{display:grid;box-sizing:border-box;min-width:0;padding:4mm 5mm;color:#e31b23;font-size:17pt;line-height:1.05;white-space:nowrap}.open-quotes-print-header>span b{display:block;letter-spacing:-.25mm}.open-quotes-print-header>span small{margin-top:1mm;color:#111;font-size:7pt}.open-quotes-print-header>div{padding:4mm;border-left:1px solid #ced6df}.open-quotes-print-header h1{margin:0;font-size:18pt}.open-quotes-print-header p{margin:1mm 0 0;color:#526274;font-size:8pt;text-transform:capitalize}.open-quotes-print-sheet table{width:100%;border-collapse:collapse;font-size:8pt}.open-quotes-print-sheet thead{display:table-header-group}.open-quotes-print-sheet tr{break-inside:avoid}.open-quotes-print-sheet th{padding:2.5mm;background:#111d2b;color:#fff;text-align:left}.open-quotes-print-sheet td{padding:2.2mm;border:1px solid #d8e0e8;vertical-align:top}.open-quotes-print-sheet td b,.open-quotes-print-sheet td small{display:block}.open-quotes-print-sheet td small{margin-top:.8mm;color:#526274}.open-quotes-print-sheet td.due{background:#ffe5e7;color:#a3131c;font-weight:900}@page{size:A4 landscape;margin:0}}
             `}</style>
             <div className="management-report-head">
               <span>
@@ -10273,12 +10317,30 @@ function Reports({
                     : ""}
                 </p>
               </span>
+            </div>
+            <div className="quote-print-controls">
+              <label>O que imprimir
+                <select value={quotePrintRange} onChange={(event) => setQuotePrintRange(event.target.value as "current" | "month" | "period")}>
+                  <option value="current">Mês atual</option>
+                  <option value="month">Escolher mês</option>
+                  <option value="period">Escolher período</option>
+                </select>
+              </label>
+              {quotePrintRange === "month" && <label>Mês
+                <input type="month" value={quotePrintMonth} onChange={(event) => setQuotePrintMonth(event.target.value)} />
+              </label>}
+              {quotePrintRange === "period" && <>
+                <label>De<input type="date" value={quotePrintFrom} onChange={(event) => setQuotePrintFrom(event.target.value)} /></label>
+                <label>Até<input type="date" value={quotePrintTo} onChange={(event) => setQuotePrintTo(event.target.value)} /></label>
+              </>}
               <button className="print-open-quotes-button" onClick={() => {
+                if (!printableOpenQuotes.length) return alert("Não há orçamentos em aberto no período escolhido.");
                 document.body.classList.add("print-open-quotes");
                 window.addEventListener("afterprint", () => document.body.classList.remove("print-open-quotes"), { once: true });
                 setTimeout(() => window.print(), 50);
                 setTimeout(() => document.body.classList.remove("print-open-quotes"), 1200);
               }}>Imprimir listagem</button>
+              <span className="quote-print-count">{printableOpenQuotes.length} {printableOpenQuotes.length === 1 ? "orçamento" : "orçamentos"} no período</span>
             </div>
             {dueQuoteReminders > 0 && <div className="open-quotes-reminder-alert">⚠ {dueQuoteReminders} {dueQuoteReminders === 1 ? "cliente precisa" : "clientes precisam"} de contato hoje.</div>}
             <div className="compact-quotes-wrap">
