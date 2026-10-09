@@ -4521,9 +4521,10 @@ function DocLogo() {
   );
 }
 function MercosulPlate({ plate, className = "" }: { plate?: string; className?: string }) {
-  const value = String(plate || "SEM PLACA")
-    .toLocaleUpperCase("pt-BR")
-    .replace(/[^A-Z0-9-]/g, "");
+  const suppliedPlate = String(plate || "").trim();
+  const value = suppliedPlate
+    ? suppliedPlate.toLocaleUpperCase("pt-BR").replace(/[^A-Z0-9-]/g, "")
+    : "SEM PLACA";
   return (
     <span className={`mercosul-plate ${className}`.trim()} aria-label={`Placa ${value}`}>
       <span className="mercosul-plate-top"><b>MERCOSUL</b><b>BRASIL</b><i aria-hidden="true" /></span>
@@ -4536,7 +4537,7 @@ function Vehicle() {
   return (
     <>
       <style>{`
-        .vehicle .mercosul-plate{display:inline-grid;grid-template-rows:9px 1fr;box-sizing:border-box;width:112px;min-width:112px;height:39px;margin-top:3px;border:1px solid #162f82;border-radius:5px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.vehicle .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 4px;background:#153891;color:#fff;font-size:6px;letter-spacing:.4px}.vehicle .mercosul-plate-top b{font-size:6px}.vehicle .mercosul-plate-top i{position:relative;width:11px;height:6px;border-radius:1px;background:#159447}.vehicle .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.vehicle .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:21px;letter-spacing:3.3px;white-space:nowrap}.vehicle>span{overflow:visible!important}
+        .vehicle .mercosul-plate{display:inline-grid;grid-template-rows:9px 1fr;box-sizing:border-box;width:138px;min-width:138px;height:43px;margin-top:3px;border:1px solid #162f82;border-radius:5px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.vehicle .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 4px;background:#153891;color:#fff;font-size:6px;letter-spacing:.4px}.vehicle .mercosul-plate-top b{font-size:6px}.vehicle .mercosul-plate-top i{position:relative;width:11px;height:6px;border-radius:1px;background:#159447}.vehicle .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.vehicle .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:20px;letter-spacing:2px;white-space:nowrap}.vehicle>span{overflow:visible!important}
       `}</style>
       <div className="printheader">
         <b>MONOCENTER ALINHAMENTO TÉCNICO</b>
