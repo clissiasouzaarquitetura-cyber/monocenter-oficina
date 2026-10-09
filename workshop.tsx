@@ -1,6 +1,6 @@
 "use client";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { CarFront } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import Image from "next/image";
 const ITEMS = [
   "Amortecedor Dianteiro Direito",
   "Amortecedor Dianteiro Esquerdo",
@@ -175,6 +175,24 @@ const findVehicle = (value: string) => {
 };
 const vehicleColorHex = (value?: string) =>
   VEHICLE_COLORS[(value || "").trim().toLocaleLowerCase("pt-BR")] ?? "#d8dde4";
+const WORKSHOP_SPOTS = [
+  { id: 1, label: "Posição 1", left: 47.2, top: 10.1, rotation: 90 },
+  { id: 2, label: "Posição 2", left: 63.2, top: 10.1, rotation: 90 },
+  { id: 3, label: "Posição 3", left: 47.2, top: 28.8, rotation: 90 },
+  { id: 4, label: "Posição 4", left: 63.2, top: 28.8, rotation: 90 },
+  { id: 5, label: "Posição 5", left: 47.2, top: 47.6, rotation: 90 },
+  { id: 6, label: "Posição 6", left: 63.2, top: 47.6, rotation: 90 },
+  { id: 7, label: "Posição 7", left: 68.8, top: 65.5, rotation: 90 },
+  { id: 8, label: "Posição 8", left: 85.6, top: 65.5, rotation: 90 },
+  { id: 9, label: "Posição 9", left: 68.8, top: 76.4, rotation: 90 },
+  { id: 10, label: "Posição 10", left: 85.6, top: 76.4, rotation: 90 },
+  { id: 11, label: "Posição 11", left: 14.7, top: 88.4, rotation: 90 },
+  { id: "elevador-1", label: "Elevador 1", left: 23.2, top: 8, rotation: 45 },
+  { id: "elevador-2", label: "Elevador 2", left: 23.2, top: 28.7, rotation: 45 },
+  { id: "elevador-3", label: "Elevador 3", left: 23.2, top: 49.3, rotation: 45 },
+  { id: "rampa-gabaritagem", label: "Rampa de gabaritagem", left: 85.3, top: 28.8, rotation: 90 },
+  { id: "rampa-alinhamento", label: "Rampa de alinhamento", left: 33.5, top: 66.1, rotation: 0 },
+] as const;
 const SERVICES = [
   ["Alinhamento de direção 3D - Passeio", 100],
   ["Alinhamento de direção 3D - SUV", 120],
@@ -296,6 +314,7 @@ type PurchaseOrderState = {
 type View =
   | "agenda"
   | "veiculos"
+  | "laudos"
   | "atendimento"
   | "avaliacao"
   | "orcamento"
@@ -304,9 +323,45 @@ type View =
   | "torque"
   | "revisao"
   | "compras"
+  | "orcamentos_abertos"
   | "relatorios"
   | "historico"
   | "config";
+const RESTORABLE_VIEWS = new Set<View>([
+  "agenda",
+  "veiculos",
+  "laudos",
+  "compras",
+  "orcamentos_abertos",
+  "relatorios",
+  "historico",
+  "config",
+]);
+const LAST_VIEW_STORAGE_KEY = "monocenter:last-main-view:v1";
+type GeometryReportData = {
+  schemaVersion?: number;
+  values: Record<string, any>;
+  technician: string;
+  notes: string;
+  sourceName?: string;
+  extraFields?: Record<string, any>;
+  savedAt: string;
+  savedBy?: string;
+};
+type StandaloneGeometryReport = {
+  id: number;
+  client: string;
+  vehicle: string;
+  plate: string;
+  km: string;
+  createdAt: string;
+  createdBy?: string;
+  updatedAt?: string;
+  linkedAppointmentId?: number;
+  linkedAt?: string;
+  linkedBy?: string;
+  report?: GeometryReportData;
+};
 type Appt = {
   id: number;
   workOrder?: string;
@@ -376,16 +431,12 @@ type Appt = {
   lastEditedAt?: string;
   startedAt?: string;
   inProgress?: boolean;
+  workshopPosition?: number | string;
+  workshopPositionUpdatedBy?: string;
+  workshopPositionUpdatedAt?: string;
   statusBeforeNoShow?: Appt["status"];
   inProgressBeforeNoShow?: boolean;
-  geometryReport?: {
-    values: Record<string, any>;
-    technician: string;
-    notes: string;
-    sourceName?: string;
-    savedAt: string;
-    savedBy?: string;
-  };
+  geometryReport?: GeometryReportData;
   noShowMarkedBy?: string;
   noShowMarkedAt?: string;
   _updatedAt?: number;
@@ -516,22 +567,57 @@ const inProgressLabel = (a: Appt) => {
   return "Serviço em andamento";
 };
 
-function VehiclePicture({ appointment }: { appointment: Appt }) {
+const workshopServiceLabel = (appointment: Appt) => {
+  if (appointment.type === "revisao")
+    return appointment.reviewWithService
+      ? "Revisão 30 dias + serviço"
+      : "Revisão 30 dias";
+  if (appointment.type === "retorno") return "Retorno";
+  if (appointment.type === "garantia") return "Garantia";
+  if (appointment.status === "servico") return "Serviço aprovado";
+  if (appointment.appointmentServiceType === "gabaritagem")
+    return "Gabaritagem";
+  if (
+    appointment.appointmentServiceType === "alinhamento_balanceamento" ||
+    appointment.appointmentServiceType === "alinhamento_3d"
+  )
+    return "Alinhamento e balanceamento";
+  if (appointment.status === "avaliou") return "Orçamento";
+  return "Avaliação";
+};
+
+function VehicleTopView({
+  appointment,
+  compact = false,
+}: {
+  appointment: Appt;
+  compact?: boolean;
+}) {
   const catalog = findVehicle(appointment.vehicle || "");
   const brand = appointment.vehicleBrand || catalog?.[1] || "Marca não informada";
-  const body = appointment.vehicleBody || catalog?.[2] || "Automóvel";
-  const color = appointment.vehicleColor || "Cor não informada";
+  const color = vehicleColorHex(appointment.vehicleColor);
   return (
-    <div className="vehicle-picture" aria-label={`${appointment.vehicle || "Veículo"}, ${color}`}>
-      <CarFront
-        aria-hidden="true"
-        size={68}
-        strokeWidth={1.8}
-        fill={vehicleColorHex(appointment.vehicleColor)}
-      />
-      <small>{body}</small>
-      <b>{brand}</b>
-      <span>{color}</span>
+    <div
+      className={`workshop-vehicle${compact ? " compact" : ""}`}
+      aria-label={`${appointment.vehicle || "Veículo"}, ${appointment.vehicleColor || "cor não informada"}`}
+    >
+      <div className="workshop-vehicle-art" style={{ "--vehicle-color": color } as CSSProperties}>
+        <span aria-hidden="true" />
+        <Image
+          src="/veiculo-vista-superior.png"
+          alt=""
+          fill
+          sizes={compact ? "90px" : "130px"}
+          priority={false}
+        />
+      </div>
+      <div className={`workshop-vehicle-label ${apptClass(appointment)}`}>
+        <strong>{workshopServiceLabel(appointment)}</strong>
+        <b>{appointment.plate || "Sem placa"}</b>
+        <small className="workshop-vehicle-model">
+          {appointment.vehicle || "Modelo não informado"} · {brand}
+        </small>
+      </div>
     </div>
   );
 }
@@ -548,25 +634,29 @@ const employeeAbsenceReason = (a: Appt) => {
 };
 const employeeAbsencePeriod = (a: Appt) =>
   a.absenceEndTime ? `${a.time}–${a.absenceEndTime}` : `${a.time} em diante`;
-const apptClass = (a: Appt) =>
-  isEmployeeAbsence(a)
-    ? "block"
-    : a.status === "faltou"
-      ? "faltou"
-      : (a.serviceScheduled && a.status === "agendado") ||
-        !!a.serviceAppointmentId
-      ? "scheduled-service"
-      : a.type === "retorno"
-        ? "retorno"
-        : a.type === "garantia"
-          ? "garantia"
-          : a.type === "revisao" && !a.review
-            ? "revisao"
-            : a.status === "servico" && conferenceStarted(a)
-              ? "conference"
-              : a.inProgress && a.status !== "servico"
-                ? "inprogress"
-                : a.status;
+function apptClass(a: Appt) {
+  if (isEmployeeAbsence(a)) return "block";
+  if (a.status === "faltou") return "faltou";
+  if (a.type === "retorno") return "retorno";
+  if (a.type === "garantia") return "garantia";
+  if (a.type === "revisao") return "revisao";
+  if (a.status === "servico" && conferenceStarted(a)) return "conference";
+  if (a.status === "servico") return "servico";
+  if (a.appointmentServiceType === "gabaritagem") return "gabaritagem";
+  if (
+    a.appointmentServiceType === "alinhamento_balanceamento" ||
+    a.appointmentServiceType === "alinhamento_3d"
+  )
+    return "alinhamento-balanceamento";
+  if (a.status === "avaliou") return "orcamento";
+  if (
+    (a.serviceScheduled && a.status === "agendado") ||
+    !!a.serviceAppointmentId
+  )
+    return "scheduled-service";
+  if (a.inProgress) return "inprogress";
+  return a.status;
+}
 const agendaStatusLabel = (a: Appt) => {
   if (isEmployeeAbsence(a)) return "AUSENTE";
   if (a.budget?.processStatus === "Finalizado")
@@ -611,12 +701,16 @@ let DISPLAY_APPT: Appt = EMPTY_APPT;
 export default function App({ initialState, user, onLogout }: any) {
   const shared = initialState ?? {};
   const [view, setView] = useState<View>("agenda"),
+    [viewRestored, setViewRestored] = useState(false),
     [reportStartMode, setReportStartMode] = useState<
       "registros" | "abertos" | "andamento"
     >("registros"),
     [costs, setCosts] = useState(false),
     [appointments, setAppointments] = useState<Appt[]>(
       shared.appointments ?? INITIAL,
+    ),
+    [geometryDrafts, setGeometryDrafts] = useState<StandaloneGeometryReport[]>(
+      shared.geometryDrafts ?? [],
     ),
     [deletedAppointmentIds, setDeletedAppointmentIds] = useState<number[]>(
       shared.deletedAppointmentIds ?? [],
@@ -705,6 +799,15 @@ export default function App({ initialState, user, onLogout }: any) {
   useEffect(() => {
     localStorage.setItem("monocenter-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
+  useEffect(() => {
+    const savedView = localStorage.getItem(LAST_VIEW_STORAGE_KEY) as View | null;
+    if (savedView && RESTORABLE_VIEWS.has(savedView)) setView(savedView);
+    setViewRestored(true);
+  }, []);
+  useEffect(() => {
+    if (viewRestored && RESTORABLE_VIEWS.has(view))
+      localStorage.setItem(LAST_VIEW_STORAGE_KEY, view);
+  }, [view, viewRestored]);
   const defaultTemplates = {
     lembrete:
       "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!",
@@ -765,6 +868,7 @@ export default function App({ initialState, user, onLogout }: any) {
     saveTimer.current = setTimeout(() => {
       const state = {
         appointments,
+        geometryDrafts,
         deletedAppointmentIds,
         footerSize,
         roundStep,
@@ -810,6 +914,7 @@ export default function App({ initialState, user, onLogout }: any) {
     };
   }, [
     appointments,
+    geometryDrafts,
     deletedAppointmentIds,
     footerSize,
     roundStep,
@@ -855,6 +960,7 @@ export default function App({ initialState, user, onLogout }: any) {
             }
           };
           apply(setAppointments, appointments, s.appointments);
+          apply(setGeometryDrafts, geometryDrafts, s.geometryDrafts);
           apply(
             setDeletedAppointmentIds,
             deletedAppointmentIds,
@@ -889,6 +995,7 @@ export default function App({ initialState, user, onLogout }: any) {
     };
   }, [
     appointments,
+    geometryDrafts,
     deletedAppointmentIds,
     techs,
     holidays,
@@ -1147,11 +1254,13 @@ export default function App({ initialState, user, onLogout }: any) {
   const nav: [View, string, string][] = [
     ["agenda", "Agenda", "▦"],
     ["veiculos", "Veículos na oficina", "▣"],
+    ["laudos", "Laudos de geometria", "▤"],
     ["avaliacao", "Avaliação", "✓"],
     ["orcamento", "Orçamento", "$"],
     ["proposta", "Proposta", "▤"],
     ["torque", "Conferência", "◇"],
     ["compras", "Pedido de compra", "☑"],
+    ["orcamentos_abertos", "Orçamentos em aberto", "◫"],
     ["relatorios", "Relatórios", "▥"],
     ["historico", "Histórico", "↺"],
     ["config", "Configurações", "⚙"],
@@ -1212,6 +1321,183 @@ export default function App({ initialState, user, onLogout }: any) {
         document.body.classList.remove("print-" + kind);
         document.body.classList.remove("no-values");
       }, 500);
+    },
+    geometrySharedState = (
+      nextAppointments: Appt[],
+      nextGeometryDrafts: StandaloneGeometryReport[],
+    ) => ({
+      appointments: nextAppointments,
+      geometryDrafts: nextGeometryDrafts,
+      deletedAppointmentIds,
+      footerSize,
+      roundStep,
+      status,
+      evaluationNotes,
+      checks,
+      custom,
+      techs,
+      holidays,
+      evaluator,
+      started,
+      templates,
+      parts,
+      selectedServices,
+      serviceQty,
+      servicePrices,
+      manualServices,
+      proposalPaymentOptions,
+      patioNotes,
+      processStatus,
+      purchaseChecks,
+      purchaseOrderStates,
+    }),
+    persistGeometryState = async (
+      nextAppointments: Appt[],
+      nextGeometryDrafts: StandaloneGeometryReport[],
+      action: string,
+      detail: string,
+    ) => {
+      syncBlockedUntil.current = Date.now() + 8000;
+      const response = await fetch("/api/state", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          state: geometrySharedState(nextAppointments, nextGeometryDrafts),
+          action,
+          entity: "Laudo de geometria",
+          detail,
+        }),
+      });
+      if (!response.ok)
+        throw new Error("A alteração ficou neste computador, mas não foi confirmada no banco compartilhado.");
+    },
+    saveGeometryReportForAppointment = async (
+      appointmentId: number,
+      geometryReport: any,
+    ) => {
+      const source = appointments.find((item) => item.id === appointmentId);
+      if (!source) throw new Error("Atendimento não localizado.");
+      const savedAt = new Date().toISOString();
+      const updated: Appt = {
+        ...source,
+        geometryReport: {
+          ...geometryReport,
+          savedAt,
+          savedBy: user.displayName,
+        },
+        lastEditedBy: user.displayName,
+        lastEditedAt: savedAt,
+        _updatedAt: Date.now(),
+      };
+      const nextAppointments = appointments.map((item) =>
+        item.id === updated.id ? updated : item,
+      );
+      DISPLAY_APPT = updated;
+      if (activeAppointment?.id === updated.id) setActiveAppointment(updated);
+      setAppointments(nextAppointments);
+      await persistGeometryState(
+        nextAppointments,
+        geometryDrafts,
+        "Salvou laudo de geometria",
+        `${updated.client} · ${updated.plate || "sem placa"}`,
+      );
+      setSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+      return updated;
+    },
+    saveGeometryReport = async (geometryReport: any) => {
+      if (!activeAppointment) throw new Error("Atendimento não localizado.");
+      return saveGeometryReportForAppointment(activeAppointment.id, geometryReport);
+    },
+    createGeometryDraft = async (data: Pick<StandaloneGeometryReport, "client" | "vehicle" | "plate" | "km">) => {
+      const now = new Date().toISOString();
+      const draft: StandaloneGeometryReport = {
+        id: Date.now(),
+        client: data.client.trim() || "Cliente avulso",
+        vehicle: data.vehicle.trim() || "Veículo não informado",
+        plate: data.plate.trim().toLocaleUpperCase("pt-BR"),
+        km: data.km.trim(),
+        createdAt: now,
+        createdBy: user.displayName,
+      };
+      const nextDrafts = [draft, ...geometryDrafts];
+      setGeometryDrafts(nextDrafts);
+      await persistGeometryState(
+        appointments,
+        nextDrafts,
+        "Criou laudo avulso",
+        `${draft.client} · ${draft.plate || "sem placa"}`,
+      );
+      return draft;
+    },
+    saveGeometryDraftReport = async (draftId: number, geometryReport: any) => {
+      const savedAt = new Date().toISOString();
+      const source = geometryDrafts.find((item) => item.id === draftId);
+      if (!source) throw new Error("Laudo avulso não localizado.");
+      const updated: StandaloneGeometryReport = {
+        ...source,
+        updatedAt: savedAt,
+        report: {
+          ...geometryReport,
+          savedAt,
+          savedBy: user.displayName,
+        },
+      };
+      const nextDrafts = geometryDrafts.map((item) =>
+        item.id === draftId ? updated : item,
+      );
+      setGeometryDrafts(nextDrafts);
+      await persistGeometryState(
+        appointments,
+        nextDrafts,
+        "Salvou laudo avulso",
+        `${updated.client} · ${updated.plate || "sem placa"}`,
+      );
+      return updated;
+    },
+    linkGeometryDraft = async (draftId: number, appointmentId: number) => {
+      const draft = geometryDrafts.find((item) => item.id === draftId);
+      const target = appointments.find((item) => item.id === appointmentId);
+      if (!draft?.report) throw new Error("Salve o laudo avulso antes de vinculá-lo.");
+      if (!target) throw new Error("Atendimento para vínculo não localizado.");
+      if (
+        target.geometryReport &&
+        !confirm(
+          `O atendimento de ${target.client} já possui um laudo salvo. Deseja substituir pelo laudo avulso selecionado?`,
+        )
+      ) {
+        throw new Error("Vínculo cancelado. O laudo já existente foi preservado.");
+      }
+      const linkedAt = new Date().toISOString();
+      const updatedAppointment: Appt = {
+        ...target,
+        geometryReport: draft.report,
+        lastEditedBy: user.displayName,
+        lastEditedAt: linkedAt,
+        _updatedAt: Date.now(),
+      };
+      const nextAppointments = appointments.map((item) =>
+        item.id === appointmentId ? updatedAppointment : item,
+      );
+      const nextDrafts = geometryDrafts.map((item) =>
+        item.id === draftId
+          ? {
+              ...item,
+              linkedAppointmentId: appointmentId,
+              linkedAt,
+              linkedBy: user.displayName,
+              updatedAt: linkedAt,
+            }
+          : item,
+      );
+      setAppointments(nextAppointments);
+      setGeometryDrafts(nextDrafts);
+      await persistGeometryState(
+        nextAppointments,
+        nextDrafts,
+        "Vinculou laudo avulso ao atendimento",
+        `${target.client} · ${target.plate || "sem placa"}`,
+      );
+      return updatedAppointment;
     },
     messageParts = groupMessageParts(parts, roundStep),
     messageServices = [
@@ -1331,7 +1617,7 @@ export default function App({ initialState, user, onLogout }: any) {
             add={() => setModal(true)}
             showOpenQuotes={() => {
               setReportStartMode("abertos");
-              setView("relatorios");
+              setView("orcamentos_abertos");
               scrollTo(0, 0);
             }}
             showInProgress={() => {
@@ -1498,6 +1784,17 @@ export default function App({ initialState, user, onLogout }: any) {
               setQuoteMessageFor(null);
               setMessage(text);
             }}
+          />
+        )}
+        {view === "laudos" && (
+          <GeometryReportsHub
+            appointments={appointments}
+            drafts={geometryDrafts}
+            currentUser={user}
+            onCreateDraft={createGeometryDraft}
+            onSaveDraft={saveGeometryDraftReport}
+            onSaveAppointment={saveGeometryReportForAppointment}
+            onLinkDraft={linkGeometryDraft}
           />
         )}
         {view === "revisao" && activeAppointment && (
@@ -3766,27 +4063,10 @@ export default function App({ initialState, user, onLogout }: any) {
               {view === "geometria" && activeAppointment && (
                 <GeometryTechnicalReport
                   appointment={activeAppointment}
+                  currentUser={user}
                   onBack={() => go("proposta")}
                   onContinue={() => go("torque")}
-                  onSave={(geometryReport: any) => {
-                    const updated: Appt = {
-                      ...activeAppointment,
-                      geometryReport: {
-                        ...geometryReport,
-                        savedAt: new Date().toISOString(),
-                        savedBy: user.displayName,
-                      },
-                      lastEditedBy: user.displayName,
-                      lastEditedAt: new Date().toISOString(),
-                      _updatedAt: Date.now(),
-                    };
-                    DISPLAY_APPT = updated;
-                    setActiveAppointment(updated);
-                    setAppointments((list) =>
-                      list.map((item) => item.id === updated.id ? updated : item),
-                    );
-                    setSavedAt(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-                  }}
+                  onSave={saveGeometryReport}
                 />
               )}
             </section>
@@ -3794,8 +4074,10 @@ export default function App({ initialState, user, onLogout }: any) {
         {view === "atendimento" && activeAppointment && (
           <AttendanceSummary
             appointment={activeAppointment}
+            currentUser={user}
             roundStep={roundStep}
             onBack={() => go("agenda")}
+            onSaveGeometry={saveGeometryReport}
             onEditConference={() => {
               setChecks(activeAppointment.conference?.checks ?? {});
               setGeometry(activeAppointment.conference?.geometry ?? {});
@@ -3823,11 +4105,19 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
           />
         )}
-        {(view === "relatorios" || view === "veiculos") && (
+        {(view === "relatorios" ||
+          view === "veiculos" ||
+          view === "orcamentos_abertos") && (
           <Reports
             data={appointments}
             user={user}
-            initialMode={view === "veiculos" ? "andamento" : reportStartMode}
+            initialMode={
+              view === "veiculos"
+                ? "andamento"
+                : view === "orcamentos_abertos"
+                  ? "abertos"
+                  : "registros"
+            }
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
@@ -3914,6 +4204,33 @@ export default function App({ initialState, user, onLogout }: any) {
                 ),
               );
             }}
+            onSetWorkshopPosition={(id: number, position?: number | string) => {
+              const now = new Date().toISOString();
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((appointment) => {
+                  if (appointment.id === id)
+                    return {
+                      ...appointment,
+                      workshopPosition: position,
+                      workshopPositionUpdatedBy: user.displayName,
+                      workshopPositionUpdatedAt: now,
+                      lastEditedBy: user.displayName,
+                      lastEditedAt: now,
+                      _updatedAt: Date.now(),
+                    };
+                  if (position && appointment.workshopPosition === position)
+                    return {
+                      ...appointment,
+                      workshopPosition: undefined,
+                      workshopPositionUpdatedBy: user.displayName,
+                      workshopPositionUpdatedAt: now,
+                      _updatedAt: Date.now(),
+                    };
+                  return appointment;
+                }),
+              );
+            }}
             message={setMessage}
           />
         )}{" "}
@@ -3974,7 +4291,11 @@ export default function App({ initialState, user, onLogout }: any) {
         )}
         <div className="bottom">
           {nav
-            .filter((n) => !["proposta", "config", "relatorios"].includes(n[0]))
+            .filter((n) =>
+              !["proposta", "config", "relatorios", "orcamentos_abertos"].includes(
+                n[0],
+              ),
+            )
             .map((n) => (
               <button
                 className={view === n[0] ? "on" : ""}
@@ -4199,10 +4520,24 @@ function DocLogo() {
     </div>
   );
 }
+function MercosulPlate({ plate, className = "" }: { plate?: string; className?: string }) {
+  const value = String(plate || "SEM PLACA")
+    .toLocaleUpperCase("pt-BR")
+    .replace(/[^A-Z0-9-]/g, "");
+  return (
+    <span className={`mercosul-plate ${className}`.trim()} aria-label={`Placa ${value}`}>
+      <span className="mercosul-plate-top"><b>MERCOSUL</b><b>BRASIL</b><i aria-hidden="true" /></span>
+      <strong>{value}</strong>
+    </span>
+  );
+}
 function Vehicle() {
   const a = DISPLAY_APPT;
   return (
     <>
+      <style>{`
+        .vehicle .mercosul-plate{display:inline-grid;grid-template-rows:7px 1fr;box-sizing:border-box;width:70px;height:29px;margin-top:3px;border:1px solid #162f82;border-radius:4px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.vehicle .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 3px;background:#153891;color:#fff;font-size:5px;letter-spacing:.3px}.vehicle .mercosul-plate-top b{font-size:5px}.vehicle .mercosul-plate-top i{position:relative;width:9px;height:5px;border-radius:1px;background:#159447}.vehicle .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.vehicle .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:16px;letter-spacing:2.2px;white-space:nowrap}
+      `}</style>
       <div className="printheader">
         <b>MONOCENTER ALINHAMENTO TÉCNICO</b>
         <span>
@@ -4221,7 +4556,7 @@ function Vehicle() {
         ].map((x) => (
           <span key={x[0]}>
             <small>{x[0]}</small>
-            <b>{x[1]}</b>
+            {x[0] === "PLACA" ? <MercosulPlate plate={a.plate} /> : <b>{x[1]}</b>}
           </span>
         ))}
       </div>
@@ -4469,10 +4804,17 @@ function Agenda({
 }: any) {
   const today = new Date(),
     todayIso = iso(today);
-  const [date, setDate] = useState(todayIso),
-    [cursor, setCursor] = useState(
-      new Date(today.getFullYear(), today.getMonth(), 1),
-    ),
+  const [date, setDate] = useState(() => {
+      if (typeof window === "undefined") return todayIso;
+      const savedDate = localStorage.getItem("monocenter-calendar-date");
+      return savedDate && /^\d{4}-\d{2}-\d{2}$/.test(savedDate)
+        ? savedDate
+        : todayIso;
+    }),
+    [cursor, setCursor] = useState(() => {
+      const selected = new Date(`${date}T12:00:00`);
+      return new Date(selected.getFullYear(), selected.getMonth(), 1);
+    }),
     [mode, setMode] = useState<"dia" | "semana" | "mes">(() => {
       if (typeof window === "undefined") return "mes";
       const savedMode = localStorage.getItem("monocenter-calendar-mode");
@@ -4485,10 +4827,17 @@ function Agenda({
     [openCal, setOpenCal] = useState(true),
     [showSaturday, setShowSaturday] = useState(false),
     [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
-    [expandedAppointments, setExpandedAppointments] = useState<number[]>([]);
+    [expandedAppointments, setExpandedAppointments] = useState<number[]>([]),
+    [appointmentSearch, setAppointmentSearch] = useState(""),
+    [calendarPrintMode, setCalendarPrintMode] = useState<"semana" | "mes">(
+      "semana",
+    );
   useEffect(() => {
     localStorage.setItem("monocenter-calendar-mode", mode);
   }, [mode]);
+  useEffect(() => {
+    localStorage.setItem("monocenter-calendar-date", date);
+  }, [date]);
   const editCalendarAbsence = (appointment: Appt) =>
     edit(
       appointment.type === "bloqueio"
@@ -4544,11 +4893,58 @@ function Agenda({
         d.setDate(start.getDate() + i);
         return d;
       });
-    }, [cursor, date, mode]);
+    }, [cursor, date, mode]),
+    printWeekDays = (() => {
+      const chosen = new Date(`${date}T12:00:00`),
+        monday = new Date(chosen),
+        weekday = chosen.getDay();
+      monday.setDate(chosen.getDate() - (weekday === 0 ? 6 : weekday - 1));
+      return Array.from(
+        { length: mode === "semana" && !showSaturday ? 5 : 6 },
+        (_, index) => {
+        const day = new Date(monday);
+        day.setDate(monday.getDate() + index);
+        return day;
+        },
+      );
+    })(),
+    printMonthDays = (() => {
+      const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1),
+        start = new Date(first);
+      start.setDate(1 - first.getDay());
+      return Array.from({ length: 42 }, (_, index) => {
+        const day = new Date(start);
+        day.setDate(start.getDate() + index);
+        return day;
+      });
+    })();
   const isOngoingVehicle = (appointment: Appt) =>
       !isEmployeeAbsence(appointment) &&
       !!appointment.inProgress &&
       appointment.budget?.processStatus !== "Finalizado",
+    normalizedAppointmentSearch = normalizeSearch(appointmentSearch),
+    compactAppointmentSearch = normalizedAppointmentSearch.replace(/[^a-z0-9]/g, ""),
+    appointmentSearchActive = normalizedAppointmentSearch.length >= 2,
+    appointmentSearchResults = appointmentSearchActive
+      ? (data as Appt[])
+          .filter((appointment) => {
+            if (isEmployeeAbsence(appointment)) return false;
+            const client = normalizeSearch(appointment.client || "");
+            const plate = normalizeSearch(appointment.plate || "");
+            const compactPlate = plate.replace(/[^a-z0-9]/g, "");
+            return (
+              client.includes(normalizedAppointmentSearch) ||
+              plate.includes(normalizedAppointmentSearch) ||
+              (!!compactAppointmentSearch && compactPlate.includes(compactAppointmentSearch))
+            );
+          })
+          .sort(
+            (first, second) =>
+              second.date.localeCompare(first.date) ||
+              second.time.localeCompare(first.time, "pt-BR", { numeric: true }),
+          )
+          .slice(0, 80)
+      : [],
     selectedDayAppointments =
       mode === "semana"
         ? (data as Appt[]).filter((appointment) => appointment.date === date)
@@ -4763,6 +5159,13 @@ function Agenda({
       setDate(iso(next));
       setCursor(new Date(next.getFullYear(), next.getMonth(), 1));
     },
+    printCalendar = () => {
+      document.body.classList.add("print-calendar-page");
+      const cleanup = () =>
+        document.body.classList.remove("print-calendar-page");
+      window.addEventListener("afterprint", cleanup, { once: true });
+      window.setTimeout(() => window.print(), 60);
+    },
     changeMode = (value: "dia" | "semana" | "mes") => {
       setMode(value);
       const chosen = new Date(date + "T12:00:00");
@@ -4776,20 +5179,22 @@ function Agenda({
         .agenda-grid-semana>.day{position:relative;top:auto;height:auto;max-height:none;overflow-y:visible}
         .calendar-semana{overflow-x:auto!important;padding:0!important}
         .week-timeline{min-width:760px;overflow:hidden;border-radius:11px}
-        .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;min-height:66px;border-bottom:1px solid #cfd8e3;background:#fff}
+        .week-timeline-head{display:grid!important;grid-template-columns:54px repeat(var(--week-days),minmax(100px,1fr));position:sticky;top:0;z-index:5;height:96px!important;min-height:96px!important;overflow:visible!important;border-bottom:1px solid #cfd8e3;background:#fff}
         .week-time-zone{display:flex;align-items:flex-end;justify-content:center;padding:0 4px 9px;color:#64748b;font-size:9px;font-weight:800}
-        .week-timeline-head button{display:flex!important;min-width:0;border:0!important;border-left:1px solid #e1e7ee!important;border-radius:0!important;background:#fff!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#172033!important}
+        .week-timeline-head button{display:flex!important;height:96px!important;min-height:96px!important;min-width:0;overflow:visible!important;border:0!important;border-left:1px solid #e1e7ee!important;border-radius:0!important;padding:5px 3px 8px!important;background:#fff!important;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#172033!important}
         .week-timeline-head button small{text-transform:uppercase;font-size:9px;font-weight:800}
         .week-timeline-head button b{display:grid;width:34px;height:34px;place-items:center;border-radius:50%;font-size:20px}
         .week-timeline-head button.today b{background:#2563eb;color:#fff}
         .week-timeline-head button.selected:not(.today){background:#fff6f6!important}
-        .week-timeline-head button em{max-width:100%;overflow:hidden;color:#c51d25;font-size:8px;font-style:normal;text-overflow:ellipsis;white-space:nowrap}
+        .week-timeline-head button em{display:block!important;position:static!important;max-width:calc(100% - 8px);min-height:20px;max-height:none!important;overflow:visible!important;transform:none!important;color:#c51d25;font-size:8px;font-style:normal;font-weight:900;line-height:1.15;text-align:center;text-overflow:clip!important;white-space:normal!important;overflow-wrap:anywhere}
+        .week-timeline-head button.holiday{background:#fff0f2!important;box-shadow:inset 0 -4px #d71920}.week-timeline-head button.holiday small,.week-timeline-head button.holiday em{color:#a50f18!important;font-weight:900}.week-timeline-head button.holiday b{color:#a50f18}.week-timeline-head button.holiday.today b{background:#d71920;color:#fff}.week-timeline-head button.holiday.selected{outline:2px solid #d71920;outline-offset:-2px}
         .week-timeline-body{position:relative!important;min-width:760px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 115px,#dbe3ec 115px,#dbe3ec 116px)}
         .week-time-column{position:absolute!important;inset:0 auto 0 0;width:54px;background:#fff}
         .week-time-column span{position:absolute!important;right:8px;z-index:2;padding:0 2px;transform:translateY(-50%);background:#fff;color:#475569;font-size:10px;line-height:1}
         .week-day-columns{display:grid!important;height:100%;margin-left:54px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}
         .week-day-column{position:relative!important;min-width:0;border-left:1px solid #dbe3ec;cursor:pointer}
         .week-day-column.selected{background:rgba(227,27,35,.025);box-shadow:inset 0 0 0 2px rgba(227,27,35,.45)}
+        .week-day-column.holiday{background:rgba(215,25,32,.065)!important}.week-day-column.holiday.selected{background:rgba(215,25,32,.10)!important;box-shadow:inset 0 0 0 2px #d71920}
         .week-appointment{display:grid!important;position:absolute!important;right:4px;left:4px;z-index:3;min-height:64px;max-height:66px;overflow:hidden;border-left:4px solid #e31b23;border-radius:5px;padding:5px 6px;background:#fff0f0;align-content:start;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 5px;color:#172033;font-size:9px;line-height:1.15;text-align:left;box-shadow:0 1px 3px rgba(15,23,42,.12)}
         .week-appointment>b{font-size:9px;white-space:nowrap}.week-appointment>strong{min-width:0;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.week-appointment>small{grid-column:1/-1;min-width:0;overflow:hidden;color:#526274;font-size:9px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.week-appointment>i{color:#087d47;font-style:normal;font-weight:900}
         .week-appointment>.week-appointment-status{color:#334155;font-size:8px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}.week-appointment>.status-finalizado{color:#087d47}.week-appointment>.status-faltou{color:#c51d25}.week-appointment>.status-em-andamento{color:#1d4ed8}
@@ -4801,28 +5206,164 @@ function Agenda({
         .week-appointment.block,.days span.block{cursor:pointer!important}.week-appointment.block>.absence-label{grid-column:1/-1;color:#704600!important;font-size:8px;font-weight:900;text-transform:uppercase}.week-appointment.block>.absence-person{grid-column:1/-1;padding-right:16px;color:#3f2c00;font-size:11px}.week-appointment.block>.absence-details{grid-column:1/-1;color:#704600!important;font-size:8px}.week-appointment.block>.absence-edit-icon{position:absolute;top:4px;right:5px;color:#704600;font-size:12px;font-style:normal}
         .app.dark .week-appointment.block,.app.dark .days span.block,.app.dark .day article.absence{background:rgb(255,232,124)!important;color:#3f2c00!important}
         .day article .appointment-service-type{display:block;margin-top:3px;color:#7c2d12;font-size:10px;font-weight:900;text-transform:uppercase}
+        .days>button.holiday{border-color:#e88b91!important;background:#fff0f2!important;box-shadow:inset 0 0 0 2px #efb2b6!important}.days>button.holiday>b,.days>button.holiday>em{color:#a50f18!important;font-weight:900}.days>button.holiday.selected{border-color:#d71920!important;background:#ffe4e7!important;box-shadow:inset 0 0 0 3px #d71920!important}.app.dark .days>button.holiday,.app.dark .week-timeline-head button.holiday{background:#4a171b!important;color:#fff!important}.app.dark .week-day-column.holiday{background:rgba(215,25,32,.16)!important}
         .day article .appointment-internal-note{display:block;margin-top:6px;padding:6px 7px;border-left:3px solid #d98b00;border-radius:5px;background:#fff4cc;color:#5d3b00!important;font-size:10px!important;line-height:1.35;overflow-wrap:anywhere;white-space:pre-wrap}
         .day article .appointment-internal-note b{font-weight:900}
         .day article .appointment-customer-note{display:block;white-space:pre-wrap}
         .app.dark .day article .appointment-internal-note{background:#493713;color:#ffe29a!important}
-        .week-appointment.avaliou{border-left-color:#e7aa18;background:#fff9e8}.week-appointment.servico{border-left-color:#1b9b59;background:#ecf8f1}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#7c3aed;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.retorno{border-left-color:#7c3aed;background:#f4efff}.week-appointment.revisao{border-left-color:#2563eb;background:#edf4ff}.week-appointment.garantia{border-left-color:#e77718;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.scheduled-service{border-left-color:#4f46e5;background:#eef2ff;color:#312e81}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
-        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}
+        .week-appointment.avaliou{border-left-color:#d6a000;background:#fff9dc}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#6d28d9;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.garantia{border-left-color:#b45309;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        .week-appointment.servico,.days span.servico,.day article.servico{border-color:#159447!important;border-left-color:#159447!important;background:#e6f7ec!important;color:#14532d!important}
+        .week-appointment.revisao,.days span.revisao,.day article.revisao{border-color:#9b5de5!important;border-left-color:#9b5de5!important;background:#f3e8ff!important;color:#4c1d75!important}
+        .week-appointment.retorno,.days span.retorno,.day article.retorno{border-color:#f97316!important;border-left-color:#f97316!important;background:#fff0e5!important;color:#7c2d12!important}
+        .week-appointment.orcamento,.days span.orcamento,.day article.orcamento{border-color:#d6a000!important;border-left-color:#d6a000!important;background:#fff8cf!important;color:#713f12!important}
+        .week-appointment.gabaritagem,.days span.gabaritagem,.day article.gabaritagem{border-color:#db2777!important;border-left-color:#db2777!important;background:#fce7f3!important;color:#831843!important}
+        .week-appointment.alinhamento-balanceamento,.days span.alinhamento-balanceamento,.day article.alinhamento-balanceamento{border-color:#0891b2!important;border-left-color:#0891b2!important;background:#e6f8fb!important;color:#164e63!important}
+        .week-appointment.scheduled-service,.days span.scheduled-service,.day article.scheduled-service{border-color:#2563eb!important;border-left-color:#2563eb!important;background:#eaf2ff!important;color:#1e3a8a!important}
+        .dot.approved-dot{background:#159447}.dot.review-dot{background:#9b5de5}.dot.return-dot{background:#f97316}.dot.quote-dot{background:#d6a000}.dot.gabaritagem-dot{background:#db2777}.dot.alignment-dot{background:#0891b2}
+        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}.day article .open-quote-badge{display:inline-flex;width:max-content;margin-top:4px;padding:3px 8px;border-radius:999px;background:#9a7200;color:#fff!important;font-size:9px;font-weight:900;letter-spacing:.2px}
         .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:#4d171b!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
+        .appointment-history-search{position:relative;margin:0 0 14px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff);box-shadow:0 5px 16px rgba(15,23,42,.06)}.appointment-history-search>label{display:grid;grid-template-columns:auto minmax(240px,1fr) auto;align-items:center;gap:10px;padding:12px 14px}.appointment-history-search>label>b{font-size:13px;white-space:nowrap}.appointment-history-search input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px 12px;background:var(--card,#fff);color:inherit;font-size:14px}.appointment-history-search .clear-search{border:0;background:transparent;color:#b3151d;font-weight:900;cursor:pointer}.appointment-search-hint{display:block;padding:0 14px 12px;color:#64748b;font-size:11px}.appointment-search-results{display:grid;gap:8px;max-height:430px;overflow:auto;padding:0 12px 12px}.appointment-search-results>header{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;color:#526274;font-size:12px}.appointment-search-result{display:grid;grid-template-columns:105px minmax(190px,1.2fr) minmax(180px,1fr) auto;align-items:center;gap:12px;padding:11px 12px;border:1px solid #d9e1ea;border-left:5px solid #df1823;border-radius:9px;background:#fff}.appointment-search-result time{display:grid;gap:2px;font-size:12px}.appointment-search-result time b{font-size:14px}.appointment-search-result .result-client,.appointment-search-result .result-vehicle{display:grid;gap:3px;min-width:0}.appointment-search-result strong,.appointment-search-result span{overflow-wrap:anywhere}.appointment-search-result small{color:#64748b}.appointment-search-result .result-plate{font-weight:900;letter-spacing:.04em}.appointment-search-result .result-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.appointment-search-result .result-actions button{border:1px solid #bac6d4;border-radius:7px;padding:8px 10px;background:#fff;font-size:11px;font-weight:900;cursor:pointer}.appointment-search-result .result-actions .primary{border-color:#16864b;background:#16864b;color:#fff}.appointment-search-empty{margin:0;padding:14px;border:1px dashed #c8d3df;border-radius:8px;color:#64748b;text-align:center}.dark .appointment-search-result{background:#172231}.dark .appointment-search-result .result-actions button{background:#223044;color:#fff}
+        .calendar-print-controls{display:flex;align-items:center;gap:6px}.calendar-print-controls select{min-width:92px}.calendar-print-controls button{border-color:#172b44!important;background:#172b44!important;color:#fff!important}.calendar-print-sheet{display:none}
+        @media print{
+          @page{size:A4 landscape;margin:0}
+          html:has(body.print-calendar-page),body.print-calendar-page{width:297mm!important;height:210mm!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important;color:#111!important}
+          body.print-calendar-page *{visibility:hidden!important}
+          body.print-calendar-page .app,body.print-calendar-page main{display:block!important;width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:visible!important}
+          body.print-calendar-page .app>aside,body.print-calendar-page main>header{display:none!important}
+          body.print-calendar-page .agenda{position:static!important;width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:visible!important}
+          body.print-calendar-page .agenda>*:not(.calendar-print-sheet):not(style){display:none!important}
+          body.print-calendar-page .calendar-print-sheet,body.print-calendar-page .calendar-print-sheet *{visibility:visible!important}
+          body.print-calendar-page .calendar-print-sheet{display:block!important;position:fixed!important;z-index:999999;inset:0!important;width:297mm!important;height:210mm!important;box-sizing:border-box;padding:7mm 8mm 6mm!important;overflow:hidden!important;background:#fff!important;color:#111!important;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+          .calendar-print-header{display:flex!important;align-items:flex-end;justify-content:space-between;padding-bottom:2mm;border-bottom:2px solid #d71920}.calendar-print-header span{display:grid;gap:1mm}.calendar-print-header b{font-size:17px}.calendar-print-header strong{font-size:13px}.calendar-print-header small{font-size:8px}.calendar-print-legend{display:flex!important;align-items:center;justify-content:center;flex-wrap:wrap;gap:1.5mm 3mm;margin-top:2mm;color:#344054;font-size:6.5px;font-weight:800}.calendar-print-legend span{display:flex;align-items:center;gap:1mm}.calendar-print-legend i{display:block;width:3mm;height:2mm;border-radius:.6mm;background:var(--legend-color)}
+          .calendar-print-week{display:grid!important;grid-template-columns:repeat(var(--print-week-days),1fr);gap:2mm;margin-top:2mm;height:166mm}.calendar-print-day{overflow:hidden;border:1px solid #9aa7b5;border-radius:2mm}.calendar-print-day>.day-head{display:grid!important;padding:2mm;background:#172b44!important;color:#fff;text-align:center}.calendar-print-day>.day-head.holiday{background:#b3131b!important}.calendar-print-day>.day-head b{font-size:11px;text-transform:uppercase}.calendar-print-day>.day-head span{font-size:15px;font-weight:900}.calendar-print-day>.day-head small{font-size:7px}.calendar-print-day-list{display:grid;gap:1mm;padding:1.5mm}.calendar-print-entry{display:grid;grid-template-columns:10mm 1fr;gap:.8mm;padding:1.2mm;border-left:2mm solid #64748b;border-radius:1mm;background:#f5f7f9!important;font-size:7px;line-height:1.15}.calendar-print-entry>time{font-weight:900}.calendar-print-entry>span{display:grid;gap:.4mm;min-width:0}.calendar-print-entry b,.calendar-print-entry small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.calendar-print-entry.servico{border-color:#159447;background:#e6f7ec!important}.calendar-print-entry.revisao{border-color:#9b5de5;background:#f3e8ff!important}.calendar-print-entry.retorno{border-color:#f97316;background:#fff0e5!important}.calendar-print-entry.orcamento,.calendar-print-entry.avaliou{border-color:#d6a000;background:#fff8cf!important}.calendar-print-entry.gabaritagem{border-color:#db2777;background:#fce7f3!important}.calendar-print-entry.alinhamento-balanceamento{border-color:#0891b2;background:#e6f8fb!important}.calendar-print-entry.faltou{border-color:#d71920;background:#ffe5e7!important}
+          .calendar-print-month{display:grid!important;grid-template-columns:repeat(7,1fr);grid-template-rows:8mm repeat(6,28mm);margin-top:3mm;border-top:1px solid #8a96a3;border-left:1px solid #8a96a3}.calendar-print-month>strong{display:grid;place-items:center;border-right:1px solid #8a96a3;border-bottom:1px solid #8a96a3;background:#172b44!important;color:#fff;font-size:8px;text-transform:uppercase}.calendar-print-month-day{min-width:0;overflow:hidden;padding:1mm;border-right:1px solid #8a96a3;border-bottom:1px solid #8a96a3}.calendar-print-month-day.outside{background:#eef1f4!important;color:#7b8794}.calendar-print-month-day.holiday{background:#fff0f2!important}.calendar-print-month-day>.month-day-head{display:flex!important;justify-content:space-between;gap:1mm;margin-bottom:.7mm;font-size:7px}.calendar-print-month-day>.month-day-head b{font-size:10px}.calendar-print-month-day>.month-day-head em{overflow:hidden;color:#a50f18;font-size:6px;font-style:normal;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.calendar-print-month-entry{display:block;overflow:hidden;margin-bottom:.5mm;padding:.5mm 1mm;border-left:1.2mm solid #64748b;border-radius:.5mm;background:#f4f6f8!important;font-size:6px;font-weight:700;line-height:1.1;text-overflow:ellipsis;white-space:nowrap}.calendar-print-month-entry.servico{border-color:#159447}.calendar-print-month-entry.revisao{border-color:#9b5de5}.calendar-print-month-entry.retorno{border-color:#f97316}.calendar-print-month-entry.orcamento,.calendar-print-month-entry.avaliou{border-color:#d6a000}.calendar-print-month-entry.gabaritagem{border-color:#db2777}.calendar-print-month-entry.alinhamento-balanceamento{border-color:#0891b2}.calendar-print-month-entry.faltou{border-color:#d71920}
+        }
         @media(min-width:1600px){.agenda{max-width:1600px!important}.agenda-grid-semana{grid-template-columns:minmax(0,1fr) 460px!important}.week-time-zone,.week-timeline-head button small{font-size:10px}.week-timeline-head button b{font-size:22px}.week-appointment{font-size:10px}.week-appointment>b{font-size:10px}.week-appointment>strong{font-size:12px}.week-appointment>small{font-size:10px}.week-appointment>.week-appointment-status,.week-appointment>.week-budget-type{font-size:9px}.week-time-column span{font-size:11px}.agenda-grid-semana .day article time>b{font-size:12px}.agenda-grid-semana .day article h3{font-size:13px}.agenda-grid-semana .day article p,.agenda-grid-semana .day article span>small{font-size:10px}.agenda-grid-semana .day article .appointment-toggle{font-size:11px!important}}
         @media(max-width:1500px){.agenda-grid-semana .agenda-finalization.compact{padding:6px 7px}.agenda-grid-semana .agenda-finalization.compact>b{display:block;font-size:11px!important;line-height:1.2;letter-spacing:-.04em;white-space:nowrap!important}}
-        @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}}
+        @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}.appointment-search-result{grid-template-columns:90px minmax(170px,1fr) minmax(150px,1fr)}.appointment-search-result .result-actions{grid-column:1/-1}}
+        @media(max-width:700px){.appointment-history-search>label{grid-template-columns:1fr}.appointment-history-search>label>b{white-space:normal}.appointment-history-search .clear-search{justify-self:start}.appointment-search-result{grid-template-columns:1fr}.appointment-search-result .result-actions{grid-column:auto;justify-content:flex-start}}
       `}</style>
+      <section className="calendar-print-sheet" aria-hidden="true">
+        <div className="calendar-print-header">
+          <span>
+            <b>MONOCENTER · AGENDA</b>
+            <small>Av. Itavuvu, 5341 · Jardim Santa Cecília · Sorocaba/SP</small>
+          </span>
+          <strong>
+            {calendarPrintMode === "semana"
+              ? `Semana de ${printWeekDays[0].toLocaleDateString("pt-BR")} a ${printWeekDays[printWeekDays.length - 1].toLocaleDateString("pt-BR")}`
+              : cursor.toLocaleDateString("pt-BR", {
+                  month: "long",
+                  year: "numeric",
+                })}
+          </strong>
+        </div>
+        <div className="calendar-print-legend">
+          <span><i style={{ "--legend-color": "#159447" } as CSSProperties} /> Serviço aprovado</span>
+          <span><i style={{ "--legend-color": "#9b5de5" } as CSSProperties} /> Revisão 30 dias</span>
+          <span><i style={{ "--legend-color": "#f97316" } as CSSProperties} /> Retorno</span>
+          <span><i style={{ "--legend-color": "#d6a000" } as CSSProperties} /> Orçamento</span>
+          <span><i style={{ "--legend-color": "#db2777" } as CSSProperties} /> Gabaritagem</span>
+          <span><i style={{ "--legend-color": "#0891b2" } as CSSProperties} /> Alinhamento e balanceamento</span>
+          <span><i style={{ "--legend-color": "#d71920" } as CSSProperties} /> Faltou</span>
+          <span><i style={{ "--legend-color": "#2563eb" } as CSSProperties} /> Serviço agendado</span>
+        </div>
+        {calendarPrintMode === "semana" ? (
+          <div className="calendar-print-week" style={{ "--print-week-days": printWeekDays.length } as CSSProperties}>
+            {printWeekDays.map((day) => {
+              const dayIso = iso(day),
+                holiday = holidays.find((item: any) => item.date === dayIso),
+                dayAppointments = (data as Appt[])
+                  .filter((appointment) => appointment.date === dayIso)
+                  .sort((first, second) =>
+                    first.time.localeCompare(second.time),
+                  );
+              return (
+                <article className="calendar-print-day" key={`print-${dayIso}`}>
+                  <div className={`day-head${holiday ? " holiday" : ""}`}>
+                    <b>{day.toLocaleDateString("pt-BR", { weekday: "long" })}</b>
+                    <span>{day.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</span>
+                    {holiday && <small>{holiday.name}</small>}
+                  </div>
+                  <div className="calendar-print-day-list">
+                    {dayAppointments.map((appointment) => (
+                      <div
+                        className={`calendar-print-entry ${apptClass(appointment)}`}
+                        key={`print-week-${appointment.id}`}
+                      >
+                        <time>{appointment.time}</time>
+                        <span>
+                          <b>{isEmployeeAbsence(appointment) ? `Funcionário ausente · ${employeeAbsenceName(appointment)}` : appointment.client}</b>
+                          <small>
+                            {isEmployeeAbsence(appointment)
+                              ? employeeAbsencePeriod(appointment)
+                              : `${appointment.vehicle || "Veículo não informado"} · ${appointment.plate || "Sem placa"}`}
+                          </small>
+                          {!isEmployeeAbsence(appointment) && (
+                            <small>{appointmentKindLabel(appointment)}</small>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="calendar-print-month">
+            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((label) => (
+              <strong key={label}>{label}</strong>
+            ))}
+            {printMonthDays.map((day) => {
+              const dayIso = iso(day),
+                holiday = holidays.find((item: any) => item.date === dayIso),
+                dayAppointments = (data as Appt[])
+                  .filter((appointment) => appointment.date === dayIso)
+                  .sort((first, second) =>
+                    first.time.localeCompare(second.time),
+                  );
+              return (
+                <article
+                  className={`calendar-print-month-day${day.getMonth() !== cursor.getMonth() ? " outside" : ""}${holiday ? " holiday" : ""}`}
+                  key={`print-month-${dayIso}`}
+                >
+                  <div className="month-day-head">
+                    <b>{day.getDate()}</b>
+                    {holiday && <em>{holiday.name}</em>}
+                  </div>
+                  {dayAppointments.slice(0, 6).map((appointment) => (
+                    <span
+                      className={`calendar-print-month-entry ${apptClass(appointment)}`}
+                      key={`print-month-entry-${appointment.id}`}
+                    >
+                      {appointment.time} · {isEmployeeAbsence(appointment) ? employeeAbsenceName(appointment) : appointment.client}
+                    </span>
+                  ))}
+                  {dayAppointments.length > 6 && (
+                    <span className="calendar-print-month-entry">
+                      + {dayAppointments.length - 6} agendamentos
+                    </span>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
       <div className="agenda-brand">
         <b>Agenda Monocenter</b>
         <span>
           <i className="dot yellow" /> Aguardando orçamento{" "}
-          <i className="dot green" /> Serviço aprovado{" "}
+          <i className="dot approved-dot" /> Serviço aprovado{" "}
           <i className="dot conference-dot" /> Conferência{" "}
-          <i className="dot red" /> Faltou <i className="dot purple" /> Retorno{" "}
-          <i className="dot orange" /> Garantia <i className="dot blue" />{" "}
-          Revisão 30 dias
+          <i className="dot red" /> Faltou <i className="dot return-dot" /> Retorno{" "}
+          <i className="dot orange" /> Garantia <i className="dot review-dot" />{" "}
+          Revisão 30 dias <i className="dot quote-dot" /> Orçamento{" "}
+          <i className="dot gabaritagem-dot" /> Gabaritagem{" "}
+          <i className="dot alignment-dot" /> Alinhamento e balanceamento{" "}
           <i className="dot completed" /> Concluído
           <i className="dot scheduled-service-dot" /> Serviço agendado
           <i className="shop-line" /> Na oficina
@@ -4896,6 +5437,23 @@ function Agenda({
             <option value="semana">Semana</option>
             <option value="mes">Mês</option>
           </select>
+          <span className="calendar-print-controls">
+            <select
+              value={calendarPrintMode}
+              onChange={(event) =>
+                setCalendarPrintMode(
+                  event.target.value as "semana" | "mes",
+                )
+              }
+              aria-label="Período para impressão do calendário"
+            >
+              <option value="semana">Imprimir semana</option>
+              <option value="mes">Imprimir mês</option>
+            </select>
+            <button type="button" onClick={printCalendar}>
+              Imprimir calendário
+            </button>
+          </span>
           {mode === "semana" && (
             <button
               type="button"
@@ -4911,6 +5469,90 @@ function Agenda({
             + Novo agendamento
           </button>
         </div>
+      </div>
+      <div className="appointment-history-search">
+        <label>
+          <b>Pesquisar agendamentos</b>
+          <input
+            type="search"
+            value={appointmentSearch}
+            onChange={(event) => setAppointmentSearch(event.target.value)}
+            placeholder="Digite o nome do cliente ou a placa"
+            aria-label="Pesquisar agendamentos antigos por nome ou placa"
+          />
+          {appointmentSearch && (
+            <button
+              type="button"
+              className="clear-search"
+              onClick={() => setAppointmentSearch("")}
+            >
+              Limpar pesquisa
+            </button>
+          )}
+        </label>
+        {!appointmentSearchActive && (
+          <small className="appointment-search-hint">
+            A pesquisa consulta todo o histórico, inclusive meses anteriores. Digite pelo menos 2 caracteres.
+          </small>
+        )}
+        {appointmentSearchActive && (
+          <div className="appointment-search-results">
+            <header>
+              <b>Resultados encontrados</b>
+              <span>{appointmentSearchResults.length}{appointmentSearchResults.length === 80 ? "+" : ""}</span>
+            </header>
+            {appointmentSearchResults.length === 0 ? (
+              <p className="appointment-search-empty">
+                Nenhum agendamento encontrado para “{appointmentSearch}”.
+              </p>
+            ) : (
+              appointmentSearchResults.map((appointment) => {
+                const evaluatedItems = Object.values(appointment.evaluation?.status ?? {})
+                  .filter((state) => state && state !== "na").length;
+                return (
+                  <article className="appointment-search-result" key={`search-${appointment.id}`}>
+                    <time>
+                      <b>{fmt(appointment.date)}</b>
+                      <span>{appointment.time}</span>
+                      <small>{agendaStatusLabel(appointment)}</small>
+                    </time>
+                    <span className="result-client">
+                      <strong>{appointment.client}</strong>
+                      <small>{evaluatedItems ? `${evaluatedItems} itens avaliados` : "Sem avaliação registrada"}</small>
+                    </span>
+                    <span className="result-vehicle">
+                      <strong>{appointment.vehicle || "Veículo não informado"}</strong>
+                      <span className="result-plate">{appointment.plate || "SEM PLACA"}</span>
+                    </span>
+                    <span className="result-actions">
+                      <button type="button" className="primary" onClick={() => preview(appointment)}>
+                        Ver avaliação / resumo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const selected = new Date(`${appointment.date}T12:00:00`);
+                          setDate(appointment.date);
+                          setCursor(new Date(selected.getFullYear(), selected.getMonth(), 1));
+                          setMode("dia");
+                          setOpenCal(true);
+                          setExpandedAppointments((current) =>
+                            current.includes(appointment.id)
+                              ? current
+                              : [...current, appointment.id],
+                          );
+                          setAppointmentSearch("");
+                        }}
+                      >
+                        Ir para o dia
+                      </button>
+                    </span>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
       <div
         className={`${openCal ? "aggrid" : "aggrid calendar-closed"} agenda-grid-${mode}`}
@@ -4931,7 +5573,7 @@ function Agenda({
                       <button
                         type="button"
                         key={ds}
-                        className={`${ds === date ? "selected" : ""}${ds === todayIso ? " today" : ""}`}
+                        className={`${ds === date ? "selected" : ""}${ds === todayIso ? " today" : ""}${holiday ? " holiday" : ""}`}
                         onClick={() => setDate(ds)}
                       >
                         <small>
@@ -4964,12 +5606,13 @@ function Agenda({
                   <div className="week-day-columns">
                     {visibleWeekDays.map((d) => {
                       const ds = iso(d),
+                        holiday = holidays.find((h: any) => h.date === ds),
                         apps = (data as Appt[]).filter(
                           (appointment) => appointment.date === ds,
                         );
                       return (
                         <div
-                          className={`week-day-column${ds === date ? " selected" : ""}`}
+                          className={`week-day-column${ds === date ? " selected" : ""}${holiday ? " holiday" : ""}`}
                           key={ds}
                           onClick={() => setDate(ds)}
                         >
@@ -5295,6 +5938,15 @@ function Agenda({
                     a.budget?.processStatus !== "Finalizado" && (
                       <small className="quote-waiting">
                         {quoteWaitingLabel(a)}
+                      </small>
+                    )}
+                  {a.type === "cliente" &&
+                    a.status === "avaliou" &&
+                    a.quoteFollowUpDecision !== "declined" &&
+                    !a.serviceAppointmentId &&
+                    a.budget?.processStatus !== "Finalizado" && (
+                      <small className="open-quote-badge">
+                        ORÇAMENTO EM ABERTO
                       </small>
                     )}
                   {a.quoteFollowUpDecision === "declined" && (
@@ -5748,6 +6400,14 @@ function ReviewScreen({
 }
 function AttendancePreviewModal({ appointment, roundStep, close }: any) {
   const budget = appointment.budget as BudgetState | undefined,
+    evaluationRows = [...ITEMS, ...(appointment.evaluation?.custom ?? [])]
+      .map((name, index) => ({
+        name,
+        state: appointment.evaluation?.status?.[index + 1] ?? "",
+        note: appointment.evaluation?.notes?.[index + 1] ?? "",
+        quoted: !!appointment.evaluation?.quoteItems?.[index + 1],
+      }))
+      .filter((item) => item.state && item.state !== "na"),
     evaluationStates = Object.values(
       appointment.evaluation?.status ?? {},
     ) as string[],
@@ -5878,6 +6538,38 @@ function AttendancePreviewModal({ appointment, roundStep, close }: any) {
           </section>
         </div>
 
+        <section className="attendance-preview-section attendance-preview-evaluation">
+          <div className="attendance-preview-section-title">
+            <h3>Itens avaliados</h3>
+            <strong>{evaluationRows.length}</strong>
+          </div>
+          {!evaluationRows.length ? (
+            <p className="attendance-preview-empty">Nenhum item de avaliação foi registrado.</p>
+          ) : (
+            <div className="attendance-evaluation-items">
+              {evaluationRows.map((item, index) => {
+                const label = item.state === "g"
+                  ? "Bom estado"
+                  : item.state === "y"
+                    ? "Atenção"
+                    : item.state === "r"
+                      ? "Troca urgente"
+                      : "Avaliado";
+                return (
+                  <div className={`evaluation-result ${item.state}`} key={`${item.name}-${index}`}>
+                    <span>
+                      <b>{item.name}</b>
+                      {item.note && <small>{item.note}</small>}
+                    </span>
+                    <strong>{label}</strong>
+                    {item.quoted && <em>Incluído no orçamento</em>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
         <section className="attendance-preview-section">
           <div className="attendance-preview-section-title">
             <h3>Orçamento e serviços</h3>
@@ -5979,19 +6671,21 @@ function AttendancePreviewModal({ appointment, roundStep, close }: any) {
         .attendance-preview-meta span{font-size:12px;line-height:1.4}
         .attendance-preview-meta b{display:block;color:var(--muted,#5d6878)}
         .attendance-preview-empty{margin:6px 0;color:var(--muted,#5d6878)}
+        .attendance-evaluation-items{display:grid;gap:7px}.attendance-evaluation-items .evaluation-result{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:9px 10px;border-left:5px solid #94a3b8;border-radius:8px;background:#f4f7fa}.attendance-evaluation-items .evaluation-result.g{border-left-color:#16864b}.attendance-evaluation-items .evaluation-result.y{border-left-color:#d49a00;background:#fff9e8}.attendance-evaluation-items .evaluation-result.r{border-left-color:#d71920;background:#fff0f1}.attendance-evaluation-items .evaluation-result span{display:grid;gap:2px;min-width:0}.attendance-evaluation-items .evaluation-result small{color:#64748b;white-space:pre-wrap}.attendance-evaluation-items .evaluation-result strong{font-size:12px;white-space:nowrap}.attendance-evaluation-items .evaluation-result.g>strong{color:#08723c}.attendance-evaluation-items .evaluation-result.y>strong{color:#8a6200}.attendance-evaluation-items .evaluation-result.r>strong{color:#b3151d}.attendance-evaluation-items .evaluation-result em{border-radius:999px;padding:4px 7px;background:#e8eef5;color:#334155;font-size:10px;font-style:normal;font-weight:900;white-space:nowrap}
         .attendance-preview-note{display:block!important;padding:10px;border-radius:8px;background:#f4f7fa;white-space:pre-wrap}
         .attendance-preview-note b{display:block;margin-bottom:4px}
         .attendance-preview-internal-note{background:#fff4cc!important;border-left:4px solid #d98b00;color:#5d3b00}
         .attendance-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 24px 24px}
         .attendance-preview-footer small{color:var(--muted,#5d6878)}
         .attendance-preview-footer button{white-space:nowrap}
-        .dark .attendance-preview-items>div,.dark .attendance-preview-note,.dark .attendance-preview-badges>*{background:#1c2938}
+        .dark .attendance-preview-items>div,.dark .attendance-preview-note,.dark .attendance-preview-badges>*,.dark .attendance-evaluation-items .evaluation-result{background:#1c2938}
         .dark .attendance-preview-internal-note{background:#493713!important;color:#ffe29a}
         @media(max-width:720px){
           .attendance-preview-backdrop{padding:8px}
           .attendance-preview-modal{max-height:calc(100vh - 16px)}
           .attendance-preview-header,.attendance-preview-badges,.attendance-preview-grid,.attendance-preview-footer{padding-left:14px;padding-right:14px}
           .attendance-preview-grid,.attendance-preview-meta{grid-template-columns:1fr}
+          .attendance-evaluation-items .evaluation-result{grid-template-columns:1fr auto}.attendance-evaluation-items .evaluation-result em{grid-column:1/-1;justify-self:start}
           .attendance-preview-section{margin-left:14px;margin-right:14px}
           .attendance-preview-grid p{grid-template-columns:125px 1fr}
           .attendance-preview-footer{align-items:stretch;flex-direction:column}
@@ -7308,7 +8002,23 @@ function PurchaseOrders({
   currentUser,
 }: any) {
   const [filter, setFilter] = useState<"all" | "open" | "closed">("all"),
-    [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    [expanded, setExpanded] = useState<Record<string, boolean>>({}),
+    [printGroup, setPrintGroup] = useState<any>(null);
+  useEffect(() => {
+    if (!printGroup) return;
+    document.body.classList.add("print-purchase-order");
+    const timer = window.setTimeout(() => window.print(), 80),
+      finish = () => {
+        document.body.classList.remove("print-purchase-order");
+        setPrintGroup(null);
+      };
+    window.addEventListener("afterprint", finish, { once: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("afterprint", finish);
+      document.body.classList.remove("print-purchase-order");
+    };
+  }, [printGroup]);
   const rows = useMemo(() => {
     const unique = new Map<string, any>();
     for (const appointment of appointments as Appt[]) {
@@ -7449,6 +8159,73 @@ function PurchaseOrders({
     };
   return (
     <section className="page purchase-page">
+      <style>{`
+        .purchase-print-sheet{display:none}
+        .purchase-order-actions .print-order{border-color:#2563eb;background:#eef5ff;color:#174ea6}
+        @media print{
+          @page{size:A4 portrait;margin:0}
+          html:has(body.print-purchase-order),body.print-purchase-order{width:210mm!important;height:148.5mm!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important;color:#111!important}
+          body.print-purchase-order *{visibility:hidden!important}
+          body.print-purchase-order .purchase-print-sheet,
+          body.print-purchase-order .purchase-print-sheet *{visibility:visible!important}
+          body.print-purchase-order .purchase-page{position:static!important;width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:visible!important}
+          body.print-purchase-order .purchase-page>*:not(.purchase-print-sheet):not(style){display:none!important}
+          body.print-purchase-order .purchase-print-sheet{display:block!important;position:fixed!important;z-index:999999;top:0!important;left:0!important;width:210mm!important;height:148.5mm!important;min-height:0!important;box-sizing:border-box;margin:0!important;padding:7mm 9mm 6mm!important;overflow:hidden!important;background:#fff!important;color:#111!important;font-family:Arial,sans-serif}
+          .purchase-print-head{display:grid!important;grid-template-columns:1fr auto;gap:4mm;align-items:start;padding-bottom:2mm;border-bottom:1.5px solid #111}
+          .purchase-print-brand{display:grid;gap:1mm}.purchase-print-brand b{font-size:15px;letter-spacing:.04em}.purchase-print-brand small{font-size:8px;text-transform:uppercase}
+          .purchase-print-title{text-align:right}.purchase-print-title b{display:block;font-size:14px}.purchase-print-title span{font-size:9px}
+          .purchase-print-meta{display:grid;grid-template-columns:1.2fr .8fr 1.2fr .8fr;gap:5mm;padding:2.5mm 0;font-size:9px}.purchase-print-meta span{display:grid;gap:.5mm}.purchase-print-meta small{font-size:7px;font-weight:700;text-transform:uppercase}.purchase-print-meta b{font-size:9px}
+          .mercosul-plate{display:inline-grid!important;grid-template-rows:3.2mm 1fr;box-sizing:border-box;width:30mm;min-width:30mm;height:12mm;border:.45mm solid #162f82!important;border-radius:1.2mm;overflow:hidden;background:#f8f8f7!important;color:#080808!important;font-family:Arial,Helvetica,sans-serif!important;font-style:normal!important;line-height:1}.mercosul-plate-top{display:grid!important;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 1mm;background:#153891!important;color:#fff!important;font-size:4.2pt!important;letter-spacing:.28mm}.mercosul-plate-top b{font-size:4.2pt!important;font-weight:900!important}.mercosul-plate-top i{position:relative;width:4.2mm;height:2.5mm;border-radius:.3mm;background:#159447}.mercosul-plate-top i:after{position:absolute;content:"";inset:.45mm 1.2mm;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.mercosul-plate>strong{display:flex!important;align-items:center;justify-content:center;padding-top:.2mm;color:#090909!important;font-size:12.5pt!important;font-weight:900!important;letter-spacing:1.15mm!important;white-space:nowrap}.purchase-print-meta .mercosul-plate{margin-top:.3mm}
+          .purchase-print-table{width:100%;border-collapse:collapse;font-size:8px}.purchase-print-table th,.purchase-print-table td{padding:1.4mm 1.5mm;border:1px solid #888;vertical-align:top}.purchase-print-table th{background:#eceff3!important;font-size:7px;text-align:left;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}.purchase-print-table .number{text-align:right;white-space:nowrap}.purchase-print-table small{display:block;margin-top:.3mm;color:#444;font-size:7px}
+          .purchase-print-total{display:flex;justify-content:flex-end;gap:5mm;padding:2mm 1mm;border-bottom:1px solid #999;font-size:10px}.purchase-print-total strong{min-width:28mm;text-align:right}
+          .purchase-print-note{min-height:10mm;padding:2mm 0;border-bottom:1px solid #999;font-size:8px}.purchase-print-note b{display:block;margin-bottom:1mm;text-transform:uppercase}.purchase-print-note p{margin:0;white-space:pre-wrap}
+          .purchase-print-signatures{display:grid;grid-template-columns:1fr 1fr;gap:14mm;margin-top:8mm;font-size:8px;text-align:center}.purchase-print-signatures span{padding-top:1.5mm;border-top:1px solid #333}
+          .purchase-print-footer{position:absolute;right:0;bottom:0;left:0;display:flex;justify-content:space-between;border-top:1px solid #bbb;padding-top:2mm;color:#555;font-size:7px}
+          .purchase-print-cut-line{position:fixed!important;z-index:999999;top:148.5mm!important;left:0!important;width:210mm!important;border-top:1px dashed #777!important;visibility:visible!important}
+        }
+      `}</style>
+      {printGroup && (
+        <article className="purchase-print-sheet">
+          <div className="purchase-print-head">
+            <span className="purchase-print-brand">
+              <b>MONOCENTER</b>
+              <small>Alinhamento Técnico</small>
+            </span>
+            <span className="purchase-print-title">
+              <b>PEDIDO DE COMPRA</b>
+              <span>OS {printGroup.appointment.workOrder || "Sem número"}</span>
+            </span>
+          </div>
+          <section className="purchase-print-meta">
+            <span><small>Cliente</small><b>{printGroup.appointment.client}</b></span>
+            <span><small>Data do serviço</small><b>{printGroup.serviceDate ? new Date(`${printGroup.serviceDate}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"}</b></span>
+            <span><small>Veículo</small><b>{printGroup.appointment.vehicle || "Não informado"}</b></span>
+            <span><small>Placa</small><MercosulPlate plate={printGroup.appointment.plate} /></span>
+          </section>
+          <table className="purchase-print-table">
+            <thead><tr><th>Peça / marca</th><th>Fornecedor / código</th><th>Qtd.</th><th>Custo unit.</th><th>Total</th></tr></thead>
+            <tbody>
+              {printGroup.rows.map(({ key, part }: any) => (
+                <tr key={key}>
+                  <td><b>{part.item}</b><small>{part.brand || "Marca não informada"}</small></td>
+                  <td><b>{part.supplier || "Não informado"}</b><small>Cód. {part.code || "não informado"}</small></td>
+                  <td className="number">{part.qty}</td>
+                  <td className="number">{brl(Number(part.cost) || 0)}</td>
+                  <td className="number"><b>{brl((Number(part.qty) || 0) * (Number(part.cost) || 0))}</b></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="purchase-print-total">
+            <b>Total do pedido</b>
+            <strong>{brl(printGroup.rows.reduce((total: number, row: any) => total + (Number(row.part.qty) || 0) * (Number(row.part.cost) || 0), 0))}</strong>
+          </div>
+          <div className="purchase-print-note"><b>Observações</b><p>{printGroup.rows.map(({ key }: any) => checks[key]?.note).filter(Boolean).join("\n") || ""}</p></div>
+          <div className="purchase-print-signatures"><span>Responsável pela compra</span><span>Conferência / recebimento</span></div>
+          <div className="purchase-print-footer"><span>Impresso em {new Date().toLocaleString("pt-BR")}</span><span>Metade superior da folha A4</span></div>
+          <div className="purchase-print-cut-line" aria-hidden="true" />
+        </article>
+      )}
       <div className="purchase-summary">
         <button
           className={filter === "all" ? "active" : ""}
@@ -7489,7 +8266,7 @@ function PurchaseOrders({
         <div className="purchase-os-list">
           {groups.map((group: any) => {
             const isClosed = group.savedState.closed,
-              isExpanded = expanded[group.ownerId] ?? !isClosed,
+              isExpanded = expanded[group.ownerId] ?? false,
               pendingToClose = group.rows.filter(
                 (row: any) => !checks[row.key]?.received,
               ).length;
@@ -7661,6 +8438,13 @@ function PurchaseOrders({
                 })}
               </div>
               <footer className="purchase-order-actions">
+                <button
+                  type="button"
+                  className="print-order"
+                  onClick={() => setPrintGroup(group)}
+                >
+                  Imprimir pedido
+                </button>
                 {isClosed ? (
                   <>
                     <span className="purchase-order-saved">
@@ -7759,9 +8543,11 @@ function History() {
 }
 function AttendanceSummary({
   appointment,
+  currentUser,
   roundStep,
   onBack,
   onEditConference,
+  onSaveGeometry,
 }: any) {
   const [summaryView, setSummaryView] = useState<"summary" | "geometry">("summary");
   const budget = appointment.budget ?? {
@@ -7845,7 +8631,9 @@ function AttendanceSummary({
     return (
       <GeometryTechnicalReport
         appointment={appointment}
+        currentUser={currentUser}
         onBack={() => setSummaryView("summary")}
+        onSave={onSaveGeometry}
       />
     );
   }
@@ -8052,6 +8840,221 @@ const GEOMETRY_FIELDS = [
   ["Setback traseira", "", "", true],
 ];
 
+function GeometryReportsHub({
+  appointments,
+  drafts,
+  currentUser,
+  onCreateDraft,
+  onSaveDraft,
+  onSaveAppointment,
+  onLinkDraft,
+}: any) {
+  const inProgress = (appointments as Appt[])
+    .filter(
+      (appointment) =>
+        !isEmployeeAbsence(appointment) &&
+        appointment.budget?.processStatus !== "Finalizado" &&
+        (appointment.inProgress || appointment.status === "servico"),
+    )
+    .sort(
+      (first, second) =>
+        second.date.localeCompare(first.date) ||
+        first.time.localeCompare(second.time, "pt-BR", { numeric: true }),
+    );
+  const [workspace, setWorkspace] = useState<
+    { kind: "appointment" | "draft"; id: number } | null
+  >(null);
+  const [showStandaloneForm, setShowStandaloneForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [hubMessage, setHubMessage] = useState("");
+  const [linkTargets, setLinkTargets] = useState<Record<number, string>>({});
+  const [standaloneForm, setStandaloneForm] = useState({
+    client: "",
+    vehicle: "",
+    plate: "",
+    km: "",
+  });
+  const selectedAppointment = workspace?.kind === "appointment"
+    ? (appointments as Appt[]).find((item) => item.id === workspace.id)
+    : null;
+  const selectedDraft = workspace?.kind === "draft"
+    ? (drafts as StandaloneGeometryReport[]).find((item) => item.id === workspace.id)
+    : null;
+
+  if (selectedAppointment) {
+    return (
+      <div className="geometry-hub-workspace">
+        <div className="geometry-link-context">
+          <span><small>LAUDO VINCULADO AO ATENDIMENTO</small><b>{selectedAppointment.client}</b></span>
+          <span><small>VEÍCULO</small><b>{selectedAppointment.vehicle || "Não informado"}</b></span>
+          <span><small>PLACA</small><b>{selectedAppointment.plate || "Sem placa"}</b></span>
+        </div>
+        <GeometryTechnicalReport
+          key={`appointment-report-${selectedAppointment.id}`}
+          appointment={selectedAppointment}
+          currentUser={currentUser}
+          backLabel="Voltar aos laudos"
+          onBack={() => setWorkspace(null)}
+          onSave={(report: any) => onSaveAppointment(selectedAppointment.id, report)}
+        />
+      </div>
+    );
+  }
+
+  if (selectedDraft) {
+    const draftAppointment: Appt = {
+      ...EMPTY_APPT,
+      id: -Math.abs(selectedDraft.id),
+      date: selectedDraft.createdAt.slice(0, 10),
+      time: new Date(selectedDraft.createdAt).toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      client: selectedDraft.client,
+      vehicle: selectedDraft.vehicle,
+      plate: selectedDraft.plate,
+      km: selectedDraft.km,
+      status: "avaliou",
+      appointmentServiceType: "alinhamento_3d",
+      geometryReport: selectedDraft.report,
+    };
+    return (
+      <div className="geometry-hub-workspace">
+        <div className="geometry-link-context standalone">
+          <span><small>ORÇAMENTO AVULSO</small><b>{selectedDraft.client}</b></span>
+          <span><small>VEÍCULO</small><b>{selectedDraft.vehicle || "Não informado"}</b></span>
+          <span><small>PLACA</small><b>{selectedDraft.plate || "Sem placa"}</b></span>
+          <strong>Aguardando vínculo com atendimento</strong>
+        </div>
+        <GeometryTechnicalReport
+          key={`draft-report-${selectedDraft.id}`}
+          appointment={draftAppointment}
+          currentUser={currentUser}
+          backLabel="Voltar aos laudos"
+          onBack={() => setWorkspace(null)}
+          onSave={(report: any) => onSaveDraft(selectedDraft.id, report)}
+        />
+      </div>
+    );
+  }
+
+  const createStandalone = async (event: any) => {
+    event.preventDefault();
+    if (creating) return;
+    if (
+      !standaloneForm.client.trim() &&
+      !standaloneForm.vehicle.trim() &&
+      !standaloneForm.plate.trim()
+    ) {
+      setHubMessage("Informe ao menos o cliente, o veículo ou a placa para identificar o laudo avulso.");
+      return;
+    }
+    setCreating(true);
+    setHubMessage("Salvando o novo laudo avulso...");
+    try {
+      const created = await onCreateDraft(standaloneForm);
+      setStandaloneForm({ client: "", vehicle: "", plate: "", km: "" });
+      setShowStandaloneForm(false);
+      setHubMessage("");
+      setWorkspace({ kind: "draft", id: created.id });
+    } catch (error: any) {
+      setHubMessage(error?.message || "Não foi possível criar o laudo avulso.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const linkDraft = async (draft: StandaloneGeometryReport) => {
+    const appointmentId = Number(linkTargets[draft.id]);
+    if (!appointmentId) {
+      setHubMessage("Selecione o veículo em andamento que receberá este laudo.");
+      return;
+    }
+    setHubMessage("Vinculando o laudo ao atendimento...");
+    try {
+      const linked = await onLinkDraft(draft.id, appointmentId);
+      setHubMessage("Laudo vinculado e confirmado no sistema compartilhado.");
+      setWorkspace({ kind: "appointment", id: linked.id });
+    } catch (error: any) {
+      setHubMessage(error?.message || "Não foi possível vincular o laudo.");
+    }
+  };
+
+  return (
+    <section className="geometry-hub">
+      <style>{`
+        .geometry-hub{display:grid;gap:18px}.geometry-hub-intro{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 20px;border:1px solid var(--line,#d8e0e8);border-left:6px solid #e31b23;border-radius:13px;background:var(--card,#fff)}.geometry-hub-intro h2{margin:0 0 4px;font-size:20px}.geometry-hub-intro p{margin:0;color:var(--muted,#667085)}.geometry-hub-intro button{border:0;border-radius:9px;padding:11px 14px;background:#111d2b;color:#fff;font-weight:900;cursor:pointer;white-space:nowrap}.geometry-hub-message{margin:0;padding:11px 14px;border:1px solid #9dc0f8;border-radius:9px;background:#edf5ff;color:#174c91;font-weight:800}.geometry-standalone-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:16px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff)}.geometry-standalone-form h3{grid-column:1/-1;margin:0}.geometry-standalone-form label{display:grid;gap:5px;color:#475467;font-size:12px;font-weight:900}.geometry-standalone-form input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px;background:var(--card,#fff);color:inherit}.geometry-standalone-form footer{display:flex;justify-content:flex-end;gap:8px;grid-column:1/-1}.geometry-standalone-form button,.geometry-hub-card button{border:1px solid #bac6d4;border-radius:8px;padding:9px 11px;background:#fff;font-weight:900;cursor:pointer}.geometry-standalone-form .primary,.geometry-hub-card .primary{border-color:#16864b;background:#16864b;color:#fff}.geometry-hub-section{display:grid;gap:10px}.geometry-hub-section>header{display:flex;align-items:flex-end;justify-content:space-between;gap:15px}.geometry-hub-section h2{margin:0;font-size:18px}.geometry-hub-section header span{color:#64748b;font-size:12px}.geometry-hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.geometry-hub-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:14px;border:1px solid #d8e0e8;border-radius:11px;background:var(--card,#fff)}.geometry-hub-card>span{display:grid;gap:3px;min-width:0}.geometry-hub-card h3{margin:0;font-size:16px}.geometry-hub-card p{margin:0;color:#526274;font-size:13px}.geometry-hub-card small{color:#64748b}.geometry-hub-card .plate{color:#b3151d;font-weight:900;letter-spacing:.05em}.geometry-hub-card>aside{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:7px}.geometry-hub-card select{max-width:260px;border:1px solid #9fb0c3;border-radius:7px;padding:8px;background:var(--card,#fff);color:inherit}.geometry-hub-card .saved-badge,.geometry-hub-card .pending-badge,.geometry-hub-card .linked-badge{width:max-content;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:900;text-transform:uppercase}.geometry-hub-card .saved-badge{background:#def7e8;color:#08723c}.geometry-hub-card .pending-badge{background:#fff2c7;color:#7a5200}.geometry-hub-card .linked-badge{background:#e8eef5;color:#334155}.geometry-hub-empty{margin:0;padding:20px;border:1px dashed #bec9d5;border-radius:10px;color:#64748b;text-align:center}.geometry-link-context{display:grid;grid-template-columns:1.2fr 1fr .6fr;gap:1px;margin:0 auto 12px;max-width:1180px;overflow:hidden;border:1px solid #c8d3df;border-radius:10px;background:#c8d3df}.geometry-link-context>span{display:grid;gap:3px;padding:10px 12px;background:#fff}.geometry-link-context small{color:#64748b;font-size:10px;font-weight:900}.geometry-link-context.standalone{grid-template-columns:1.2fr 1fr .6fr auto}.geometry-link-context>strong{display:grid;place-items:center;padding:10px 14px;background:#fff2c7;color:#7a5200;font-size:11px;text-align:center}.dark .geometry-hub-intro,.dark .geometry-standalone-form,.dark .geometry-hub-card,.dark .geometry-link-context>span{background:#172231}.dark .geometry-hub-intro button{background:#e31b23}@media(max-width:950px){.geometry-standalone-form{grid-template-columns:repeat(2,minmax(0,1fr))}.geometry-hub-grid{grid-template-columns:1fr}.geometry-link-context,.geometry-link-context.standalone{grid-template-columns:1fr 1fr}}@media(max-width:620px){.geometry-hub-intro{align-items:stretch;flex-direction:column}.geometry-standalone-form{grid-template-columns:1fr}.geometry-hub-card{grid-template-columns:1fr}.geometry-hub-card>aside{align-items:stretch}.geometry-hub-card select{max-width:none}.geometry-link-context,.geometry-link-context.standalone{grid-template-columns:1fr}}
+      `}</style>
+      <div className="geometry-hub-intro">
+        <span>
+          <h2>Importar laudo diretamente</h2>
+          <p>Escolha um veículo que está na oficina ou crie um orçamento avulso para vincular depois.</p>
+        </span>
+        <button type="button" onClick={() => setShowStandaloneForm((current) => !current)}>
+          {showStandaloneForm ? "Fechar cadastro avulso" : "+ Novo laudo avulso"}
+        </button>
+      </div>
+      {hubMessage && <p className="geometry-hub-message">{hubMessage}</p>}
+      {showStandaloneForm && (
+        <form className="geometry-standalone-form" onSubmit={createStandalone}>
+          <h3>Identificação do orçamento avulso</h3>
+          <label>Cliente<input value={standaloneForm.client} onChange={(event) => setStandaloneForm({...standaloneForm,client:event.target.value})} placeholder="Pode preencher depois"/></label>
+          <label>Veículo<input value={standaloneForm.vehicle} onChange={(event) => setStandaloneForm({...standaloneForm,vehicle:event.target.value})} placeholder="Modelo do veículo"/></label>
+          <label>Placa<input value={standaloneForm.plate} onChange={(event) => setStandaloneForm({...standaloneForm,plate:event.target.value.toLocaleUpperCase("pt-BR")})} placeholder="ABC1D23"/></label>
+          <label>KM<input value={standaloneForm.km} onChange={(event) => setStandaloneForm({...standaloneForm,km:event.target.value})} inputMode="numeric" placeholder="Quilometragem"/></label>
+          <footer><button type="button" onClick={() => setShowStandaloneForm(false)}>Cancelar</button><button type="submit" className="primary" disabled={creating}>{creating ? "Criando..." : "Criar e importar laudo"}</button></footer>
+        </form>
+      )}
+      <div className="geometry-hub-section">
+        <header><h2>Veículos em andamento na oficina</h2><span>{inProgress.length} {inProgress.length === 1 ? "veículo" : "veículos"}</span></header>
+        {inProgress.length === 0 ? <p className="geometry-hub-empty">Nenhum veículo está marcado como em andamento neste momento.</p> : (
+          <div className="geometry-hub-grid">
+            {inProgress.map((appointment) => (
+              <article className="geometry-hub-card" key={appointment.id}>
+                <span>
+                  <h3>{appointment.client}</h3>
+                  <p>{appointment.vehicle || "Veículo não informado"} · <b className="plate">{appointment.plate || "SEM PLACA"}</b></p>
+                  <small>Entrada: {fmt(appointment.date)} · {appointment.time}</small>
+                  <b className={appointment.geometryReport ? "saved-badge" : "pending-badge"}>{appointment.geometryReport ? "Laudo salvo" : "Aguardando laudo"}</b>
+                </span>
+                <aside><button type="button" className="primary" onClick={() => setWorkspace({kind:"appointment",id:appointment.id})}>{appointment.geometryReport ? "Abrir laudo" : "Importar laudo"}</button></aside>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="geometry-hub-section">
+        <header><h2>Laudos avulsos</h2><span>{drafts.length} {drafts.length === 1 ? "laudo" : "laudos"}</span></header>
+        {drafts.length === 0 ? <p className="geometry-hub-empty">Nenhum laudo avulso foi criado.</p> : (
+          <div className="geometry-hub-grid">
+            {(drafts as StandaloneGeometryReport[]).map((draft) => {
+              const linkedAppointment = draft.linkedAppointmentId
+                ? (appointments as Appt[]).find((item) => item.id === draft.linkedAppointmentId)
+                : null;
+              return (
+                <article className="geometry-hub-card" key={draft.id}>
+                  <span>
+                    <h3>{draft.client}</h3>
+                    <p>{draft.vehicle || "Veículo não informado"} · <b className="plate">{draft.plate || "SEM PLACA"}</b></p>
+                    <small>Criado em {new Date(draft.createdAt).toLocaleString("pt-BR")}{draft.createdBy ? ` por ${draft.createdBy}` : ""}</small>
+                    <b className={linkedAppointment ? "linked-badge" : draft.report ? "saved-badge" : "pending-badge"}>{linkedAppointment ? `Vinculado a ${linkedAppointment.client}` : draft.report ? "Pronto para vincular" : "Aguardando importação"}</b>
+                  </span>
+                  <aside>
+                    <button type="button" onClick={() => setWorkspace(linkedAppointment ? {kind:"appointment",id:linkedAppointment.id} : {kind:"draft",id:draft.id})}>{linkedAppointment ? "Abrir atendimento vinculado" : draft.report ? "Abrir laudo" : "Importar laudo"}</button>
+                    {!linkedAppointment && draft.report && (
+                      <><select value={linkTargets[draft.id] || ""} onChange={(event) => setLinkTargets({...linkTargets,[draft.id]:event.target.value})}><option value="">Selecionar veículo para vincular</option>{inProgress.map((appointment) => <option key={appointment.id} value={appointment.id}>{appointment.client} · {appointment.vehicle} · {appointment.plate || "sem placa"}</option>)}</select><button type="button" className="primary" onClick={() => linkDraft(draft)}>Vincular ao atendimento</button></>
+                    )}
+                  </aside>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, rightToe, rear = false }: any) {
   return (
     <div className="axle-illustration">
@@ -8077,9 +9080,40 @@ function AxleTechnicalIllustration({ title, leftCamber, rightCamber, leftToe, ri
   );
 }
 
-function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: any) {
+function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue, onSave, backLabel = "Voltar à proposta" }: any) {
   const storageKey = `geometry-report-${appointment.id ?? appointment.plate ?? appointment.name}`;
   const extraStorageKey = `${storageKey}-extra-fields`;
+  const recommendedReviewKm = (() => {
+    const digits = String(appointment.km ?? "").replace(/\D/g, "");
+    const currentKm = Number(digits);
+    return Number.isFinite(currentKm) && currentKm > 0
+      ? (currentKm + 10000).toLocaleString("pt-BR")
+      : "";
+  })();
+  const sixMonthsAfter = (raw: any) => {
+    const value = String(raw ?? "").trim();
+    const br = value.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const iso = value.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+    const day = Number(br?.[1] ?? iso?.[3]);
+    const month = Number(br?.[2] ?? iso?.[2]);
+    const year = Number(br?.[3] ?? iso?.[1]);
+    if (!day || !month || !year) return "";
+    const targetMonth = month - 1 + 6;
+    const targetYear = year + Math.floor(targetMonth / 12);
+    const normalizedMonth = targetMonth % 12;
+    const lastDay = new Date(targetYear, normalizedMonth + 1, 0).getDate();
+    return new Date(targetYear, normalizedMonth, Math.min(day, lastDay)).toLocaleDateString("pt-BR");
+  };
+  const withRecommendedReview = (saved: any) => {
+    const current = saved || {};
+    const reviewDate = current.nextReviewDate || sixMonthsAfter(current.reportDate || appointment.date);
+    return {
+      ...current,
+      nextReviewKm: current.nextReviewKm || recommendedReviewKm,
+      nextReviewDate: reviewDate,
+      nextReviewDateAuto: current.nextReviewDateAuto ?? !current.nextReviewDate,
+    };
+  };
   const normalizeGeometryValues = (stored: any) => {
     if (!stored || typeof stored !== "object") return {};
     const rows = Object.values(stored) as any[];
@@ -8101,21 +9135,28 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     return migrated;
   };
   const [sourcePdf, setSourcePdf] = useState("");
+  const [sourceIsImage, setSourceIsImage] = useState(false);
   const [sourceName, setSourceName] = useState(appointment.geometryReport?.sourceName || "");
-  const [technician, setTechnician] = useState(appointment.geometryReport?.technician || appointment.tech || "");
+  const [technician, setTechnician] = useState(appointment.geometryReport?.technician || "");
   const [notes, setNotes] = useState(appointment.geometryReport?.notes || "Realizado alinhamento conforme especificação do fabricante.");
   const [readingPdf, setReadingPdf] = useState(false);
+  const [savingGeometry, setSavingGeometry] = useState(false);
   const [readMessage, setReadMessage] = useState("");
   const [pendingValues, setPendingValues] = useState<any>(null);
+  const [measureEditing, setMeasureEditing] = useState(false);
+  const [adminUnlockOpen, setAdminUnlockOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminUnlockError, setAdminUnlockError] = useState("");
+  const [checkingAdmin, setCheckingAdmin] = useState(false);
   const [values, setValues] = useState<any>(() => {
     if (appointment.geometryReport?.values) return normalizeGeometryValues(appointment.geometryReport.values);
     if (typeof window === "undefined") return {};
     try { return normalizeGeometryValues(JSON.parse(localStorage.getItem(storageKey) || "{}")); } catch { return {}; }
   });
   const [extraFields, setExtraFields] = useState<any>(() => {
-    if (appointment.geometryReport?.extraFields) return appointment.geometryReport.extraFields;
-    if (typeof window === "undefined") return {};
-    try { return JSON.parse(localStorage.getItem(extraStorageKey) || "{}"); } catch { return {}; }
+    if (appointment.geometryReport?.extraFields) return withRecommendedReview(appointment.geometryReport.extraFields);
+    if (typeof window === "undefined") return withRecommendedReview({});
+    try { return withRecommendedReview(JSON.parse(localStorage.getItem(extraStorageKey) || "{}")); } catch { return withRecommendedReview({}); }
   });
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(values));
@@ -8160,9 +9201,21 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   const updateValue = (index: number, field: string, value: string) =>
     setValues((current: any) => ({ ...current, [index]: { ...(current[index] || {}), [field]: value } }));
   const updateExtra = (field: string, value: string) =>
-    setExtraFields((current: any) => ({ ...current, [field]: value }));
+    setExtraFields((current: any) => {
+      const recalculatedDate = field === "reportDate" ? sixMonthsAfter(value) : "";
+      return {
+        ...current,
+        [field]: value,
+        ...(field === "nextReviewDate" ? { nextReviewDateAuto: false } : {}),
+        ...(
+          recalculatedDate && current.nextReviewDateAuto !== false
+            ? { nextReviewDate: recalculatedDate, nextReviewDateAuto: true }
+            : {}
+        ),
+      };
+    });
   const formatAngle = (raw: string) => {
-    const cleaned = raw.replace(/\s/g, "").replace(",", ".");
+    const cleaned = raw.replace(/\s/g, "").replace(/[oO]/g, "°").replace(",", ".");
     const match = cleaned.match(/([+-]?\d+)[°º](?:(\d+)[\'’′\"”″])?/);
     if (!match) return cleaned;
     const sign = match[1].startsWith("-") ? "-" : "";
@@ -8177,57 +9230,247 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       [0, /camber dianteir|cambagem dianteir/i, false],
       [1, /caster/i, false],
       [2, /converg.ncia dianteira(?! total)/i, false],
-      [3, /converg.ncia total dianteir/i, true],
+      [3, /converg.ncia total dianteir/i, false],
       [4, /\bkpi\b|sai/i, false],
       [5, /angulo de inclusao/i, false],
-      [6, /setback dianteir/i, true],
+      [6, /set[\s-]*back dianteir|recuo dianteir/i, true],
       [7, /camber traseir|cambagem traseir/i, false],
       [8, /converg.ncia traseira(?! total)/i, false],
-      [9, /converg.ncia total traseir/i, true],
+      [9, /converg.ncia total traseir/i, false],
       [10, /angulo de (impulsao|empurrao)/i, true],
-      [11, /setback traseir/i, true],
+      [11, /set[\s-]*back traseir|recuo traseir/i, true],
     ];
     const next: any = {};
     let recognized = 0;
-    definitions.forEach(([index, pattern, single]) => {
-      const line = findGeometryLine(text, pattern);
-      const angles = line.match(/[+-]?\d+[°º]\s*\d*[\'’′\"”″]?/g) || [];
+    const angleValues = (line: string) =>
+      line.match(/[+-]?\d+\s*[°ºoO]\s*\d*[\'’′\"”″]?/g) || [];
+    const applyRow = (index: number, angles: string[], single = false) => {
       if (!single && angles.length >= 6) {
+        // Ordem visual da tabela do alinhador: esquerda (antes/depois),
+        // especificação (mín./máx.) e direita (antes/depois). A extração do
+        // PDF preserva esta ordem horizontal, portanto não se pode assumir
+        // que as especificações venham antes das medidas.
         next[index] = {
           ...(values[index] || {}),
-          min: formatAngle(angles[0]),
-          max: formatAngle(angles[1]),
-          beforeLeft: formatAngle(angles[angles.length - 4]),
-          afterLeft: formatAngle(angles[angles.length - 3]),
-          beforeRight: formatAngle(angles[angles.length - 2]),
-          afterRight: formatAngle(angles[angles.length - 1]),
+          beforeLeft: formatAngle(angles[0]),
+          afterLeft: formatAngle(angles[1]),
+          min: formatAngle(angles[2]),
+          max: formatAngle(angles[3]),
+          beforeRight: formatAngle(angles[4]),
+          afterRight: formatAngle(angles[5]),
         };
         recognized += 4;
-      } else if (single && angles.length >= 4) {
+        return true;
+      }
+      if (single && angles.length >= 4) {
         next[index] = {
           ...(values[index] || {}),
           min: formatAngle(angles[0]),
           max: formatAngle(angles[1]),
-          beforeLeft: formatAngle(angles[angles.length - 2]),
+          beforeLeft: formatAngle(angles[2]),
           beforeRight: "",
-          afterLeft: formatAngle(angles[angles.length - 1]),
+          afterLeft: formatAngle(angles[3]),
           afterRight: "",
         };
         recognized += 2;
-      } else if (!single && angles.length >= 4) {
+        return true;
+      }
+      if (single && angles.length >= 2) {
         next[index] = {
           ...(values[index] || {}),
-          min: formatAngle(angles[0]),
-          max: formatAngle(angles[1]),
-          beforeLeft: "",
+          beforeLeft: formatAngle(angles[0]),
           beforeRight: "",
-          afterLeft: formatAngle(angles[angles.length - 2]),
-          afterRight: formatAngle(angles[angles.length - 1]),
+          afterLeft: formatAngle(angles[1]),
+          afterRight: "",
         };
         recognized += 2;
+        return true;
       }
+      if (!single && angles.length >= 4) {
+        // Em alguns PDFs/imagens o OCR não lê a especificação do meio e
+        // devolve somente as quatro medidas. Elas continuam na ordem por
+        // lado: antes E., após E., antes D., após D.
+        next[index] = {
+          ...(values[index] || {}),
+          beforeLeft: formatAngle(angles[0]),
+          afterLeft: formatAngle(angles[1]),
+          beforeRight: formatAngle(angles[2]),
+          afterRight: formatAngle(angles[3]),
+        };
+        recognized += 2;
+        return true;
+      }
+      return false;
+    };
+    definitions.forEach(([index, pattern, single]) => {
+      const line = findGeometryLine(text, pattern);
+      const angles = angleValues(line);
+      if (!single && angles.length >= 6) {
+        applyRow(index, angles, single);
+      } else applyRow(index, angles, single);
     });
+    // Fotos do alinhador geralmente trazem os títulos apenas como "Camber",
+    // "Convergência" etc. Esta segunda leitura usa as seções dianteira/traseira.
+    const plain = text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\r/g, "")
+      .split("\n")
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    const frontAt = plain.findIndex((line) => /roda\s*dianteir|eixo\s*dianteir/i.test(line));
+    const rearAt = plain.findIndex((line) => /roda\s*traseir|eixo\s*traseir/i.test(line));
+    const frontLines = frontAt >= 0 ? plain.slice(frontAt, rearAt >= 0 ? rearAt : undefined) : [];
+    const rearLines = rearAt >= 0 ? plain.slice(rearAt) : [];
+    const readSection = (lines: string[], rows: Array<[number, RegExp, boolean]>) => {
+      rows.forEach(([index, matcher, single]) => {
+        if (next[index]) return;
+        const line = lines.find((candidate) => matcher.test(candidate));
+        if (line) applyRow(index, angleValues(line), single);
+      });
+    };
+    readSection(frontLines, [
+      [3, /converg.*total/i, false],
+      [2, /converg/i, false],
+      [0, /camber|cambagem/i, false],
+      [1, /caster/i, false],
+      [4, /\bkpi\b/i, false],
+      [5, /inclus/i, false],
+      [6, /set[\s-]*back|recuo/i, true],
+    ]);
+    readSection(rearLines, [
+      [9, /converg.*total/i, false],
+      [8, /converg/i, false],
+      [7, /camber|cambagem/i, false],
+      [11, /set[\s-]*back|recuo/i, true],
+      [10, /impuls|empurr/i, true],
+    ]);
+    // Alguns alinhadores escrevem somente "Setback"/"Set-back", sem dizer
+    // dianteira ou traseira. Quando isso acontece fora de uma seção legível,
+    // a primeira ocorrência pertence ao eixo dianteiro e a segunda ao traseiro.
+    const genericSetbacks = plain.filter((line) => /set[\s-]*back|recuo/i.test(line));
+    if (!next[6] && genericSetbacks[0]) applyRow(6, angleValues(genericSetbacks[0]), true);
+    if (!next[11] && genericSetbacks[1]) applyRow(11, angleValues(genericSetbacks[1]), true);
     return { next, recognized };
+  };
+  const readGeometryPdfTable = (items: any[]) => {
+    // Neste modelo de relatório os números não devem ser lidos como uma frase:
+    // a posição horizontal define a coluna (intervalo, E. antes/depois,
+    // D. antes/depois). Preservar essas coordenadas elimina a troca de lados.
+    const rows: Array<{ y: number; parts: Array<{ x: number; text: string }> }> = [];
+    (items || []).forEach((item: any) => {
+      const text = String(item.str || "").trim();
+      if (!text) return;
+      const x = Number(item.transform?.[4] || 0);
+      const y = Number(item.transform?.[5] || 0);
+      let row = rows.find((candidate) => Math.abs(candidate.y - y) < 2.5);
+      if (!row) { row = { y, parts: [] }; rows.push(row); }
+      row.parts.push({ x, text });
+    });
+    const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const angleAt = (parts: Array<{ x: number; text: string }>, start: number, end = Infinity) => {
+      const source = parts.find((part) => part.x >= start && part.x < end && angleValues(part.text).length);
+      return source ? formatAngle(angleValues(source.text)[0]) : "";
+    };
+    const next: any = {};
+    let recognized = 0;
+    let convergenceCount = 0;
+    let camberCount = 0;
+    let setbackCount = 0;
+    let pendingKpiRow: Array<{ x: number; text: string }> | null = null;
+    const setRow = (index: number, parts: Array<{ x: number; text: string }>, single: boolean) => {
+      const min = angleAt(parts, 110, 175);
+      const max = angleAt(parts, 175, 235);
+      const beforeLeft = angleAt(parts, 300, 380);
+      const afterLeft = angleAt(parts, 380, 455);
+      const beforeRight = angleAt(parts, 455, 525);
+      const afterRight = angleAt(parts, 525);
+      if (single) {
+        if (!beforeLeft && !afterRight) return;
+        next[index] = { ...(values[index] || {}), min, max, beforeLeft, beforeRight: "", afterLeft: afterRight, afterRight: "" };
+        recognized += Number(!!beforeLeft) + Number(!!afterRight);
+        return;
+      }
+      if (!beforeLeft && !afterLeft && !beforeRight && !afterRight) return;
+      next[index] = { ...(values[index] || {}), min, max, beforeLeft, beforeRight, afterLeft, afterRight };
+      recognized += [beforeLeft, afterLeft, beforeRight, afterRight].filter(Boolean).length;
+    };
+    rows.sort((a, b) => b.y - a.y).forEach((row) => {
+      const parts = row.parts.sort((a, b) => a.x - b.x);
+      const label = normalized(parts.filter((part) => part.x < 105).map((part) => part.text).join(" "));
+      if (/converg/.test(label)) setRow(convergenceCount++ < 2 ? convergenceCount - 1 + 2 : convergenceCount - 1 + 6, parts, convergenceCount === 2 || convergenceCount === 4);
+      else if (/camber|cambagem/.test(label)) setRow(camberCount++ ? 7 : 0, parts, false);
+      else if (/caster/.test(label)) setRow(1, parts, false);
+      else if (/kpi|sai/.test(label)) setRow(4, parts, false);
+      else if (/inclus/.test(label)) setRow(5, parts, false);
+      else if (/set[\s-]*back|recuo/.test(label)) setRow(setbackCount++ ? 11 : 6, parts, true);
+      else if (/impuls|empurr/.test(label)) setRow(10, parts, true);
+      else if (!pendingKpiRow && parts.filter((part) => angleValues(part.text).length).length >= 6) pendingKpiRow = parts;
+    });
+    if (!next[4] && pendingKpiRow) setRow(4, pendingKpiRow, false);
+    return { next, recognized };
+  };
+  const readGeometryMetadata = (text: string) => {
+    const normalized = text.replace(/\u00a0/g, " ");
+    const normalizedWithoutAccents = (value: string) => value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const extractComments = () => {
+      const lines = normalized
+        .split(/\r?\n/)
+        .map((line) => line.replace(/\s+/g, " ").trim());
+      const collected: string[] = [];
+      let readingComments = false;
+
+      for (const originalLine of lines) {
+        const searchableLine = normalizedWithoutAccents(originalLine);
+        if (!readingComments) {
+          const heading = searchableLine.match(/\bcoment(?:ario|arios)\b\s*:?[\s-]*/i);
+          if (!heading) continue;
+          readingComments = true;
+          const sameLine = originalLine.slice(heading.index! + heading[0].length).trim();
+          if (sameLine) collected.push(sameLine);
+          continue;
+        }
+
+        if (!originalLine || /^[-_]{3,}$/.test(originalLine)) continue;
+        if (/^(oficina|telefone|relatorio\s+do\s+alinhador)\b\s*:?/i.test(searchableLine)) break;
+        collected.push(originalLine);
+        if (collected.length >= 8) break;
+      }
+
+      return collected
+        .join("\n")
+        .replace(/\s+(oficina|telefone)\s*:.*$/i, "")
+        .trim();
+    };
+    const rimMatch = normalized.match(/(?:tamanho\s+do\s+aro|\baro\b)\s*[:\-]?\s*(\d{1,2}(?:[.,]\d)?)/i);
+    const dateMatch = normalized.match(/\bData\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    const timeMatch = normalized.match(/\bHora\s+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+    const comments = extractComments();
+    return {
+      ...(rimMatch ? { rim: rimMatch[1].replace(",", ".") } : {}),
+      ...(dateMatch ? { reportDate: dateMatch[1] } : {}),
+      ...(timeMatch ? { reportTime: timeMatch[1] } : {}),
+      ...(comments ? { importedComments: comments } : {}),
+    };
+  };
+  const applyGeometryMetadata = (metadata: any) => {
+    if (!metadata || !Object.keys(metadata).length) return;
+    const { importedComments, ...reportMetadata } = metadata;
+    if (importedComments) setNotes(importedComments);
+    setExtraFields((current: any) => {
+      const importedReviewDate = sixMonthsAfter(reportMetadata.reportDate);
+      return {
+        ...current,
+        ...reportMetadata,
+        ...(
+          importedReviewDate && (!current.nextReviewDate || current.nextReviewDateAuto !== false)
+            ? { nextReviewDate: importedReviewDate, nextReviewDateAuto: true }
+            : {}
+        ),
+      };
+    });
   };
   const scanPdf = async (file: File) => {
     setReadingPdf(true);
@@ -8255,8 +9498,16 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         .sort((a, b) => b.y - a.y)
         .map((row) => row.parts.sort((a, b) => a.x - b.x).map((part) => part.text).join(" "))
         .join("\n");
-      const embeddedReading = readGeometryText(embeddedText);
+      const positionedReading = readGeometryPdfTable(textContent.items || []);
+      // Em PDFs nativos, a leitura por coordenadas é a fonte confiável; a
+      // leitura por texto corrido continua apenas como alternativa para PDFs
+      // cuja tabela não mantenha a estrutura esperada.
+      const embeddedReading = positionedReading.recognized >= 4
+        ? positionedReading
+        : readGeometryText(embeddedText);
       if (embeddedReading.recognized >= 4) {
+        const metadata = readGeometryMetadata(embeddedText);
+        applyGeometryMetadata(metadata);
         setPendingValues(embeddedReading.next);
         setReadMessage(`${embeddedReading.recognized} medidas reconhecidas diretamente do PDF. Confira a tela de confirmação antes de importar.`);
         return;
@@ -8274,6 +9525,8 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
       const result = await worker.recognize(canvas);
       await worker.terminate();
       const { next, recognized } = readGeometryText(result.data.text || "");
+      const metadata = readGeometryMetadata(result.data.text || "");
+      applyGeometryMetadata(metadata);
       setPendingValues(recognized ? next : null);
       setReadMessage(
         recognized
@@ -8290,29 +9543,186 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     const file = event.target.files?.[0];
     if (!file) return;
     if (sourcePdf) URL.revokeObjectURL(sourcePdf);
+    setSourceIsImage(false);
     setSourcePdf(URL.createObjectURL(file));
     setSourceName(file.name);
     await scanPdf(file);
   };
+  const scanImage = async (file: File) => {
+    setReadingPdf(true);
+    setReadMessage("Melhorando a imagem e lendo textos e medidas do alinhador...");
+    try {
+      const imageUrl = URL.createObjectURL(file);
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        // Usa o elemento nativo: "Image" já é usado pelo componente do Next.
+        const element = document.createElement("img");
+        element.onload = () => resolve(element);
+        element.onerror = () => reject(new Error("Não foi possível abrir a imagem."));
+        element.src = imageUrl;
+      });
+      const scale = Math.min(4, Math.max(2, 2600 / Math.max(image.naturalWidth, 1)));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.naturalWidth * scale);
+      canvas.height = Math.round(image.naturalHeight * scale);
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("Não foi possível preparar a imagem para leitura.");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+      for (let index = 0; index < pixels.data.length; index += 4) {
+        const gray = pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114;
+        const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.65 + 128));
+        pixels.data[index] = contrast;
+        pixels.data[index + 1] = contrast;
+        pixels.data[index + 2] = contrast;
+      }
+      context.putImageData(pixels, 0, 0);
+      const { createWorker }: any = await import("tesseract.js");
+      const worker = await createWorker("por");
+      const result = await worker.recognize(canvas);
+      URL.revokeObjectURL(imageUrl);
+      const text = result.data.text || "";
+      let { next, recognized } = readGeometryText(text);
+      // Segunda passagem: lê cada faixa de números da tabela. Em fotos como a
+      // enviada, os traços da grade fazem o OCR perder os rótulos das linhas.
+      if (recognized < 8 && image.naturalWidth / image.naturalHeight > 1.25) {
+        await worker.setParameters({ tessedit_pageseg_mode: "7" });
+        const rowDefinitions: Array<[string, number]> = [
+          ["Convergência", 0.239], ["Convergência total", 0.296],
+          ["Camber", 0.352], ["Caster", 0.408], ["KPI", 0.465],
+          ["Ângulo de inclusão", 0.522], ["Setback", 0.578],
+          ["__traseira__", 0.665], ["Convergência", 0.752],
+          ["Camber", 0.808], ["Setback", 0.864], ["Ângulo de impulsão", 0.920],
+        ];
+        let syntheticText = "Roda dianteira\n";
+        for (const [label, middle] of rowDefinitions) {
+          if (label === "__traseira__") {
+            syntheticText += "\nRoda traseira\n";
+            continue;
+          }
+          const crop = document.createElement("canvas");
+          crop.width = Math.round(canvas.width * 0.74);
+          crop.height = Math.round(canvas.height * 0.064);
+          const cropContext = crop.getContext("2d");
+          if (!cropContext) continue;
+          const sourceX = Math.round(canvas.width * 0.255);
+          const sourceY = Math.max(0, Math.round(canvas.height * (middle - 0.032)));
+          const sourceWidth = canvas.width - sourceX;
+          const sourceHeight = Math.min(Math.round(canvas.height * 0.064), canvas.height - sourceY);
+          cropContext.drawImage(canvas, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, crop.width, crop.height);
+          const rowResult = await worker.recognize(crop);
+          syntheticText += `${label} ${rowResult.data.text || ""}\n`;
+        }
+        const croppedReading = readGeometryText(syntheticText);
+        if (croppedReading.recognized > recognized) {
+          next = croppedReading.next;
+          recognized = croppedReading.recognized;
+        }
+      }
+      await worker.terminate();
+      applyGeometryMetadata(readGeometryMetadata(text));
+      setPendingValues(recognized ? next : null);
+      setReadMessage(
+        recognized
+          ? `${recognized} medidas reconhecidas na imagem. Confira a tela de confirmação antes de importar.`
+          : "A imagem foi carregada, mas as medidas não foram reconhecidas com segurança. Confira ou preencha os campos manualmente.",
+      );
+    } catch (error: any) {
+      setReadMessage(`Não foi possível concluir a leitura da imagem: ${error?.message || "erro desconhecido"}. Confira as medidas manualmente.`);
+    } finally {
+      setReadingPdf(false);
+    }
+  };
+  const importGeometryFile = async (event: any) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (sourcePdf) URL.revokeObjectURL(sourcePdf);
+    const isImage = file.type.startsWith("image/");
+    setSourceIsImage(isImage);
+    setSourcePdf(URL.createObjectURL(file));
+    setSourceName(file.name);
+    if (isImage) await scanImage(file);
+    else await scanPdf(file);
+  };
   const printGeometry = () => {
     const report = document.querySelector(".geometry-template-sheet") as HTMLElement | null;
     if (!report) { setReadMessage("Não foi possível localizar o laudo para impressão."); return; }
-    setReadMessage("Abrindo a impressão do laudo...");
-    document.body.classList.add("print-geometry-report");
-    const finishPrint = () => document.body.classList.remove("print-geometry-report");
-    window.addEventListener("afterprint", finishPrint, { once: true });
+    const printWindow = window.open("", "_blank", "width=980,height=1080");
+    if (!printWindow) {
+      setReadMessage("O navegador bloqueou a janela de impressão. Permita pop-ups para este site e clique novamente.");
+      return;
+    }
+    const copy = report.cloneNode(true) as HTMLElement;
+    const originalFields = report.querySelectorAll("input, textarea");
+    const copiedFields = copy.querySelectorAll("input, textarea");
+    originalFields.forEach((field: any, index) => {
+      const copied: any = copiedFields[index];
+      if (!copied) return;
+      if (copied.tagName === "TEXTAREA") copied.textContent = field.value;
+      else copied.setAttribute("value", field.value);
+    });
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => node.outerHTML)
+      .join("\n");
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><base href="${window.location.origin}/"><title>Laudo de geometria - ${appointment.client || appointment.name || "Cliente"}</title>${styles}<style>html,body{margin:0!important;padding:0!important;background:#fff!important}.geometry-template-sheet{display:block!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:297mm!important;margin:0!important;padding:5mm!important;box-shadow:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.geometry-template-sheet input,.geometry-template-sheet textarea{outline:0!important}@page{size:A4 portrait;margin:0}</style></head><body>${copy.outerHTML}</body></html>`);
+    printWindow.document.close();
+    let opened = false;
+    const openDialog = () => {
+      if (opened) return;
+      opened = true;
+      printWindow.focus();
+      printWindow.print();
+    };
+    printWindow.addEventListener("load", () => window.setTimeout(openDialog, 250), { once: true });
+    window.setTimeout(openDialog, 700);
+    setReadMessage("A impressão foi aberta em uma nova janela. Escolha a impressora ou Salvar como PDF.");
+  };
+  const saveGeometry = async () => {
+    if (savingGeometry) return false;
+    if (!technician.trim()) {
+      setReadMessage("Preencha o nome do técnico alinhador antes de salvar o laudo.");
+      document.querySelector<HTMLInputElement>(".data-tech input")?.focus();
+      return false;
+    }
+    setSavingGeometry(true);
+    setReadMessage("Salvando o laudo no sistema compartilhado...");
     try {
-      window.print();
-      setReadMessage("Escolha imprimir ou salvar como PDF.");
-      window.setTimeout(finishPrint, 3000);
-    } catch {
-      finishPrint();
-      setReadMessage("Não foi possível abrir a impressão neste navegador.");
+      if (!onSave) throw new Error("Não foi possível acessar o salvamento compartilhado.");
+      await onSave({ schemaVersion: 4, values, technician, notes, sourceName, extraFields });
+      setReadMessage("Laudo salvo e confirmado no sistema. Ele já pode ser aberto em outro computador.");
+      return true;
+    } catch (error: any) {
+      setReadMessage(error?.message || "Não foi possível confirmar o salvamento do laudo.");
+      return false;
+    } finally {
+      setSavingGeometry(false);
     }
   };
-  const saveGeometry = () => {
-    onSave?.({ schemaVersion: 2, values, technician, notes, sourceName, extraFields });
-    setReadMessage("Laudo salvo no atendimento do cliente.");
+  const openMeasureUnlock = () => {
+    if (measureEditing) {
+      setMeasureEditing(false);
+      setReadMessage("Quadro de medidas bloqueado novamente.");
+      return;
+    }
+    setAdminUnlockError("");
+    setAdminPassword("");
+    setAdminUnlockOpen(true);
+  };
+  const unlockMeasureEditing = (event: any) => {
+    event.preventDefault();
+    if (checkingAdmin) return;
+    setCheckingAdmin(true);
+    setAdminUnlockError("");
+    if (adminPassword !== "3010") {
+      setAdminUnlockError("Senha de edição incorreta.");
+      setCheckingAdmin(false);
+      return;
+    }
+    setMeasureEditing(true);
+    setAdminUnlockOpen(false);
+    setAdminPassword("");
+    setCheckingAdmin(false);
+    setReadMessage("Edição das medidas liberada. Revise os valores e salve o laudo ao concluir.");
   };
   const renderMeasureRow = ([label, defaultMin, defaultMax, single]: any, index: number) => {
     const row = values[index] || {};
@@ -8320,21 +9730,21 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
     const max = row.max ?? defaultMax;
     if (single) return <div className="a4-measure-row single" key={label}>
       <b>{label}</b>
-      <input className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
-      <span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
-      <input className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
+      <input readOnly={!measureEditing} className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
+      <span><input readOnly={!measureEditing} value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input readOnly={!measureEditing} value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
+      <input readOnly={!measureEditing} className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
     </div>;
     return <div className="a4-measure-row" key={label}>
       <b>{label}</b>
-      <input className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
-      <input className={stateOf(beforeRightOf(row),min,max)} value={beforeRightOf(row)} onChange={(e)=>updateValue(index,"beforeRight",e.target.value)}/>
-      <span><input value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
-      <input className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
-      <input className={stateOf(afterRightOf(row),min,max)} value={afterRightOf(row)} onChange={(e)=>updateValue(index,"afterRight",e.target.value)}/>
+      <input readOnly={!measureEditing} className={stateOf(beforeLeftOf(row),min,max)} value={beforeLeftOf(row)} onChange={(e)=>updateValue(index,"beforeLeft",e.target.value)}/>
+      <input readOnly={!measureEditing} className={stateOf(beforeRightOf(row),min,max)} value={beforeRightOf(row)} onChange={(e)=>updateValue(index,"beforeRight",e.target.value)}/>
+      <span><input readOnly={!measureEditing} value={min} onChange={(e)=>updateValue(index,"min",e.target.value)}/> a <input readOnly={!measureEditing} value={max} onChange={(e)=>updateValue(index,"max",e.target.value)}/></span>
+      <input readOnly={!measureEditing} className={stateOf(afterLeftOf(row),min,max)} value={afterLeftOf(row)} onChange={(e)=>updateValue(index,"afterLeft",e.target.value)}/>
+      <input readOnly={!measureEditing} className={stateOf(afterRightOf(row),min,max)} value={afterRightOf(row)} onChange={(e)=>updateValue(index,"afterRight",e.target.value)}/>
     </div>;
   };
   const measureHead = <div className="a4-measure-head">
-    <b>PARÂMETRO</b>
+    <b className="measure-parameter-head">PARÂMETRO<button type="button" className={`measure-edit-button no-print ${measureEditing ? "unlocked" : ""}`} onClick={openMeasureUnlock} title={measureEditing ? "Bloquear edição das medidas" : "Alterar medidas com senha administrativa"} aria-label={measureEditing ? "Bloquear edição das medidas" : "Alterar medidas com senha administrativa"}>{measureEditing ? "🔒" : "✎"}</button></b>
     <span><strong>ANTES DO AJUSTE</strong><i>ESQ.</i><i>DIR.</i></span>
     <b>ESPECIFICAÇÃO</b>
     <span><strong>APÓS O AJUSTE</strong><i>ESQ.</i><i>DIR.</i></span>
@@ -8342,34 +9752,37 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
   return (
     <div className="geometry-report-page">
       <div className="geometry-toolbar">
-        <span className="geometry-version">Laudo A4 V16</span>
-        <button type="button" onClick={onBack}>← Voltar à proposta</button>
-        <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo PDF..." : "Importar e ler PDF do alinhador"}<input type="file" accept="application/pdf" onChange={importPdf} disabled={readingPdf}/></label>
-        <button type="button" onClick={saveGeometry}>Salvar laudo</button>
+        <span className="geometry-version">Laudo A4 V27</span>
+        <button type="button" onClick={onBack}>← {backLabel}</button>
+        <label className={`pdf-upload ${readingPdf ? "disabled" : ""}`}>{readingPdf ? "Lendo laudo..." : "Importar PDF ou imagem do alinhador"}<input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={importGeometryFile} disabled={readingPdf}/></label>
+        <button type="button" onClick={saveGeometry} disabled={savingGeometry}>{savingGeometry ? "Salvando..." : "Salvar laudo"}</button>
         <button type="button" className="primary print-geometry-button" onClick={printGeometry}>Imprimir / compartilhar PDF</button>
-        {onContinue && <button type="button" className="primary" onClick={() => { saveGeometry(); onContinue(); }}>Ir para conferência →</button>}
+        {onContinue && <button type="button" className="primary" disabled={savingGeometry} onClick={async () => { if (await saveGeometry()) onContinue(); }}>Ir para conferência →</button>}
       </div>
       <details className="geometry-extra-editor" open>
         <summary>Editar dados complementares do laudo</summary>
         <div className="geometry-extra-grid">
-          <label>Técnico<input value={technician} onChange={(e)=>setTechnician(e.target.value)}/></label>
+          <label className="geometry-technician-required">Técnico alinhador (obrigatório)<input required value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Preencha quem realizou o alinhamento"/></label>
+          <label>Aro<input value={extraFields.rim || ""} onChange={(e)=>updateExtra("rim",e.target.value)} placeholder="Ex.: 16"/></label>
+          <label>Data do laudo importado<input value={extraFields.reportDate || ""} onChange={(e)=>updateExtra("reportDate",e.target.value)} placeholder="dd/mm/aaaa"/></label>
+          <label>Horário do laudo importado<input value={extraFields.reportTime || ""} onChange={(e)=>updateExtra("reportTime",e.target.value)} placeholder="hh:mm:ss"/></label>
           <label>Pneu dianteiro esquerdo<input value={extraFields.tireFrontLeft || ""} onChange={(e)=>updateExtra("tireFrontLeft",e.target.value)}/></label>
           <label>Pneu dianteiro direito<input value={extraFields.tireFrontRight || ""} onChange={(e)=>updateExtra("tireFrontRight",e.target.value)}/></label>
           <label>Pneu traseiro esquerdo<input value={extraFields.tireRearLeft || ""} onChange={(e)=>updateExtra("tireRearLeft",e.target.value)}/></label>
           <label>Pneu traseiro direito<input value={extraFields.tireRearRight || ""} onChange={(e)=>updateExtra("tireRearRight",e.target.value)}/></label>
           <label>Ângulo do volante<input value={extraFields.steeringAngle || ""} onChange={(e)=>updateExtra("steeringAngle",e.target.value)}/></label>
-          <label>Próxima revisão - data<input value={extraFields.nextReviewDate || ""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label>
-          <label>Próxima revisão - KM<input value={extraFields.nextReviewKm || ""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label>
+          <label>Próximo alinhamento - 6 meses<input value={extraFields.nextReviewDate || ""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label>
+          <label>Próximo alinhamento - 10.000 km<input value={extraFields.nextReviewKm || ""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label>
           <label className="wide">Observações técnicas<textarea value={notes} onChange={(e)=>setNotes(e.target.value)}/></label>
         </div>
         <p>As alterações aparecem automaticamente no laudo abaixo. Clique em <b>Salvar laudo</b> ao terminar.</p>
       </details>
       {readMessage && <div className={`ocr-message ${readingPdf ? "reading" : ""}`}>{readMessage}</div>}
       {pendingValues && (
-        <section className="geometry-import-review" role="dialog" aria-modal="true" aria-label="Confirmar medidas lidas do PDF">
+        <section className="geometry-import-review" role="dialog" aria-modal="true" aria-label="Confirmar medidas lidas do laudo">
           <div className="geometry-import-card">
             <header>
-              <div><small>LEITURA DO PDF</small><h2>Confirme as medidas antes de importar</h2></div>
+              <div><small>LEITURA DO LAUDO</small><h2>Confirme as medidas antes de importar</h2></div>
               <button onClick={() => setPendingValues(null)} aria-label="Fechar conferência">×</button>
             </header>
             <p>Confira os valores lidos no relatório do alinhador. Eles só serão aplicados ao laudo depois da confirmação.</p>
@@ -8399,20 +9812,35 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
           </div>
         </section>
       )}
-      <article className="geometry-template-sheet geometry-a4-sheet">
+      {adminUnlockOpen && (
+        <section className="geometry-admin-unlock no-print" role="dialog" aria-modal="true" aria-labelledby="admin-unlock-title">
+          <form onSubmit={unlockMeasureEditing}>
+            <header>
+              <div><small>EDIÇÃO PROTEGIDA</small><h2 id="admin-unlock-title">Liberar alteração das medidas</h2></div>
+              <button type="button" onClick={() => setAdminUnlockOpen(false)} aria-label="Fechar">×</button>
+            </header>
+            <p>Digite a senha exclusiva para liberar a alteração das medidas.</p>
+            <label>Senha de edição<input type="password" inputMode="numeric" maxLength={4} value={adminPassword} onChange={(e)=>setAdminPassword(e.target.value.replace(/\D/g,""))} autoComplete="off" required autoFocus/></label>
+            {adminUnlockError && <p className="geometry-admin-error" role="alert">{adminUnlockError}</p>}
+            <footer><button type="button" onClick={() => setAdminUnlockOpen(false)}>Cancelar</button><button type="submit" className="primary" disabled={checkingAdmin}>{checkingAdmin ? "Conferindo..." : "Liberar edição"}</button></footer>
+          </form>
+        </section>
+      )}
+      <article className={`geometry-template-sheet geometry-a4-sheet ${measureEditing ? "measure-editing" : ""}`}>
         <header className="a4-report-header">
           <div className="a4-brand"><img src="/logo-monocenter.jpg" alt="Monocenter Alinhamento Técnico"/></div>
           <div className="a4-title"><b>LAUDO TÉCNICO DE GEOMETRIA</b><span>ALINHAMENTO 3D</span></div>
         </header>
         <section className="a4-customer-data">
-          <div><small>CLIENTE</small><b>{appointment.client || appointment.name || "Não informado"}</b></div>
-          <div><small>VEÍCULO</small><b>{appointment.vehicle || appointment.model || "Não informado"}</b></div>
-          <div><small>ANO / MODELO</small><b>{appointment.vehicleYear || appointment.year || "Não informado"}</b></div>
-          <div><small>PLACA</small><b>{appointment.plate || "Não informada"}</b></div>
-          <div><small>KM</small><b>{appointment.km || "Não informado"}</b></div>
-          <div><small>CHASSI</small><b>{appointment.chassis || "Não informado"}</b></div>
-          <div><small>DATA / HORA</small><b>{new Date().toLocaleDateString("pt-BR")} · {new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b></div>
-          <label><small>TÉCNICO</small><input value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Nome do técnico"/></label>
+          <div className="data-client"><small>CLIENTE</small><b>{appointment.client || appointment.name || "Não informado"}</b></div>
+          <div className="data-vehicle"><small>VEÍCULO</small><b>{appointment.vehicle || appointment.model || "Não informado"}</b></div>
+          <div className="data-year"><small>ANO / MODELO</small><b>{appointment.vehicleYear || appointment.year || "Não informado"}</b></div>
+          <div className="data-plate"><small>PLACA</small><b>{appointment.plate || "Não informada"}</b></div>
+          <div className="data-km"><small>KM</small><b>{appointment.km || "Não informado"}</b></div>
+          <div className="data-rim"><small>ARO</small><b>{extraFields.rim || (appointment as any).rim || "Não informado"}</b></div>
+          <div className="data-chassis"><small>CHASSI</small><b>{appointment.chassis || "Não informado"}</b></div>
+          <div className="data-date"><small>DATA / HORA DO ALINHAMENTO</small><b>{extraFields.reportDate || new Date().toLocaleDateString("pt-BR")} · {extraFields.reportTime || new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</b></div>
+          <label className="data-tech"><small>TÉCNICO ALINHADOR *</small><input required value={technician} onChange={(e)=>setTechnician(e.target.value)} placeholder="Preencher"/></label>
         </section>
 
         <section className="a4-axis-section front">
@@ -8429,17 +9857,17 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                 <img src="/eixo-dianteiro-laudo.png" alt="Conjunto técnico do eixo dianteiro"/>
                 <svg viewBox="0 0 600 250" preserveAspectRatio="none" aria-hidden="true">
                   <defs><marker id="a4fg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4fr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
-                  <g className="angle-reference"><line x1="88" y1="219" x2="88" y2="82"/><line x1="512" y1="219" x2="512" y2="82"/><line x1="197" y1="174" x2="163" y2="75"/><line x1="403" y1="174" x2="437" y2="75"/></g>
-                  {afterLeftOf(values[0]) && <line className="angle-measure" x1="88" y1="219" x2="88" y2="82" stroke={guideColor(0,afterLeftOf(values[0]))} transform={`rotate(${clampAngle(afterLeftOf(values[0]),-4)} 88 219)`}/>} 
-                  {afterRightOf(values[0]) && <line className="angle-measure" x1="512" y1="219" x2="512" y2="82" stroke={guideColor(0,afterRightOf(values[0]))} transform={`rotate(${clampAngle(afterRightOf(values[0]),4)} 512 219)`}/>} 
-                  {afterLeftOf(values[1]) && <line className="angle-measure" x1="197" y1="174" x2="163" y2="75" stroke={guideColor(1,afterLeftOf(values[1]))} transform={`rotate(${clampAngle(afterLeftOf(values[1]),-1.4)} 197 174)`}/>} 
-                  {afterRightOf(values[1]) && <line className="angle-measure" x1="403" y1="174" x2="437" y2="75" stroke={guideColor(1,afterRightOf(values[1]))} transform={`rotate(${clampAngle(afterRightOf(values[1]),1.4)} 403 174)`}/>} 
-                  {afterLeftOf(values[0]) && <text className="guide-label" x="42" y="92" fill={guideColor(0,afterLeftOf(values[0]))}>CAMBER E.</text>}
-                  {afterLeftOf(values[1]) && <text className="guide-label" x="128" y="72" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
-                  {afterRightOf(values[1]) && <text className="guide-label" x="472" y="72" textAnchor="end" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
-                  {afterRightOf(values[0]) && <text className="guide-label" x="558" y="92" textAnchor="end" fill={guideColor(0,afterRightOf(values[0]))}>CAMBER D.</text>}
-                  {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="226" x2="137" y2="226" stroke={guideColor(2,afterLeftOf(values[2]))} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
-                  {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="226" x2="463" y2="226" stroke={guideColor(2,afterRightOf(values[2]))} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  <g className="angle-reference"><line x1="88" y1="214" x2="88" y2="58"/><line x1="512" y1="214" x2="512" y2="58"/><line x1="197" y1="174" x2="163" y2="52"/><line x1="403" y1="174" x2="437" y2="52"/></g>
+                  {afterLeftOf(values[0]) && <line className="angle-measure" x1="88" y1="214" x2="88" y2="58" stroke={guideColor(0,afterLeftOf(values[0]))} markerEnd={stateOf(afterLeftOf(values[0]),values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])==="ok"?"url(#a4fg)":"url(#a4fr)"} transform={`rotate(${clampAngle(afterLeftOf(values[0]),-4)} 88 214)`}/>} 
+                  {afterRightOf(values[0]) && <line className="angle-measure" x1="512" y1="214" x2="512" y2="58" stroke={guideColor(0,afterRightOf(values[0]))} markerEnd={stateOf(afterRightOf(values[0]),values[0]?.min??GEOMETRY_FIELDS[0][1],values[0]?.max??GEOMETRY_FIELDS[0][2])==="ok"?"url(#a4fg)":"url(#a4fr)"} transform={`rotate(${clampAngle(afterRightOf(values[0]),4)} 512 214)`}/>} 
+                  {afterLeftOf(values[1]) && <line className="angle-measure" x1="197" y1="174" x2="163" y2="52" stroke={guideColor(1,afterLeftOf(values[1]))} markerEnd={stateOf(afterLeftOf(values[1]),values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])==="ok"?"url(#a4fg)":"url(#a4fr)"} transform={`rotate(${clampAngle(afterLeftOf(values[1]),-1.4)} 197 174)`}/>} 
+                  {afterRightOf(values[1]) && <line className="angle-measure" x1="403" y1="174" x2="437" y2="52" stroke={guideColor(1,afterRightOf(values[1]))} markerEnd={stateOf(afterRightOf(values[1]),values[1]?.min??GEOMETRY_FIELDS[1][1],values[1]?.max??GEOMETRY_FIELDS[1][2])==="ok"?"url(#a4fg)":"url(#a4fr)"} transform={`rotate(${clampAngle(afterRightOf(values[1]),1.4)} 403 174)`}/>} 
+                  {afterLeftOf(values[0]) && <text className="guide-label" x="88" y="38" textAnchor="middle" fill={guideColor(0,afterLeftOf(values[0]))}>CAMBER E.</text>}
+                  {afterLeftOf(values[1]) && <text className="guide-label caster-label" x="190" y="38" textAnchor="middle" fill={guideColor(1,afterLeftOf(values[1]))}>CASTER E.</text>}
+                  {afterRightOf(values[1]) && <text className="guide-label caster-label" x="410" y="38" textAnchor="middle" fill={guideColor(1,afterRightOf(values[1]))}>CASTER D.</text>}
+                  {afterRightOf(values[0]) && <text className="guide-label" x="512" y="38" textAnchor="middle" fill={guideColor(0,afterRightOf(values[0]))}>CAMBER D.</text>}
+                  {afterLeftOf(values[2]) && <line className="toe-measure" x1="35" y1="232" x2="137" y2="232" stroke={guideColor(2,afterLeftOf(values[2]))} transform={`rotate(${-clampAngle(afterLeftOf(values[2]),18)} 86 232)`} markerEnd={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
+                  {afterRightOf(values[2]) && <line className="toe-measure" x1="565" y1="232" x2="463" y2="232" stroke={guideColor(2,afterRightOf(values[2]))} transform={`rotate(${clampAngle(afterRightOf(values[2]),18)} 514 232)`} markerEnd={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])==="ok"?"url(#a4fg)":"url(#a4fr)"}/>} 
                 </svg>
               </div>
               <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[2]) || "—"}</b></span><span className={stateOf(afterRightOf(values[2]),values[2]?.min??GEOMETRY_FIELDS[2][1],values[2]?.max??GEOMETRY_FIELDS[2][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[2]) || "—"}</b></span></div>
@@ -8460,13 +9888,13 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
                 <img src="/eixo-traseiro-laudo.png" alt="Conjunto técnico do eixo traseiro"/>
                 <svg viewBox="0 0 600 230" preserveAspectRatio="none" aria-hidden="true">
                   <defs><marker id="a4rg" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#07883e"/></marker><marker id="a4rr" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><path d="M0,0 L0,5 L5,2.5 z" fill="#d71920"/></marker></defs>
-                  <g className="angle-reference"><line x1="155" y1="204" x2="155" y2="66"/><line x1="445" y1="204" x2="445" y2="66"/></g>
-                  {afterLeftOf(values[7]) && <line className="angle-measure" x1="155" y1="204" x2="155" y2="66" stroke={guideColor(7,afterLeftOf(values[7]))} transform={`rotate(${clampAngle(afterLeftOf(values[7]),-4)} 155 204)`}/>} 
-                  {afterRightOf(values[7]) && <line className="angle-measure" x1="445" y1="204" x2="445" y2="66" stroke={guideColor(7,afterRightOf(values[7]))} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 445 204)`}/>} 
-                  {afterLeftOf(values[7]) && <text className="guide-label" x="112" y="78" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
-                  {afterRightOf(values[7]) && <text className="guide-label" x="488" y="78" textAnchor="end" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
-                  {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="211" x2="175" y2="211" stroke={guideColor(8,afterLeftOf(values[8]))} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
-                  {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="211" x2="425" y2="211" stroke={guideColor(8,afterRightOf(values[8]))} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  <g className="angle-reference"><line x1="88" y1="198" x2="88" y2="50"/><line x1="512" y1="198" x2="512" y2="50"/></g>
+                  {afterLeftOf(values[7]) && <line className="angle-measure" x1="88" y1="198" x2="88" y2="50" stroke={guideColor(7,afterLeftOf(values[7]))} markerEnd={stateOf(afterLeftOf(values[7]),values[7]?.min??GEOMETRY_FIELDS[7][1],values[7]?.max??GEOMETRY_FIELDS[7][2])==="ok"?"url(#a4rg)":"url(#a4rr)"} transform={`rotate(${clampAngle(afterLeftOf(values[7]),-4)} 88 198)`}/>} 
+                  {afterRightOf(values[7]) && <line className="angle-measure" x1="512" y1="198" x2="512" y2="50" stroke={guideColor(7,afterRightOf(values[7]))} markerEnd={stateOf(afterRightOf(values[7]),values[7]?.min??GEOMETRY_FIELDS[7][1],values[7]?.max??GEOMETRY_FIELDS[7][2])==="ok"?"url(#a4rg)":"url(#a4rr)"} transform={`rotate(${clampAngle(afterRightOf(values[7]),4)} 512 198)`}/>} 
+                  {afterLeftOf(values[7]) && <text className="guide-label" x="88" y="32" textAnchor="middle" fill={guideColor(7,afterLeftOf(values[7]))}>CAMBER E.</text>}
+                  {afterRightOf(values[7]) && <text className="guide-label" x="512" y="32" textAnchor="middle" fill={guideColor(7,afterRightOf(values[7]))}>CAMBER D.</text>}
+                  {afterLeftOf(values[8]) && <line className="toe-measure" x1="70" y1="220" x2="175" y2="220" stroke={guideColor(8,afterLeftOf(values[8]))} transform={`rotate(${-clampAngle(afterLeftOf(values[8]),18)} 122.5 220)`} markerEnd={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
+                  {afterRightOf(values[8]) && <line className="toe-measure" x1="530" y1="220" x2="425" y2="220" stroke={guideColor(8,afterRightOf(values[8]))} transform={`rotate(${clampAngle(afterRightOf(values[8]),18)} 477.5 220)`} markerEnd={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])==="ok"?"url(#a4rg)":"url(#a4rr)"}/>} 
                 </svg>
               </div>
               <div className="a4-toe-values"><span className={stateOf(afterLeftOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA E. <b>{afterLeftOf(values[8]) || "—"}</b></span><span className={stateOf(afterRightOf(values[8]),values[8]?.min??GEOMETRY_FIELDS[8][1],values[8]?.max??GEOMETRY_FIELDS[8][2])}>CONVERGÊNCIA D. <b>{afterRightOf(values[8]) || "—"}</b></span></div>
@@ -8485,7 +9913,7 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         <p className="a4-unit-note"><b>UNIDADE DAS MEDIDAS:</b> sistema sexagesimal (60 graus): 1 grau (1°) corresponde a 60 minutos (60').</p>
         <section className="a4-report-footer">
           <label><b>OBSERVAÇÕES TÉCNICAS</b><textarea value={notes} onChange={(e)=>setNotes(e.target.value)}/></label>
-          <div><b>PRÓXIMA REVISÃO</b><label>Data<input value={extraFields.nextReviewDate||""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label><label>KM<input value={extraFields.nextReviewKm||""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label></div>
+          <div><b>PRÓXIMO ALINHAMENTO</b><small className="next-alignment-rule">6 meses ou 10.000 km<br/>o que ocorrer primeiro</small><label>Data<input value={extraFields.nextReviewDate||""} onChange={(e)=>updateExtra("nextReviewDate",e.target.value)}/></label><label>KM<input value={extraFields.nextReviewKm||""} onChange={(e)=>updateExtra("nextReviewKm",e.target.value)}/></label></div>
         </section>
         <footer className="a4-address">MONOCENTER ALINHAMENTO TÉCNICO · Av. Itavuvu, 5341 · Jd. Santa Cecília · Sorocaba/SP</footer>
       </article>
@@ -8587,9 +10015,10 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         </section>
         <section className="geometry-notes"><h3>OBSERVAÇÕES TÉCNICAS</h3><textarea value={notes} onChange={(e) => setNotes(e.target.value)}/><aside><b>PRÓXIMA REVISÃO</b><span>A cada 10.000 km<br/>ou 6 meses.</span></aside></section>
       </article>
-      {sourcePdf && <section className="source-pdf"><h3>PDF original do alinhador: {sourceName}</h3><object data={sourcePdf} type="application/pdf"><a href={sourcePdf} target="_blank">Abrir PDF original</a></object></section>}
+      {sourcePdf && <section className="source-pdf"><h3>{sourceIsImage ? "Imagem original do alinhador" : "PDF original do alinhador"}: {sourceName}</h3>{sourceIsImage ? <img src={sourcePdf} alt={`Imagem original do alinhador: ${sourceName}`} /> : <object data={sourcePdf} type="application/pdf"><a href={sourcePdf} target="_blank">Abrir PDF original</a></object>}</section>}
       <style>{`
-        .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-version{margin-right:auto;border-radius:999px;background:#e9f8ef;color:#08783b;padding:7px 11px;font-size:12px;font-weight:900}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.geometry-extra-editor{max-width:1050px;margin:0 auto 14px;border:1px solid #b9c8da;border-radius:12px;background:#fff;overflow:hidden}.geometry-extra-editor summary{padding:13px 16px;background:#111d2b;color:#fff;font-weight:900;cursor:pointer}.geometry-extra-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.geometry-extra-grid label{display:flex;flex-direction:column;gap:5px;color:#344054;font-size:12px;font-weight:800}.geometry-extra-grid input,.geometry-extra-grid textarea{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:7px;background:#fff;padding:9px;color:#111;font-size:14px}.geometry-extra-grid .wide{grid-column:1/-1}.geometry-extra-grid textarea{min-height:70px;resize:vertical}.geometry-extra-editor>p{margin:0;padding:0 14px 14px;color:#475467}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-import-review{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#07111dcc}.geometry-import-card{width:min(900px,96vw);max-height:92vh;overflow:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px #0008}.geometry-import-card>header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;background:#111d2b;color:#fff;border-bottom:5px solid #e31b23}.geometry-import-card h2{margin:3px 0 0}.geometry-import-card header small{color:#ff4a52;font-weight:900}.geometry-import-card header button{border:0;background:transparent;color:#fff;font-size:30px;line-height:1;cursor:pointer}.geometry-import-card>p{margin:0;padding:15px 20px;background:#edf5ff}.import-measure-table{margin:16px 20px;border:1px solid #d8e0e8}.import-measure-row{display:grid;grid-template-columns:1.45fr .7fr 1.15fr .7fr;border-top:1px solid #d8e0e8}.import-measure-row:first-child{border-top:0}.import-measure-row>*{min-width:0;padding:10px;border:0;border-right:1px solid #d8e0e8}.import-measure-row.heading{background:#111d2b;color:#fff}.import-measure-row input{text-align:center;font-weight:800;background:#f8fafc}.import-measure-row>span{display:flex;align-items:center;justify-content:center;gap:5px}.import-measure-row>span input{width:72px;padding:5px}.geometry-import-card>footer{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px}.geometry-import-card>footer button{padding:11px 15px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:900}.geometry-import-card>footer .primary{background:#168b4b;color:#fff;border-color:#168b4b}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf h3{margin-top:0}
+        .geometry-toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:14px}.geometry-version{margin-right:auto;border-radius:999px;background:#e9f8ef;color:#08783b;padding:7px 11px;font-size:12px;font-weight:900}.geometry-toolbar button,.pdf-upload{border:1px solid #cad2dc;border-radius:9px;background:#fff;padding:11px 14px;font-weight:800;cursor:pointer}.pdf-upload{background:#111d2b;color:#fff}.pdf-upload.disabled{opacity:.65;cursor:wait}.pdf-upload input{display:none}.geometry-extra-editor{max-width:1050px;margin:0 auto 14px;border:1px solid #b9c8da;border-radius:12px;background:#fff;overflow:hidden}.geometry-extra-editor summary{padding:13px 16px;background:#111d2b;color:#fff;font-weight:900;cursor:pointer}.geometry-extra-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}.geometry-extra-grid label{display:flex;flex-direction:column;gap:5px;color:#344054;font-size:12px;font-weight:800}.geometry-extra-grid input,.geometry-extra-grid textarea{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:7px;background:#fff;padding:9px;color:#111;font-size:14px}.geometry-extra-grid .wide{grid-column:1/-1}.geometry-extra-grid textarea{min-height:70px;resize:vertical}.geometry-extra-editor>p{margin:0;padding:0 14px 14px;color:#475467}.ocr-message{max-width:1050px;margin:0 auto 14px;padding:12px 15px;border:1px solid #9dc0f8;border-radius:10px;background:#edf5ff;color:#174c91;font-weight:800}.ocr-message.reading{animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.65}}.geometry-import-review{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#07111dcc}.geometry-import-card{width:min(900px,96vw);max-height:92vh;overflow:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px #0008}.geometry-import-card>header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px;background:#111d2b;color:#fff;border-bottom:5px solid #e31b23}.geometry-import-card h2{margin:3px 0 0}.geometry-import-card header small{color:#ff4a52;font-weight:900}.geometry-import-card header button{border:0;background:transparent;color:#fff;font-size:30px;line-height:1;cursor:pointer}.geometry-import-card>p{margin:0;padding:15px 20px;background:#edf5ff}.import-measure-table{margin:16px 20px;border:1px solid #d8e0e8}.import-measure-row{display:grid;grid-template-columns:1.45fr .7fr 1.15fr .7fr;border-top:1px solid #d8e0e8}.import-measure-row:first-child{border-top:0}.import-measure-row>*{min-width:0;padding:10px;border:0;border-right:1px solid #d8e0e8}.import-measure-row.heading{background:#111d2b;color:#fff}.import-measure-row input{text-align:center;font-weight:800;background:#f8fafc}.import-measure-row>span{display:flex;align-items:center;justify-content:center;gap:5px}.import-measure-row>span input{width:72px;padding:5px}.geometry-import-card>footer{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 20px}.geometry-import-card>footer button{padding:11px 15px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:900}.geometry-import-card>footer .primary{background:#168b4b;color:#fff;border-color:#168b4b}.geometry-sheet{max-width:1050px;margin:auto;background:#fff;border:1px solid #d8e0e8;border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0f172a14}.geometry-header{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:center;padding:24px 32px;background:linear-gradient(120deg,#0d1622,#05070a);color:#fff;border-bottom:5px solid #e31b23}.geometry-header>div{display:flex;flex-direction:column}.geometry-header strong{font-size:34px;color:#e31b23;letter-spacing:-1px}.geometry-header small{letter-spacing:4px}.geometry-header h1{margin:0;font-size:31px;line-height:.95;border-left:3px solid #e31b23;padding-left:24px}.geometry-header h1 small{display:block;margin-top:10px;font-size:12px}.geometry-customer{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#d8e0e8;margin:18px}.geometry-customer p,.geometry-customer label{display:flex;flex-direction:column;gap:4px;margin:0;padding:10px 12px;background:#fff}.geometry-customer small{font-weight:800;color:#667085}.geometry-customer input{border:0;border-bottom:1px solid #ccd5df;padding:3px;font-weight:800}.geometry-legend{display:flex;justify-content:flex-end;gap:20px;margin:0 20px 12px;font-weight:800}.geometry-legend .ok{color:#079447}.geometry-legend .bad{color:#df171f}.geometry-axis{margin:0 18px 18px;border:1px solid #d8e0e8}.geometry-axis h2,.geometry-notes h3{margin:0;padding:10px 16px;background:#111d2b;color:#fff;border-left:6px solid #e31b23}.axle-illustration{position:relative;min-height:320px;background:radial-gradient(circle at center,#fff,#eef1f4);overflow:hidden}.axle-illustration>h3{position:absolute;left:50%;top:14px;transform:translateX(-50%);margin:0;color:#111d2b}.axle-illustration svg{display:block;width:100%;height:280px;margin-top:30px}.axle-label,.axle-toe{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;color:#df171f}.axle-label b,.axle-toe b{font-size:22px}.axle-label span,.axle-toe span{font-size:10px;font-weight:900}.axle-label.left{left:10%;top:45px}.axle-label.right{right:10%;top:45px}.axle-toe.left{left:8%;bottom:12px;color:#079447}.axle-toe.right{right:8%;bottom:12px;color:#079447}.geometry-row{display:grid;grid-template-columns:1.35fr .65fr 1fr .65fr;align-items:stretch;border-top:1px solid #d8e0e8}.geometry-row>*{padding:9px;border:0;border-right:1px solid #d8e0e8;min-width:0}.geometry-row.heading{background:#111d2b;color:#fff}.geometry-row input{text-align:center;font-weight:900;font-size:15px;background:#f8fafc}.geometry-row>input.ok,.rear-summary b.ok{color:#07883e;background:#e9f8ef}.geometry-row>input.bad,.rear-summary b.bad{color:#cf121b;background:#fff0f1}.geometry-row>span{display:flex;align-items:center;justify-content:center;gap:4px}.geometry-row>span input{width:48px;padding:3px}.rear-summary{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d8e0e8}.rear-summary p{display:flex;align-items:center;justify-content:space-between;margin:0;padding:12px;background:#fff}.rear-summary small{font-weight:900}.rear-summary b{padding:5px 10px;border-radius:7px}.geometry-notes{display:grid;grid-template-columns:1fr 220px;margin:18px;border:1px solid #d8e0e8}.geometry-notes h3{grid-column:1/-1}.geometry-notes textarea{min-height:90px;border:0;padding:12px;resize:vertical}.geometry-notes aside{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;border-left:1px solid #d8e0e8}.source-pdf{max-width:1050px;margin:18px auto;background:#fff;padding:15px;border-radius:12px}.source-pdf object{width:100%;height:680px}.source-pdf img{display:block;width:100%;max-height:760px;object-fit:contain;background:#eef1f4}.source-pdf h3{margin-top:0}
+        .a4-measure-row input[readonly]{cursor:not-allowed}.measure-editing .a4-measure-row input:not([readonly]){outline:1px solid #e0a800;outline-offset:-1px;background:#fff9d8}.measure-parameter-head{position:relative!important;padding-right:7mm!important}.measure-edit-button{position:absolute;right:.7mm;top:50%;display:flex;align-items:center;justify-content:center;width:5.5mm;height:5.5mm;padding:0;border:.25mm solid #8ea0b5;border-radius:1.2mm;background:#fff;color:#152236;font-size:8pt;line-height:1;transform:translateY(-50%);cursor:pointer}.measure-edit-button.unlocked{border-color:#07883e;background:#e7f8ee}.geometry-admin-unlock{position:fixed;z-index:10000;inset:0;display:grid;place-items:center;padding:20px;background:#0f172ab8}.geometry-admin-unlock form{width:min(440px,100%);padding:20px;border-radius:14px;background:#fff;box-shadow:0 24px 70px #0006}.geometry-admin-unlock header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.geometry-admin-unlock header small{color:#d71920;font-weight:900}.geometry-admin-unlock h2{margin:4px 0 0;font-size:21px}.geometry-admin-unlock header>button{width:38px;height:38px;border:1px solid #d8e0e8;border-radius:9px;background:#fff;font-size:24px}.geometry-admin-unlock>form>p{margin:14px 0;color:#475467}.geometry-admin-unlock label{display:grid;gap:6px;margin-top:12px;font-weight:800}.geometry-admin-unlock input{height:42px;padding:0 12px;border:1px solid #aeb9c7;border-radius:8px;font-size:16px}.geometry-admin-unlock footer{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.geometry-admin-error{padding:9px 11px;border-radius:7px;background:#fff0f1!important;color:#b42318!important;font-weight:800}@media print{.no-print,.measure-edit-button,.geometry-admin-unlock{display:none!important}}
         .legacy-geometry-template{display:none!important}
         .geometry-a4-sheet{box-sizing:border-box;width:210mm;max-width:100%;height:297mm;margin:0 auto 18px;padding:5mm;background:#fff;color:#111;overflow:hidden;font-family:Arial,Helvetica,sans-serif;box-shadow:0 12px 30px #0f172a20}
         .geometry-a4-sheet *{box-sizing:border-box}.geometry-a4-sheet input,.geometry-a4-sheet textarea{min-width:0;color:#111;font-family:inherit}
@@ -8617,7 +10046,22 @@ function GeometryTechnicalReport({ appointment, onBack, onContinue, onSave }: an
         .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;height:17mm!important;grid-template-columns:52mm 1fr!important;padding:0!important}.a4-brand{padding:2.5mm 7mm!important}.a4-brand img{width:100%!important;height:10.5mm!important;object-fit:contain!important}.a4-title{padding-left:6mm!important;background:#fff!important;border-left:.3mm solid #d8e0e8!important}.a4-title b{color:#111!important;font-size:15pt!important}.a4-title span{color:#e31b23!important;font-size:8pt!important}
         .a4-customer-data{height:24mm!important}.a4-axis-section{height:82mm!important}.a4-axis-section.rear{height:70mm!important}.a4-extra-data{height:30mm!important;grid-template-columns:1fr 1fr!important}.a4-report-footer{height:39mm!important}.a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}.a4-toe-values .ok{color:#07883e!important}.a4-toe-values .bad{color:#cf121b!important}.a4-toe-values .pending{color:#4d5968!important}.a4-measure-row>b{line-height:1.2!important}.a4-measure-head>*{line-height:1.15!important}
         .a4-axis-grid{grid-template-columns:46% 54%!important}.a4-measure-table{grid-template-rows:10mm repeat(7,1fr)!important}.a4-measure-table.rear-table{grid-template-rows:10mm repeat(5,1fr)!important}.a4-measure-head{display:grid!important;grid-template-columns:1.3fr 1.12fr 1fr 1.12fr!important;background:#fff!important;color:#111!important;border-bottom:.45mm solid #e31b23!important}.a4-measure-head>b,.a4-measure-head>span{min-width:0;border-right:.25mm solid #cfd7e1!important}.a4-measure-head>b{display:flex;align-items:center;justify-content:center;padding:.7mm;font-size:5.3pt!important;text-align:center}.a4-measure-head>span{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;align-items:center;text-align:center}.a4-measure-head>span strong{grid-column:1/-1;padding:.45mm .2mm;border-bottom:.25mm solid #cfd7e1;font-size:4.8pt;line-height:1}.a4-measure-head>span i{font-size:4.7pt;font-style:normal}.a4-measure-row{grid-template-columns:1.3fr .56fr .56fr 1fr .56fr .56fr!important}.a4-measure-row.single>input:nth-of-type(1){grid-column:2/4}.a4-measure-row.single>span{grid-column:4}.a4-measure-row.single>input:nth-of-type(2){grid-column:5/7}.a4-measure-row>b{font-size:5.45pt!important;padding:.7mm 1mm!important}.a4-measure-row>input{font-size:6.2pt!important;padding:.25mm!important}.a4-measure-row>span{gap:.2mm!important;padding:.2mm!important;font-size:4.7pt!important}.a4-measure-row>span input{width:43%!important;font-size:5pt!important}.a4-axis-section h2,.a4-extra-card h3{background:#fff!important;color:#111!important;border-top:0!important;border-bottom:.45mm solid #e31b23!important}.a4-axis-section h2{border-left:2.4mm solid #e31b23!important}.a4-extra-card h3{border-left:1.5mm solid #e31b23!important}.a4-address{background:#fff!important;color:#111!important;border-top:.55mm solid #e31b23!important}.a4-unit-note{display:flex;align-items:center;height:8mm;margin:0;padding:0 2mm;border:.3mm solid #cfd7e1;border-bottom:0;background:#fff;color:#4b5563;font-size:6.1pt}.a4-unit-note b{margin-right:1.2mm;color:#111}.a4-extra-card label{height:5.5mm!important}.a4-extra-card.steering label{height:11mm!important}.steering-status{margin:2mm 3mm!important;padding:2mm 1mm!important}
+        /* V17: mantém todos os títulos legíveis e as guias junto às rodas. */
+        .a4-customer-data small{display:block!important;min-height:2.6mm!important;line-height:1.25!important;overflow:visible!important}.a4-customer-data b,.a4-customer-data input{margin-top:.45mm!important;line-height:1.2!important}.a4-customer-data input{height:4.3mm!important}.a4-customer-data>label{justify-content:flex-start!important;padding-top:1.35mm!important;overflow:visible!important}
+        .a4-mechanical-image .guide-label{font-family:Arial,Helvetica,sans-serif!important;font-size:9.5px!important;font-weight:800!important;letter-spacing:.15px!important;paint-order:stroke!important;stroke:#fff!important;stroke-width:2.2px!important;stroke-linejoin:round!important}.a4-mechanical-image .guide-label.caster-label{font-size:9px!important;stroke-width:2px!important}
+        .a4-measure-table{grid-template-rows:12mm repeat(7,1fr)!important}.a4-measure-table.rear-table{grid-template-rows:12mm repeat(5,1fr)!important}.a4-measure-head{overflow:visible!important}.a4-measure-head>*{line-height:1.25!important;overflow:visible!important}.a4-measure-head>b{padding:1mm .7mm!important;line-height:1.25!important;white-space:normal!important}.a4-measure-head>span{grid-template-rows:minmax(5.8mm,auto) 1fr!important;align-items:stretch!important;overflow:visible!important}.a4-measure-head>span strong{display:flex!important;align-items:center!important;justify-content:center!important;min-height:5.8mm!important;padding:.8mm .3mm!important;line-height:1.25!important;white-space:normal!important;overflow:visible!important}.a4-measure-head>span i{display:flex!important;align-items:center!important;justify-content:center!important;padding:.45mm!important;line-height:1.2!important}
+        .a4-axis-section h2,.a4-extra-card h3{display:flex!important;align-items:center!important;line-height:1.2!important;overflow:visible!important}.a4-extra-card h3{height:7mm!important;margin:0!important;padding:1mm 2.2mm!important;font-size:7.4pt!important;white-space:nowrap!important}
+        /* V18: cabeçalho completo, mais espaço nos pneus/volante e observações compactas. */
+        .a4-customer-data{grid-template-columns:repeat(6,minmax(0,1fr))!important;grid-template-rows:repeat(2,minmax(0,1fr))!important;overflow:visible!important}.a4-customer-data .data-client{grid-column:span 2}.a4-customer-data .data-vehicle{grid-column:span 2}.a4-customer-data .data-year,.a4-customer-data .data-plate,.a4-customer-data .data-km,.a4-customer-data .data-rim{grid-column:span 1}.a4-customer-data .data-chassis{grid-column:span 1}.a4-customer-data .data-date{grid-column:span 2}.a4-customer-data .data-tech{grid-column:span 1}.a4-customer-data>div,.a4-customer-data>label{justify-content:flex-start!important;padding:1.1mm 1.6mm!important;overflow:visible!important}.a4-customer-data small{flex:0 0 auto!important}.a4-customer-data b,.a4-customer-data input{flex:0 0 auto!important;min-height:3.8mm!important;line-height:1.25!important}
+        .a4-measure-row{overflow:visible!important}.a4-measure-row>*{overflow:visible!important}.a4-measure-row>b{font-size:5.25pt!important;line-height:1.28!important;white-space:normal!important}.a4-measure-row>input{line-height:1.2!important}.a4-measure-row>span,.a4-measure-row>span input{line-height:1.2!important}
+        .a4-extra-data{height:36mm!important;margin-bottom:2mm!important;overflow:visible!important}.a4-extra-card{overflow:visible!important}.a4-extra-card h3{height:8mm!important;padding:1.2mm 2.4mm!important;font-size:7.6pt!important;line-height:1.25!important}.a4-extra-card label{height:6.7mm!important;padding:0 2mm!important;font-size:6.4pt!important;line-height:1.25!important;overflow:visible!important}.a4-extra-card label input{height:4.8mm!important;line-height:1.2!important}.a4-extra-card.steering label{height:13mm!important;padding:1.5mm 2mm!important}.a4-extra-card.steering label input{height:6.5mm!important;margin-top:.7mm!important}.steering-status{display:flex!important;align-items:center!important;justify-content:center!important;min-height:8mm!important;margin:2mm 3mm 0!important;padding:1.5mm 1mm!important;line-height:1.2!important;overflow:visible!important}.a4-report-footer{height:33mm!important}.a4-report-footer textarea{line-height:1.35!important;overflow:hidden!important}
         .import-measure-row{grid-template-columns:1.45fr .7fr .7fr 1.15fr .7fr .7fr!important}.import-measure-row.single>input:nth-of-type(1){grid-column:2/4}.import-measure-row.single>span{grid-column:4}.import-measure-row.single>input:nth-of-type(2){grid-column:5/7}.import-measure-row.heading{background:#fff!important;color:#111!important;border-bottom:3px solid #e31b23}.import-measure-row.heading>*{display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px}
+        /* V22: visualização ampliada na tela e tipografia mais legível nos eixos. */
+        .a4-axis-section h2{font-size:10.8pt!important}.a4-angle-strip small{font-size:6.1pt!important}.a4-angle-strip b{font-size:8.7pt!important}.a4-toe-values span{font-size:6.1pt!important}.a4-toe-values b{font-size:8pt!important}.a4-measure-head>b{font-size:5.9pt!important}.a4-measure-head>span strong{font-size:5.35pt!important}.a4-measure-head>span i{font-size:5.2pt!important}.a4-measure-row>b{font-size:5.8pt!important}.a4-measure-row>input{font-size:6.75pt!important}.a4-measure-row>span{font-size:5.15pt!important}.a4-measure-row>span input{font-size:5.45pt!important}
+        .next-alignment-rule{grid-column:1/-1;color:#475467;font-size:5.7pt;font-weight:800;line-height:1.2;text-align:center}.a4-report-footer>div{grid-template-rows:auto auto 1fr!important}.a4-report-footer>div label{align-self:end}@media screen{.geometry-technician-required input,.data-tech input{border:2px solid #e31b23!important;background:#fff3a8!important;box-shadow:0 0 0 2px #fff inset}.geometry-technician-required{color:#b42318!important}.data-tech small{color:#b42318!important}}
+        @media screen and (min-width:1300px){.geometry-a4-sheet{zoom:1.3}}
+        @media screen and (min-width:1600px){.geometry-a4-sheet{zoom:1.42}}
+        @media print{.geometry-a4-sheet{zoom:1!important}}
         @media print{html,body{width:210mm!important;height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}body.print-geometry-report *{visibility:hidden!important}body.print-geometry-report .geometry-report-page{position:static!important;inset:auto!important;margin:0!important;padding:0!important;transform:none!important}body.print-geometry-report .geometry-template-sheet,body.print-geometry-report .geometry-template-sheet *{visibility:visible!important}body.print-geometry-report .geometry-template-sheet{position:fixed!important;left:0!important;top:0!important;width:210mm!important;max-width:none!important;height:297mm!important;min-height:0!important;margin:0!important;padding:5mm!important;box-shadow:none!important;transform:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-template-sheet .a4-report-header{display:grid!important;position:static!important;top:auto!important;z-index:auto!important;padding:0!important}body.print-geometry-report .geometry-template-sheet input,body.print-geometry-report .geometry-template-sheet textarea{outline:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}body.print-geometry-report .geometry-entry-sheet{display:none!important}@page{size:A4 portrait;margin:0}}
       `}</style>
     </div>
@@ -8631,6 +10075,7 @@ function Reports({
   edit,
   remove,
   updateQuoteFollowUp,
+  onSetWorkshopPosition,
   message,
 }: any) {
   const [query, setQuery] = useState(""),
@@ -8646,7 +10091,16 @@ function Reports({
     [weekDate, setWeekDate] = useState(iso(new Date())),
     [reminderDayDrafts, setReminderDayDrafts] = useState<
       Record<number, number>
-    >({});
+    >({}),
+    [quotePrintRange, setQuotePrintRange] = useState<
+      "current" | "month" | "period"
+    >("current"),
+    [quotePrintMonth, setQuotePrintMonth] = useState(
+      iso(new Date()).slice(0, 7),
+    ),
+    [quotePrintFrom, setQuotePrintFrom] = useState(""),
+    [quotePrintTo, setQuotePrintTo] = useState(iso(new Date())),
+    [quoteSummary, setQuoteSummary] = useState<Appt | null>(null);
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -8794,6 +10248,72 @@ function Reports({
       !!appointment.quoteFollowUpDueDate &&
       appointment.quoteFollowUpDueDate <= iso(new Date()),
   ).length;
+  const currentQuoteMonth = iso(new Date()).slice(0, 7),
+    printableOpenQuotes = openQuotes.filter((appointment) => {
+      if (quotePrintRange === "current")
+        return appointment.date.startsWith(currentQuoteMonth);
+      if (quotePrintRange === "month")
+        return appointment.date.startsWith(quotePrintMonth);
+      return (
+        (!quotePrintFrom || appointment.date >= quotePrintFrom) &&
+        (!quotePrintTo || appointment.date <= quotePrintTo)
+      );
+    }),
+    quotePrintPeriodLabel =
+      quotePrintRange === "current"
+        ? new Date(`${currentQuoteMonth}-01T12:00:00`).toLocaleDateString(
+            "pt-BR",
+            { month: "long", year: "numeric" },
+          )
+        : quotePrintRange === "month"
+          ? new Date(`${quotePrintMonth}-01T12:00:00`).toLocaleDateString(
+              "pt-BR",
+              { month: "long", year: "numeric" },
+            )
+          : `${quotePrintFrom ? new Date(`${quotePrintFrom}T12:00:00`).toLocaleDateString("pt-BR") : "início"} a ${quotePrintTo ? new Date(`${quotePrintTo}T12:00:00`).toLocaleDateString("pt-BR") : "hoje"}`;
+  const quoteSummaryParts = (quoteSummary?.budget?.parts ?? []).filter(
+      (part: any) => String(part?.item ?? part?.name ?? "").trim(),
+    ),
+    quoteSummaryServices = quoteSummary
+      ? [
+          ...(quoteSummary.budget?.selectedServices ?? []).map(
+            (index: number) => ({
+              name: SERVICES[index]?.[0] ?? "Serviço",
+              qty: quoteSummary.budget?.serviceQty?.[index] ?? 1,
+              value:
+                servicePrice(index, quoteSummary.budget?.servicePrices) *
+                (quoteSummary.budget?.serviceQty?.[index] ?? 1),
+            }),
+          ),
+          ...(quoteSummary.budget?.manualServices ?? [])
+            .filter((service: any) => String(service?.name ?? "").trim())
+            .map((service: any) => ({
+              name: service.name,
+              qty: Number(service.qty) || 1,
+              value: (Number(service.qty) || 1) * (Number(service.value) || 0),
+            })),
+        ]
+      : [],
+    quoteSummaryFindings = quoteSummary
+      ? [...ITEMS, ...(quoteSummary.evaluation?.custom ?? [])]
+          .map((name, index) => ({
+            name,
+            state: quoteSummary.evaluation?.status?.[index + 1],
+            note: quoteSummary.evaluation?.notes?.[index + 1],
+            quoted: !!quoteSummary.evaluation?.quoteItems?.[index + 1],
+          }))
+          .filter((item) => item.state || item.note || item.quoted)
+      : [],
+    quoteSummaryPartsTotal = quoteSummaryParts.reduce(
+      (total: number, part: any) =>
+        total + (Number(part.qty) || 1) * saleOf(part, 5),
+      0,
+    ),
+    quoteSummaryServicesTotal = quoteSummaryServices.reduce(
+      (total: number, service: any) => total + (Number(service.value) || 0),
+      0,
+    ),
+    quoteSummaryTotal = quoteSummaryPartsTotal + quoteSummaryServicesTotal;
   const reminderDaysFor = (appointment: Appt) =>
       reminderDayDrafts[appointment.id] ??
       appointment.quoteFollowUpDays ??
@@ -8840,7 +10360,12 @@ function Reports({
         !isEmployeeAbsence(a) &&
         a.budget?.processStatus !== "Finalizado",
     )
-    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+  const workshopPositionOwners = new Map(
+    inProgress
+      .filter((appointment) => appointment.workshopPosition)
+      .map((appointment) => [appointment.workshopPosition, appointment.id]),
+  );
   const print = (a: Appt) => {
     setPrintRow(a);
     document.body.classList.add("print-report");
@@ -8864,9 +10389,12 @@ function Reports({
           ? "Troca urgente"
           : "Não avaliado";
   return (
-    <section className="page reports-page">
+    <section
+      className={`page reports-page${initialMode === "andamento" ? " workshop-page" : ""}`}
+    >
       <div className="report-screen">
-        <div className="management-report-tabs">
+        {initialMode !== "andamento" && initialMode !== "abertos" && (
+          <div className="management-report-tabs">
           <button
             className={reportMode === "registros" ? "active" : ""}
             onClick={() => setReportMode("registros")}
@@ -8902,7 +10430,8 @@ function Reports({
           >
             Veículos em andamento
           </button>
-        </div>
+          </div>
+        )}
         {isClissia && reportMode === "semana" && (
           <div className="management-report-panel weekly-report-panel">
             <div className="management-report-head">
@@ -9012,6 +10541,32 @@ function Reports({
           </div>
         )}
         {reportMode === "abertos" && (
+          <>
+          <div className="open-quotes-print-sheet" aria-hidden="true">
+            <div className="open-quotes-print-header">
+              <span><b>MONOCENTER</b><small>Centro Automotivo</small></span>
+              <div>
+                <h1>Orçamentos em aberto</h1>
+                <p>{quotePrintPeriodLabel} · Emitido em {new Date().toLocaleDateString("pt-BR")}</p>
+                <strong className="open-quotes-print-total">
+                  Quantidade: {printableOpenQuotes.length} {printableOpenQuotes.length === 1 ? "orçamento" : "orçamentos"}
+                </strong>
+              </div>
+            </div>
+            <table>
+              <thead><tr><th>Cliente / contato</th><th>Veículo</th><th>Entrada</th><th>Lembrete</th><th>Situação</th></tr></thead>
+              <tbody>{printableOpenQuotes.map((a) => {
+                const reminderDue = !!a.quoteFollowUpDueDate && a.quoteFollowUpDueDate <= iso(new Date());
+                return <tr key={`print-${a.id}`}>
+                  <td><b>{a.client}</b><small>{a.phone || "Contato não informado"}</small></td>
+                  <td><b>{a.vehicle || "Veículo não informado"}</b><small>{a.plate || "Sem placa"}</small></td>
+                  <td>{new Date(`${a.date}T12:00:00`).toLocaleDateString("pt-BR")}</td>
+                  <td className={reminderDue ? "due" : ""}>{a.quoteFollowUpDueDate ? new Date(`${a.quoteFollowUpDueDate}T12:00:00`).toLocaleDateString("pt-BR") : "Não programado"}</td>
+                  <td>{a.quoteFollowUpDecision === "message" ? "Enviar mensagem" : "Aguardando retorno"}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>
           <div className="management-report-panel open-quotes-panel">
             <style>{`
               .compact-quotes-wrap{overflow-x:auto;border:1px solid #d9e1ea;border-radius:10px;background:#fff}
@@ -9027,6 +10582,7 @@ function Reports({
               .compact-reminder-control{display:flex;align-items:center;gap:5px}
               .compact-reminder-control input{width:56px!important;min-width:56px;padding:5px 6px;text-align:center}
               .compact-reminder-control button{padding:6px 8px;font-size:10px}
+              .compact-reminder-exact{display:flex;align-items:center;gap:6px}.compact-reminder-exact input{width:136px!important;padding:5px 6px;font-size:10px}.compact-reminder-exact small{font-weight:800}
               .compact-reminder-date{font-weight:800}
               .compact-reminder-date.due{color:#c51d25}
               .compact-quote-decision{display:grid;gap:5px}
@@ -9041,6 +10597,9 @@ function Reports({
               .declined-quote-row span{display:grid;gap:2px}.declined-quote-row small{color:#64748b}
               .declined-quote-row button{padding:6px 9px;font-size:10px}
               .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
+              .open-quotes-print-sheet{display:none}.open-quotes-reminder-alert{margin:0 0 12px;padding:10px 12px;border:1px solid #efb2b6;border-radius:9px;background:#fff0f1;color:#a3131c;font-size:12px;font-weight:900}.quote-print-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:10px;border:1px solid #d8e0e8;border-radius:9px;background:#f8fafc}.quote-print-controls label{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.quote-print-controls select,.quote-print-controls input{min-width:145px;padding:8px;border:1px solid #aeb9c7;border-radius:7px;background:#fff}.quote-print-controls button{padding:9px 12px;background:#111d2b;color:#fff}.quote-print-count{align-self:center;color:#526274;font-size:11px;font-weight:800}
+              .quote-summary-backdrop{position:fixed;z-index:1200;inset:0;display:grid;place-items:center;padding:20px;background:#07111dcc}.quote-summary-modal{width:min(940px,96vw);max-height:92vh;overflow:auto;border-radius:15px;background:#fff;color:#111d2b;box-shadow:0 24px 80px #0008}.quote-summary-modal>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:5px solid #e31b23;background:#111d2b;color:#fff}.quote-summary-modal h2{margin:2px 0 3px;font-size:21px}.quote-summary-modal header small{color:#cbd5e1}.quote-summary-close{border:0;background:transparent!important;color:#fff!important;font-size:28px;line-height:1}.quote-summary-body{display:grid;gap:14px;padding:18px}.quote-summary-customer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.quote-summary-customer span{display:grid;gap:3px;min-width:0;padding:10px;border:1px solid #d8e0e8;border-radius:8px;background:#f8fafc}.quote-summary-customer small{color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase}.quote-summary-customer b{overflow-wrap:anywhere}.quote-summary-section{border:1px solid #d8e0e8;border-radius:10px;overflow:hidden}.quote-summary-section h3{display:flex;justify-content:space-between;gap:12px;margin:0;padding:10px 12px;background:#eef2f6;font-size:13px}.quote-summary-list{display:grid}.quote-summary-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:9px 12px;border-top:1px solid #e4e9ef;font-size:12px}.quote-summary-row:first-child{border-top:0}.quote-summary-row span{display:grid;gap:2px}.quote-summary-row small{color:#64748b}.quote-summary-value{display:grid;justify-items:end;align-content:center;gap:2px;white-space:nowrap}.quote-summary-value small{font-size:9px}.quote-summary-state{align-self:center;border-radius:999px;padding:4px 8px;background:#eef2f6;font-size:9px;font-weight:900}.quote-summary-state.g{background:#e6f7ec;color:#08783b}.quote-summary-state.y{background:#fff8cf;color:#8a6200}.quote-summary-state.r{background:#ffe5e7;color:#b3131b}.quote-summary-total{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:13px 15px;border-radius:10px;background:#111d2b;color:#fff}.quote-summary-total span{display:grid;gap:2px}.quote-summary-total small{color:#cbd5e1}.quote-summary-total strong{color:#5ee18c;font-size:23px}.quote-summary-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px}.quote-summary-note{padding:11px;border:1px solid #d8e0e8;border-radius:9px;background:#fff}.quote-summary-note b{display:block;margin-bottom:5px;font-size:11px}.quote-summary-empty{margin:0;padding:12px;color:#64748b;font-size:12px}.quote-summary-footer{display:flex;justify-content:flex-end;padding:0 18px 18px}.quote-summary-footer button{padding:9px 14px;background:#111d2b;color:#fff}.app.dark .quote-summary-modal{background:#111c29;color:#fff}.app.dark .quote-summary-customer span,.app.dark .quote-summary-note{background:#172231}.app.dark .quote-summary-section h3{background:#1c2938}@media(max-width:700px){.quote-summary-customer{grid-template-columns:1fr 1fr}.quote-summary-notes{grid-template-columns:1fr}}
+              @media print{html:has(body.print-open-quotes),body.print-open-quotes{width:297mm!important;height:210mm!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}body.print-open-quotes .app,body.print-open-quotes main,body.print-open-quotes .reports-page,body.print-open-quotes .report-screen{display:block!important;position:fixed!important;inset:0!important;width:297mm!important;height:210mm!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}body.print-open-quotes .app>aside,body.print-open-quotes main>header{display:none!important}body.print-open-quotes .report-screen>*:not(.open-quotes-print-sheet):not(style){display:none!important}body.print-open-quotes *{visibility:hidden!important}body.print-open-quotes .open-quotes-print-sheet,body.print-open-quotes .open-quotes-print-sheet *{visibility:visible!important}body.print-open-quotes .open-quotes-print-sheet{display:block!important;position:absolute!important;z-index:999999!important;inset:0!important;width:297mm!important;height:210mm!important;box-sizing:border-box;padding:7mm 8mm!important;background:#fff!important;color:#111!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.open-quotes-print-header{display:grid;grid-template-columns:68mm 1fr;align-items:center;margin-bottom:4mm;border:1px solid #ced6df;border-bottom:2mm solid #e31b23}.open-quotes-print-header>span{display:grid;box-sizing:border-box;min-width:0;padding:3.5mm 5mm;color:#e31b23;font-size:17pt;line-height:1.05;white-space:nowrap}.open-quotes-print-header>span b{display:block;letter-spacing:-.25mm}.open-quotes-print-header>span small{margin-top:1mm;color:#111;font-size:7pt}.open-quotes-print-header>div{padding:3mm 4mm;border-left:1px solid #ced6df}.open-quotes-print-header h1{margin:0;font-size:17pt}.open-quotes-print-header p{margin:1mm 0 0;color:#526274;font-size:7.5pt;text-transform:capitalize}.open-quotes-print-total{display:inline-block;margin-top:1.5mm;padding:1mm 2mm;border-radius:1mm;background:#e31b23!important;color:#fff!important;font-size:8pt}.open-quotes-print-sheet table{width:100%;border-collapse:collapse;font-size:7.5pt;table-layout:fixed}.open-quotes-print-sheet thead{display:table-header-group}.open-quotes-print-sheet tr{break-inside:avoid}.open-quotes-print-sheet th{padding:2mm;background:#111d2b!important;color:#fff!important;text-align:left}.open-quotes-print-sheet td{padding:1.7mm 2mm;border:1px solid #d8e0e8;vertical-align:top;line-height:1.15}.open-quotes-print-sheet td b,.open-quotes-print-sheet td small{display:block}.open-quotes-print-sheet td small{margin-top:.5mm;color:#526274;font-size:6.5pt}.open-quotes-print-sheet td.due{background:#ffe5e7!important;color:#a3131c;font-weight:900}@page{size:A4 landscape;margin:0}}
             `}</style>
             <div className="management-report-head">
               <span>
@@ -9053,6 +10612,31 @@ function Reports({
                 </p>
               </span>
             </div>
+            <div className="quote-print-controls">
+              <label>O que imprimir
+                <select value={quotePrintRange} onChange={(event) => setQuotePrintRange(event.target.value as "current" | "month" | "period")}>
+                  <option value="current">Mês atual</option>
+                  <option value="month">Escolher mês</option>
+                  <option value="period">Escolher período</option>
+                </select>
+              </label>
+              {quotePrintRange === "month" && <label>Mês
+                <input type="month" value={quotePrintMonth} onChange={(event) => setQuotePrintMonth(event.target.value)} />
+              </label>}
+              {quotePrintRange === "period" && <>
+                <label>De<input type="date" value={quotePrintFrom} onChange={(event) => setQuotePrintFrom(event.target.value)} /></label>
+                <label>Até<input type="date" value={quotePrintTo} onChange={(event) => setQuotePrintTo(event.target.value)} /></label>
+              </>}
+              <button className="print-open-quotes-button" onClick={() => {
+                if (!printableOpenQuotes.length) return alert("Não há orçamentos em aberto no período escolhido.");
+                document.body.classList.add("print-open-quotes");
+                window.addEventListener("afterprint", () => document.body.classList.remove("print-open-quotes"), { once: true });
+                setTimeout(() => window.print(), 50);
+                setTimeout(() => document.body.classList.remove("print-open-quotes"), 1200);
+              }}>Imprimir listagem</button>
+              <span className="quote-print-count">{printableOpenQuotes.length} {printableOpenQuotes.length === 1 ? "orçamento" : "orçamentos"} no período</span>
+            </div>
+            {dueQuoteReminders > 0 && <div className="open-quotes-reminder-alert">⚠ {dueQuoteReminders} {dueQuoteReminders === 1 ? "cliente precisa" : "clientes precisam"} de contato hoje.</div>}
             <div className="compact-quotes-wrap">
               <div className="compact-quotes-table">
                 <div className="compact-quotes-head">
@@ -9120,6 +10704,18 @@ function Reports({
                             Programar
                           </button>
                         </span>
+                        <span className="compact-reminder-exact">
+                          <small>ou data:</small>
+                          <input
+                            type="date"
+                            value={a.quoteFollowUpDueDate || ""}
+                            onChange={(event) => updateQuoteFollowUp(a.id, {
+                              quoteFollowUpDueDate: event.target.value || undefined,
+                              quoteFollowUpDecision: event.target.value ? "message" : undefined,
+                            })}
+                            aria-label={`Data exata do lembrete para ${a.client}`}
+                          />
+                        </span>
                         <small
                           className={`compact-reminder-date${reminderDue ? " due" : ""}`}
                         >
@@ -9172,7 +10768,9 @@ function Reports({
                         </label>
                       </span>
                       <div className="compact-quote-actions">
-                        <button onClick={() => open(a)}>Abrir orçamento</button>
+                        <button onClick={() => setQuoteSummary(a)}>
+                          Abrir orçamento
+                        </button>
                         <button
                           className="wa"
                           onClick={() => prepareQuoteFollowUp(a)}
@@ -9222,62 +10820,240 @@ function Reports({
               </details>
             )}
           </div>
+          {quoteSummary && (
+            <div
+              className="quote-summary-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Resumo do atendimento de ${quoteSummary.client}`}
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setQuoteSummary(null);
+              }}
+            >
+              <div className="quote-summary-modal">
+                <header>
+                  <span>
+                    <small>RESUMO DO ATENDIMENTO</small>
+                    <h2>{quoteSummary.client}</h2>
+                  </span>
+                  <button className="quote-summary-close" onClick={() => setQuoteSummary(null)} aria-label="Fechar resumo">×</button>
+                </header>
+                <div className="quote-summary-body">
+                  <div className="quote-summary-customer">
+                    <span><small>Veículo / modelo</small><b>{quoteSummary.vehicle || "Não informado"}</b></span>
+                    <span><small>Marca</small><b>{quoteSummary.vehicleBrand || "Não informada"}</b></span>
+                    <span><small>Placa</small><b>{quoteSummary.plate || "Não informada"}</b></span>
+                    <span><small>Data do atendimento</small><b>{new Date(`${quoteSummary.date}T12:00:00`).toLocaleDateString("pt-BR")} · {quoteSummary.time}</b></span>
+                    <span><small>Contato</small><b>{quoteSummary.phone || "Não informado"}</b></span>
+                    <span><small>Quilometragem</small><b>{quoteSummary.km || "Não informada"}</b></span>
+                    <span><small>Avaliador</small><b>{quoteSummary.tech || quoteSummary.evaluationRecordedBy || "Não informado"}</b></span>
+                  </div>
+                  <section className="quote-summary-section">
+                    <h3>Itens encontrados na avaliação</h3>
+                    <div className="quote-summary-list">
+                      {quoteSummaryFindings.length ? quoteSummaryFindings.map((item, index) => (
+                        <div className="quote-summary-row" key={`${item.name}-${index}`}>
+                          <span><b>{item.name}</b>{item.note && <small>{item.note}</small>}{item.quoted && <small>Selecionado para orçamento</small>}</span>
+                          <strong className={`quote-summary-state ${item.state || ""}`}>{item.state === "g" ? "Bom estado" : item.state === "y" ? "Atenção" : item.state === "r" ? "Troca urgente" : "Orçar"}</strong>
+                        </div>
+                      )) : <p className="quote-summary-empty">Nenhum item registrado na avaliação.</p>}
+                    </div>
+                  </section>
+                  <section className="quote-summary-section">
+                    <h3><span>Peças incluídas no orçamento</span><strong>{brl(quoteSummaryPartsTotal)}</strong></h3>
+                    <div className="quote-summary-list">
+                      {quoteSummaryParts.length ? quoteSummaryParts.map((part: any, index: number) => (
+                        <div className="quote-summary-row" key={`${part.item || part.name}-${index}`}>
+                          <span><b>{part.item || part.name}</b><small>{[part.brand, part.code].filter(Boolean).join(" · ") || "Sem marca/código informado"}</small></span>
+                          <span className="quote-summary-value"><b>{brl((Number(part.qty) || 1) * saleOf(part, 5))}</b><small>{Number(part.qty) || 1}x · {brl(saleOf(part, 5))} cada</small></span>
+                        </div>
+                      )) : <p className="quote-summary-empty">Nenhuma peça incluída.</p>}
+                    </div>
+                  </section>
+                  <section className="quote-summary-section">
+                    <h3><span>Serviços incluídos no orçamento</span><strong>{brl(quoteSummaryServicesTotal)}</strong></h3>
+                    <div className="quote-summary-list">
+                      {quoteSummaryServices.length ? quoteSummaryServices.map((service: any, index: number) => (
+                        <div className="quote-summary-row" key={`${service.name}-${index}`}><b>{service.name}</b><span className="quote-summary-value"><b>{brl(service.value)}</b><small>{service.qty}x</small></span></div>
+                      )) : <p className="quote-summary-empty">Nenhum serviço incluído.</p>}
+                    </div>
+                  </section>
+                  <div className="quote-summary-total"><span><b>TOTAL DO ORÇAMENTO</b><small>Peças e serviços</small></span><strong>{brl(quoteSummaryTotal)}</strong></div>
+                  <div className="quote-summary-notes">
+                    <div className="quote-summary-note"><b>Relato do cliente</b>{quoteSummary.note || "Nenhum relato registrado."}</div>
+                    <div className="quote-summary-note"><b>Observações técnicas</b>{quoteSummary.budget?.patioNotes || quoteSummary.internalNote || "Nenhuma observação registrada."}</div>
+                  </div>
+                </div>
+                <div className="quote-summary-footer"><button onClick={() => setQuoteSummary(null)}>Fechar resumo</button></div>
+              </div>
+            </div>
+          )}
+          </>
         )}
         {reportMode === "andamento" && (
-          <div className="management-report-panel open-quotes-panel">
+          <div className="management-report-panel workshop-map-panel">
+            <style>{`
+              .workshop-map-panel{overflow:hidden}.workshop-map-help{max-width:660px;color:#64748b;font-size:12px;line-height:1.45}.workshop-layout{display:grid;grid-template-columns:minmax(430px,1.5fr) minmax(300px,.8fr);gap:18px;align-items:start}.workshop-map{position:relative;width:100%;max-width:780px;margin:0 auto;border:1px solid #cbd5e1;border-radius:14px;background:#e5e7eb;box-shadow:0 8px 24px #0f172a18;overflow:hidden}.workshop-map>.workshop-floorplan{position:relative!important;display:block!important;width:100%!important;height:auto!important}.workshop-map-marker{position:absolute;z-index:3;width:18%;min-width:98px;height:120px;transform:translate(-50%,-50%);border:0;background:transparent;padding:0;cursor:pointer}.workshop-vehicle{display:grid;justify-items:center;gap:2px}.workshop-vehicle-art{position:relative;width:var(--car-width,122px);height:var(--car-height,78px);margin:26px 0;transform:rotate(var(--car-rotation,90deg));filter:drop-shadow(0 4px 5px #0009)}.workshop-vehicle-art>span{position:absolute;inset:0;background:var(--vehicle-color);-webkit-mask:url('/veiculo-vista-superior.png') center/contain no-repeat;mask:url('/veiculo-vista-superior.png') center/contain no-repeat}.workshop-vehicle-art img{object-fit:contain;mix-blend-mode:multiply}.workshop-vehicle-label{display:grid;width:100%;max-width:126px;padding:4px 5px;border:1px solid #ffffff80;border-radius:6px;background:#101923d9;color:#fff;box-shadow:0 2px 8px #0007;text-align:center;line-height:1.05;backdrop-filter:blur(3px)}.workshop-vehicle-label strong{overflow:hidden;color:#ffd43b;font-size:7px;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase}.workshop-vehicle-label b{margin-top:1px;font-size:9px;letter-spacing:.5px}.workshop-vehicle-label .workshop-vehicle-model{display:block;overflow:visible;margin-top:2px;color:#fff;font-size:7px;font-weight:900;line-height:1.1;white-space:normal}.workshop-map-marker .workshop-vehicle{position:relative;width:100%;height:100%}.workshop-map-marker .workshop-vehicle-art{position:absolute;left:50%;top:50%;margin:0;transform:translate(-50%,-50%) rotate(var(--car-rotation,90deg))}.workshop-map-marker .workshop-vehicle-label{position:absolute;z-index:4;left:50%;top:calc(50% + var(--label-offset,24px));transform:translateX(-50%)}.workshop-map-marker:focus-visible{outline:3px solid #168b4b;outline-offset:3px;border-radius:8px}.workshop-position-list{display:grid;gap:9px;max-height:980px;overflow:auto;padding-right:3px}.workshop-position-card{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:center;padding:10px;border:1px solid #d8e0e8;border-radius:11px;background:#fff}.workshop-position-card .workshop-vehicle-art{width:66px;height:43px;margin:0;transform:none}.workshop-position-card .workshop-vehicle-label{display:none}.workshop-position-info{display:grid;gap:4px;min-width:0}.workshop-position-info>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info .workshop-card-vehicle{display:block;overflow:hidden;color:#111d2b;font-size:12px;font-weight:900;text-overflow:ellipsis;white-space:nowrap}.workshop-position-info small{color:#64748b}.workshop-position-info label{display:flex;align-items:center;gap:7px;margin-top:3px;color:#334155;font-size:11px;font-weight:900}.workshop-position-info select{min-width:0;flex:1;padding:7px;border:1px solid #aab6c4;border-radius:7px;background:#fff;font-weight:800}.workshop-position-actions{display:flex;gap:6px;margin-top:3px}.workshop-position-actions button{padding:6px 8px;font-size:10px}.workshop-position-updated{font-size:9px!important}.workshop-empty{padding:18px;border:1px dashed #aab6c4;border-radius:10px;background:#f8fafc;color:#64748b;text-align:center}.app.dark .workshop-position-card,.app.dark .workshop-position-info select{background:#111c29;color:#fff}.app.dark .workshop-position-info .workshop-card-vehicle{color:#fff}.app.dark .workshop-map-help,.app.dark .workshop-position-info small{color:#aeb9c7}@media(max-width:1000px){.workshop-layout{grid-template-columns:1fr}.workshop-position-list{max-height:none}.workshop-position-card{grid-template-columns:80px 1fr}}@media(max-width:620px){.workshop-map-wrap{overflow-x:auto;padding-bottom:8px}.workshop-map{min-width:720px}.workshop-position-card{grid-template-columns:70px 1fr}.workshop-position-card .workshop-vehicle-art{width:58px;height:39px}}
+            `}</style>
+            <style>{`
+              .workshop-page{height:calc(100vh - 80px);padding:8px 12px!important;overflow:hidden}.workshop-page .report-screen{width:100%!important;max-width:none!important;margin:0!important}.workshop-page .workshop-map-panel{margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible}.workshop-page .workshop-map-panel>.management-report-head{display:none!important}.workshop-page .workshop-layout{position:relative;display:grid!important;grid-template-columns:1fr!important;place-items:start center;min-height:calc(100vh - 100px);gap:0!important}.workshop-page .workshop-map-wrap{display:flex;width:100%;justify-content:center;overflow:visible}.workshop-page .workshop-map{width:min(100%,calc((100vh - 112px)*1.5142));max-width:none;margin:0 auto}.workshop-vehicle-drawer{position:absolute;z-index:30;top:8px;right:8px;width:min(430px,42vw);max-height:calc(100vh - 135px);border:1px solid #b8c4d1;border-radius:12px;background:#fffffff2;box-shadow:0 12px 35px #0f172a38;overflow:hidden;backdrop-filter:blur(8px)}.workshop-vehicle-drawer:not([open]){width:auto}.workshop-vehicle-drawer>summary{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:205px;padding:11px 14px;background:#111d2b;color:#fff;font-size:13px;font-weight:900;cursor:pointer;list-style:revert}.workshop-vehicle-drawer>summary b{display:grid;place-items:center;min-width:25px;height:25px;border-radius:999px;background:#e31b23}.workshop-vehicle-drawer .workshop-position-list{max-height:calc(100vh - 190px);padding:10px;overflow:auto}.workshop-vehicle-label strong{color:#fff}.workshop-vehicle-label.servico{background:#116b37e8}.workshop-vehicle-label.revisao{background:#7040a7e8}.workshop-vehicle-label.retorno{background:#c6530be8}.workshop-vehicle-label.orcamento,.workshop-vehicle-label.avaliou{background:#9a7200e8}.workshop-vehicle-label.gabaritagem{background:#a8175de8}.workshop-vehicle-label.alinhamento-balanceamento{background:#08758fe8}.workshop-vehicle-label.scheduled-service{background:#1d4ed8e8}.workshop-position-card.servico{border-left:5px solid #159447}.workshop-position-card.revisao{border-left:5px solid #9b5de5}.workshop-position-card.retorno{border-left:5px solid #f97316}.workshop-position-card.orcamento,.workshop-position-card.avaliou{border-left:5px solid #d6a000}.workshop-position-card.gabaritagem{border-left:5px solid #db2777}.workshop-position-card.alinhamento-balanceamento{border-left:5px solid #0891b2}.workshop-position-card.scheduled-service{border-left:5px solid #2563eb}.app.dark .workshop-vehicle-drawer{background:#111c29f2}@media(max-width:760px){.workshop-page{overflow:auto}.workshop-page .workshop-map{width:100%;min-width:720px}.workshop-vehicle-drawer{position:fixed;top:92px;right:10px;width:calc(100vw - 20px);max-height:calc(100vh - 110px)}}
+            `}</style>
             <div className="management-report-head">
               <span>
                 <h2>Veículos na oficina</h2>
                 <p>
                   {inProgress.length} {inProgress.length === 1 ? "veículo" : "veículos"} aguardando avaliação ou conclusão
                 </p>
+                <small className="workshop-map-help">
+                  Escolha a posição de cada veículo na lista. A planta e as posições ficam salvas para toda a equipe.
+                </small>
               </span>
             </div>
-            <div className="open-quotes-list vehicle-progress-list">
-              {inProgress.length ? (
-                inProgress.map((a) => {
-                  const daysInProgress = Math.max(
-                    0,
-                    Math.floor(
-                      (Date.now() - new Date(a.date + "T12:00:00").getTime()) /
-                        86400000,
-                    ),
-                  );
-                  return (
-                    <article key={a.id} className="vehicle-progress-card">
-                      <VehiclePicture appointment={a} />
-                      <span>
-                        <strong className="vehicle-progress-status">
-                          {inProgressLabel(a)}
-                        </strong>
-                        <b className="vehicle-progress-model">
-                          {a.vehicle || "Modelo não informado"}
-                          {a.vehicleColor ? ` · ${a.vehicleColor}` : ""}
-                        </b>
-                        <small>
-                          Cliente: {a.client} · {a.plate || "Sem placa"}
-                        </small>
-                        <small>
-                          Iniciado em{" "}
-                          {new Date(a.date + "T12:00:00").toLocaleDateString(
-                            "pt-BR",
-                          )}{" "}
-                          · {daysInProgress}{" "}
-                          {daysInProgress === 1 ? "dia" : "dias"} em andamento
-                        </small>
-                        <small>Técnico: {a.tech || "não informado"}</small>
-                      </span>
-                      <div>
-                        <button onClick={() => open(a)}>
-                          Continuar atendimento
+            <div className="workshop-layout">
+              <div className="workshop-map-wrap">
+                <div className="workshop-map">
+                  <Image
+                    className="workshop-floorplan"
+                    src="/oficina-planta-horizontal.jpg"
+                    alt="Planta real da oficina com posições numeradas de 1 a 11"
+                    width={1543}
+                    height={1019}
+                    sizes="(max-width: 1000px) 100vw, 65vw"
+                    priority
+                  />
+                  {inProgress
+                    .filter((appointment) => appointment.workshopPosition)
+                    .map((appointment) => {
+                      const spot = WORKSHOP_SPOTS.find(
+                        ({ id }) => id === appointment.workshopPosition,
+                      );
+                      if (!spot) return null;
+                      return (
+                        <button
+                          type="button"
+                          key={appointment.id}
+                          className="workshop-map-marker"
+                          style={
+                            {
+                              left: `${100 - spot.top}%`,
+                              top: `${spot.left}%`,
+                              "--car-rotation": `${spot.rotation + 90}deg`,
+                              "--car-width":
+                                typeof spot.id === "number" ? "134px" : "122px",
+                              "--car-height":
+                                typeof spot.id === "number" ? "86px" : "78px",
+                              "--label-offset":
+                                spot.id === "rampa-gabaritagem"
+                                  ? "-26px"
+                                  : typeof spot.id === "number"
+                                    ? "24px"
+                                    : "32px",
+                            } as CSSProperties
+                          }
+                          onClick={() => open(appointment)}
+                          title={`Abrir atendimento de ${appointment.client}`}
+                        >
+                          <VehicleTopView appointment={appointment} compact />
                         </button>
-                      </div>
-                    </article>
-                  );
-                })
-              ) : (
-                <p>Nenhum atendimento em andamento.</p>
-              )}
+                      );
+                    })}
+                </div>
+              </div>
+              <details className="workshop-vehicle-drawer">
+                <summary>
+                  <span>Veículos e posições</span>
+                  <b>{inProgress.length}</b>
+                </summary>
+                <div className="workshop-position-list">
+                {inProgress.length ? (
+                  inProgress.map((appointment) => {
+                    const catalog = findVehicle(appointment.vehicle || "");
+                    const brand =
+                      appointment.vehicleBrand ||
+                      catalog?.[1] ||
+                      "Marca não informada";
+                    return (
+                      <article
+                        className={`workshop-position-card ${apptClass(appointment)}`}
+                        key={appointment.id}
+                      >
+                        <VehicleTopView appointment={appointment} />
+                        <div className="workshop-position-info">
+                          <b>{appointment.client}</b>
+                          <strong className="workshop-card-vehicle">
+                            {appointment.vehicle || "Modelo não informado"} · {brand}
+                            {appointment.vehicleColor
+                              ? ` · ${appointment.vehicleColor}`
+                              : ""}
+                          </strong>
+                          <small>
+                            {inProgressLabel(appointment)} · {appointment.plate || "Sem placa"}
+                          </small>
+                          <label>
+                            Posição
+                            <select
+                              value={appointment.workshopPosition || ""}
+                              onChange={(event) =>
+                                onSetWorkshopPosition(
+                                  appointment.id,
+                                  !event.target.value
+                                    ? undefined
+                                    : /^\d+$/.test(event.target.value)
+                                      ? Number(event.target.value)
+                                      : event.target.value,
+                                )
+                              }
+                            >
+                              <option value="">Sem posição</option>
+                              {WORKSHOP_SPOTS.map(({ id, label }) => (
+                                <option
+                                  key={id}
+                                  value={id}
+                                  disabled={
+                                    !!workshopPositionOwners.get(id) &&
+                                    workshopPositionOwners.get(id) !==
+                                      appointment.id
+                                  }
+                                >
+                                  {label}
+                                  {!!workshopPositionOwners.get(id) &&
+                                  workshopPositionOwners.get(id) !==
+                                    appointment.id
+                                    ? " — ocupada"
+                                    : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="workshop-position-actions">
+                            <button type="button" onClick={() => open(appointment)}>
+                              Continuar atendimento
+                            </button>
+                            {appointment.workshopPosition && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onSetWorkshopPosition(appointment.id, undefined)
+                                }
+                              >
+                                Retirar da planta
+                              </button>
+                            )}
+                          </div>
+                          {appointment.workshopPositionUpdatedBy && (
+                            <small className="workshop-position-updated">
+                              Movido por {appointment.workshopPositionUpdatedBy}
+                            </small>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <p className="workshop-empty">Nenhum atendimento em andamento.</p>
+                )}
+                </div>
+              </details>
             </div>
           </div>
         )}
@@ -9393,6 +11169,9 @@ function Reports({
       </div>
       {printRow && (
         <div className="report-document">
+          <style>{`
+            .report-document .mercosul-plate{display:inline-grid;grid-template-rows:7px 1fr;box-sizing:border-box;width:68px;height:28px;margin-top:3px;border:1px solid #162f82;border-radius:4px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.report-document .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 3px;background:#153891;color:#fff;font-size:5px;letter-spacing:.3px}.report-document .mercosul-plate-top b{font-size:5px}.report-document .mercosul-plate-top i{position:relative;width:9px;height:5px;border-radius:1px;background:#159447}.report-document .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.report-document .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:16px;letter-spacing:2.2px;white-space:nowrap}
+          `}</style>
           <h1>MONOCENTER ALINHAMENTO TÉCNICO</h1>
           <p>
             Av. Itavuvu, 5341 - Jd. Santa Cecília - Sorocaba/SP · WhatsApp (15)
@@ -9417,7 +11196,7 @@ function Reports({
             </span>
             <span>
               <b>Placa</b>
-              {printRow.plate || "Sem placa"}
+              <MercosulPlate plate={printRow.plate} />
             </span>
             <span>
               <b>Situação</b>
@@ -9468,6 +11247,10 @@ const TITLES: Record<View, [string, string]> = {
     "Veículos na oficina",
     "Modelos aguardando avaliação, revisão ou conclusão do serviço.",
   ],
+  laudos: [
+    "Laudos de geometria",
+    "Importe o PDF, vincule a um veículo na oficina ou salve como orçamento avulso.",
+  ],
   atendimento: [
     "Atendimento concluído",
     "Avaliação, orçamento aprovado e conferência final.",
@@ -9492,6 +11275,10 @@ const TITLES: Record<View, [string, string]> = {
   compras: [
     "Pedido de compra",
     "Acompanhe as peças compradas, recebidas e conferidas.",
+  ],
+  orcamentos_abertos: [
+    "Orçamentos em aberto",
+    "Acompanhe retornos, programe lembretes e imprima a listagem.",
   ],
   relatorios: [
     "Relatórios de avaliações",
