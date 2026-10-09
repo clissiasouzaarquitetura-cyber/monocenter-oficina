@@ -4536,7 +4536,7 @@ function Vehicle() {
   return (
     <>
       <style>{`
-        .vehicle .mercosul-plate{display:inline-grid;grid-template-rows:7px 1fr;box-sizing:border-box;width:70px;height:29px;margin-top:3px;border:1px solid #162f82;border-radius:4px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.vehicle .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 3px;background:#153891;color:#fff;font-size:5px;letter-spacing:.3px}.vehicle .mercosul-plate-top b{font-size:5px}.vehicle .mercosul-plate-top i{position:relative;width:9px;height:5px;border-radius:1px;background:#159447}.vehicle .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.vehicle .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:16px;letter-spacing:2.2px;white-space:nowrap}
+        .vehicle .mercosul-plate{display:inline-grid;grid-template-rows:9px 1fr;box-sizing:border-box;width:112px;min-width:112px;height:39px;margin-top:3px;border:1px solid #162f82;border-radius:5px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.vehicle .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 4px;background:#153891;color:#fff;font-size:6px;letter-spacing:.4px}.vehicle .mercosul-plate-top b{font-size:6px}.vehicle .mercosul-plate-top i{position:relative;width:11px;height:6px;border-radius:1px;background:#159447}.vehicle .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.vehicle .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:21px;letter-spacing:3.3px;white-space:nowrap}.vehicle>span{overflow:visible!important}
       `}</style>
       <div className="printheader">
         <b>MONOCENTER ALINHAMENTO TÉCNICO</b>
@@ -10197,6 +10197,36 @@ function Reports({
     ["Garantias", weeklyRows.filter((a) => a.type === "garantia").length],
     ["Revisões 30 dias", weeklyRows.filter((a) => a.type === "revisao").length],
   ];
+  const weeklyDashboard = {
+    appointments: weeklyRows.length,
+    attended: weeklyRows.filter((a) => a.status !== "faltou").length,
+    evaluated: weeklyRows.filter((a) => !!a.evaluation).length,
+    approved: weeklyRows.filter((a) => a.status === "servico" || a.budget?.processStatus === "Finalizado").length,
+    notApproved: weeklyRows.filter(
+      (a) =>
+        a.status === "avaliou" &&
+        a.type === "cliente" &&
+        a.quoteFollowUpDecision !== "declined" &&
+        !a.serviceAppointmentId &&
+        a.budget?.processStatus !== "Finalizado",
+    ).length,
+    completed: weeklyRows.filter((a) => a.budget?.processStatus === "Finalizado").length,
+    missed: weeklyRows.filter((a) => a.status === "faltou").length,
+  };
+  const weeklyDayBars = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    const dateIso = iso(date);
+    return {
+      label: date.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", ""),
+      day: String(date.getDate()).padStart(2, "0"),
+      total: weeklyRows.filter((appointment) => appointment.date === dateIso).length,
+      completed: weeklyRows.filter(
+        (appointment) => appointment.date === dateIso && appointment.budget?.processStatus === "Finalizado",
+      ).length,
+    };
+  });
+  const weeklyMaxDayTotal = Math.max(1, ...weeklyDayBars.map((item) => item.total));
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowIso = iso(tomorrow);
@@ -10474,39 +10504,36 @@ function Reports({
                 Imprimir resumo
               </button>
             </div>
-            <div className="weekly-metrics">
-              {weeklyMetrics.map(([label, value]) => (
-                <div key={String(label)}>
-                  <b>{value}</b>
-                  <span>{label}</span>
+            <style>{`
+              .weekly-report-panel{max-width:1120px}.weekly-dashboard{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:16px}.weekly-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.weekly-kpi{min-height:94px;padding:14px;border:1px solid #d8e0e8;border-radius:11px;background:#fff;box-shadow:0 4px 12px #0f172a0a}.weekly-kpi b{display:block;font-size:28px;line-height:1;color:#111d2b}.weekly-kpi span{display:block;margin-top:8px;color:#536477;font-size:12px;font-weight:800;line-height:1.2}.weekly-kpi.approved{border-top:5px solid #168b4b}.weekly-kpi.open{border-top:5px solid #d39c00}.weekly-kpi.completed{border-top:5px solid #1d78a8}.weekly-kpi.missed{border-top:5px solid #d71920}.weekly-chart,.weekly-followup{padding:16px;border:1px solid #d8e0e8;border-radius:11px;background:#fff}.weekly-chart h3,.weekly-followup h3{margin:0 0 12px;color:#111d2b;font-size:15px}.weekly-bars{display:grid;grid-template-columns:repeat(6,1fr);align-items:end;gap:10px;height:172px;padding-top:10px;border-bottom:1px solid #cad4df}.weekly-bar{display:grid;grid-template-rows:20px 1fr auto;align-items:end;min-width:0;height:100%;text-align:center}.weekly-bar b{font-size:13px}.weekly-bar i{display:block;width:100%;min-height:6px;border-radius:7px 7px 0 0;background:#1d78a8}.weekly-bar i.done{background:#168b4b}.weekly-bar span{padding-top:7px;color:#5d6b7b;font-size:11px;font-weight:900;text-transform:capitalize}.weekly-followup{display:grid;align-content:start;gap:10px}.weekly-followup>div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #e1e7ee;font-size:13px}.weekly-followup>div:last-child{border:0}.weekly-followup span{color:#536477;font-weight:800}.weekly-followup b{color:#111d2b}.weekly-note{margin:14px 0 0;padding:11px 14px;border-radius:9px;background:#f3f6f9;color:#526274;font-size:12px;font-weight:700}.weekly-note b{color:#111d2b}@media(max-width:850px){.weekly-dashboard{grid-template-columns:1fr}.weekly-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media print{body.print-weekly .app>aside,body.print-weekly main>header,body.print-weekly .management-report-tabs,body.print-weekly .weekly-report-panel .management-report-head label,body.print-weekly .weekly-report-panel .management-report-head button{display:none!important}body.print-weekly .reports-page{padding:0!important;background:#fff!important}body.print-weekly .report-screen>*:not(.weekly-report-panel):not(style){display:none!important}body.print-weekly .weekly-report-panel{max-width:none!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important}body.print-weekly .weekly-dashboard{grid-template-columns:1.15fr .85fr!important;gap:10px!important}.weekly-kpi{min-height:68px!important;padding:9px!important}.weekly-kpi b{font-size:21px!important}.weekly-kpi span{margin-top:5px!important;font-size:9px!important}.weekly-chart,.weekly-followup{padding:10px!important}.weekly-bars{height:110px!important}.weekly-note{margin-top:10px!important;font-size:9px!important}@page{size:A4 landscape;margin:10mm}}
+            `}</style>
+            <div className="weekly-dashboard">
+              <section className="weekly-kpis" aria-label="Indicadores da semana">
+                <div className="weekly-kpi"><b>{weeklyDashboard.appointments}</b><span>Atendimentos agendados</span></div>
+                <div className="weekly-kpi"><b>{weeklyDashboard.attended}</b><span>Clientes atendidos</span></div>
+                <div className="weekly-kpi"><b>{weeklyDashboard.evaluated}</b><span>Avaliações realizadas</span></div>
+                <div className="weekly-kpi approved"><b>{weeklyDashboard.approved}</b><span>Orçamentos aprovados</span></div>
+                <div className="weekly-kpi open"><b>{weeklyDashboard.notApproved}</b><span>Não aprovados / em aberto</span></div>
+                <div className="weekly-kpi completed"><b>{weeklyDashboard.completed}</b><span>Serviços concluídos</span></div>
+                <div className="weekly-kpi missed"><b>{weeklyDashboard.missed}</b><span>Faltas</span></div>
+                <div className="weekly-kpi"><b>{weeklyRows.filter((a) => a.type === "retorno" || a.type === "garantia" || a.type === "revisao").length}</b><span>Retornos, garantias e revisões</span></div>
+              </section>
+              <section className="weekly-chart">
+                <h3>Atendimentos por dia</h3>
+                <div className="weekly-bars">
+                  {weeklyDayBars.map((item) => <div className="weekly-bar" key={item.day}><b>{item.total}</b><i className={item.completed ? "done" : ""} style={{height:`${Math.max(6, Math.round((item.total / weeklyMaxDayTotal) * 100))}%`}}/><span>{item.label} {item.day}</span></div>)}
                 </div>
-              ))}
+              </section>
+              <section className="weekly-followup">
+                <h3>Pontos de acompanhamento</h3>
+                <div><span>Orçamentos enviados</span><b>{weeklyRows.filter((a) => a.quoteSentAt).length}</b></div>
+                <div><span>Orçamentos em aberto</span><b>{weeklyDashboard.notApproved}</b></div>
+                <div><span>Retornos</span><b>{weeklyRows.filter((a) => a.type === "retorno").length}</b></div>
+                <div><span>Garantias</span><b>{weeklyRows.filter((a) => a.type === "garantia").length}</b></div>
+                <div><span>Revisões de 30 dias</span><b>{weeklyRows.filter((a) => a.type === "revisao").length}</b></div>
+              </section>
             </div>
-            <h3>Movimentação da semana</h3>
-            <div className="weekly-list">
-              {weeklyRows.length ? (
-                weeklyRows
-                  .sort((a, b) =>
-                    `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`),
-                  )
-                  .map((a) => (
-                    <div key={a.id}>
-                      <span>
-                        <b>{a.client}</b>
-                        <small>
-                          {new Date(a.date + "T12:00:00").toLocaleDateString(
-                            "pt-BR",
-                          )}{" "}
-                          · {a.time} · {a.vehicle || "Veículo não informado"}
-                        </small>
-                      </span>
-                      <strong>{category(a)}</strong>
-                    </div>
-                  ))
-              ) : (
-                <p>Nenhum atendimento registrado nesta semana.</p>
-              )}
-            </div>
+            <p className="weekly-note"><b>Resumo visual:</b> a relação detalhada continua em <b>Registros</b>; este painel foi feito para acompanhar a semana e imprimir em uma única folha.</p>
           </div>
         )}
         {reportMode === "amanha" && (
