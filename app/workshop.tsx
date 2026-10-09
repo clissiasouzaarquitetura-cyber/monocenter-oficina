@@ -4520,10 +4520,24 @@ function DocLogo() {
     </div>
   );
 }
+function MercosulPlate({ plate, className = "" }: { plate?: string; className?: string }) {
+  const value = String(plate || "SEM PLACA")
+    .toLocaleUpperCase("pt-BR")
+    .replace(/[^A-Z0-9-]/g, "");
+  return (
+    <span className={`mercosul-plate ${className}`.trim()} aria-label={`Placa ${value}`}>
+      <span className="mercosul-plate-top"><b>MERCOSUL</b><b>BRASIL</b><i aria-hidden="true" /></span>
+      <strong>{value}</strong>
+    </span>
+  );
+}
 function Vehicle() {
   const a = DISPLAY_APPT;
   return (
     <>
+      <style>{`
+        .vehicle .mercosul-plate{display:inline-grid;grid-template-rows:7px 1fr;box-sizing:border-box;width:70px;height:29px;margin-top:3px;border:1px solid #162f82;border-radius:4px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.vehicle .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 3px;background:#153891;color:#fff;font-size:5px;letter-spacing:.3px}.vehicle .mercosul-plate-top b{font-size:5px}.vehicle .mercosul-plate-top i{position:relative;width:9px;height:5px;border-radius:1px;background:#159447}.vehicle .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.vehicle .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:16px;letter-spacing:2.2px;white-space:nowrap}
+      `}</style>
       <div className="printheader">
         <b>MONOCENTER ALINHAMENTO TÉCNICO</b>
         <span>
@@ -4542,7 +4556,7 @@ function Vehicle() {
         ].map((x) => (
           <span key={x[0]}>
             <small>{x[0]}</small>
-            <b>{x[1]}</b>
+            {x[0] === "PLACA" ? <MercosulPlate plate={a.plate} /> : <b>{x[1]}</b>}
           </span>
         ))}
       </div>
@@ -8161,6 +8175,7 @@ function PurchaseOrders({
           .purchase-print-brand{display:grid;gap:1mm}.purchase-print-brand b{font-size:15px;letter-spacing:.04em}.purchase-print-brand small{font-size:8px;text-transform:uppercase}
           .purchase-print-title{text-align:right}.purchase-print-title b{display:block;font-size:14px}.purchase-print-title span{font-size:9px}
           .purchase-print-meta{display:grid;grid-template-columns:1.2fr .8fr 1.2fr .8fr;gap:5mm;padding:2.5mm 0;font-size:9px}.purchase-print-meta span{display:grid;gap:.5mm}.purchase-print-meta small{font-size:7px;font-weight:700;text-transform:uppercase}.purchase-print-meta b{font-size:9px}
+          .mercosul-plate{display:inline-grid!important;grid-template-rows:3.2mm 1fr;box-sizing:border-box;width:30mm;min-width:30mm;height:12mm;border:.45mm solid #162f82!important;border-radius:1.2mm;overflow:hidden;background:#f8f8f7!important;color:#080808!important;font-family:Arial,Helvetica,sans-serif!important;font-style:normal!important;line-height:1}.mercosul-plate-top{display:grid!important;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 1mm;background:#153891!important;color:#fff!important;font-size:4.2pt!important;letter-spacing:.28mm}.mercosul-plate-top b{font-size:4.2pt!important;font-weight:900!important}.mercosul-plate-top i{position:relative;width:4.2mm;height:2.5mm;border-radius:.3mm;background:#159447}.mercosul-plate-top i:after{position:absolute;content:"";inset:.45mm 1.2mm;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.mercosul-plate>strong{display:flex!important;align-items:center;justify-content:center;padding-top:.2mm;color:#090909!important;font-size:12.5pt!important;font-weight:900!important;letter-spacing:1.15mm!important;white-space:nowrap}.purchase-print-meta .mercosul-plate{margin-top:.3mm}
           .purchase-print-table{width:100%;border-collapse:collapse;font-size:8px}.purchase-print-table th,.purchase-print-table td{padding:1.4mm 1.5mm;border:1px solid #888;vertical-align:top}.purchase-print-table th{background:#eceff3!important;font-size:7px;text-align:left;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}.purchase-print-table .number{text-align:right;white-space:nowrap}.purchase-print-table small{display:block;margin-top:.3mm;color:#444;font-size:7px}
           .purchase-print-total{display:flex;justify-content:flex-end;gap:5mm;padding:2mm 1mm;border-bottom:1px solid #999;font-size:10px}.purchase-print-total strong{min-width:28mm;text-align:right}
           .purchase-print-note{min-height:10mm;padding:2mm 0;border-bottom:1px solid #999;font-size:8px}.purchase-print-note b{display:block;margin-bottom:1mm;text-transform:uppercase}.purchase-print-note p{margin:0;white-space:pre-wrap}
@@ -8185,7 +8200,7 @@ function PurchaseOrders({
             <span><small>Cliente</small><b>{printGroup.appointment.client}</b></span>
             <span><small>Data do serviço</small><b>{printGroup.serviceDate ? new Date(`${printGroup.serviceDate}T12:00:00`).toLocaleDateString("pt-BR") : "Não informada"}</b></span>
             <span><small>Veículo</small><b>{printGroup.appointment.vehicle || "Não informado"}</b></span>
-            <span><small>Placa</small><b>{printGroup.appointment.plate || "Não informada"}</b></span>
+            <span><small>Placa</small><MercosulPlate plate={printGroup.appointment.plate} /></span>
           </section>
           <table className="purchase-print-table">
             <thead><tr><th>Peça / marca</th><th>Fornecedor / código</th><th>Qtd.</th><th>Custo unit.</th><th>Total</th></tr></thead>
@@ -11080,6 +11095,9 @@ function Reports({
       </div>
       {printRow && (
         <div className="report-document">
+          <style>{`
+            .report-document .mercosul-plate{display:inline-grid;grid-template-rows:7px 1fr;box-sizing:border-box;width:68px;height:28px;margin-top:3px;border:1px solid #162f82;border-radius:4px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.report-document .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 3px;background:#153891;color:#fff;font-size:5px;letter-spacing:.3px}.report-document .mercosul-plate-top b{font-size:5px}.report-document .mercosul-plate-top i{position:relative;width:9px;height:5px;border-radius:1px;background:#159447}.report-document .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.report-document .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:16px;letter-spacing:2.2px;white-space:nowrap}
+          `}</style>
           <h1>MONOCENTER ALINHAMENTO TÉCNICO</h1>
           <p>
             Av. Itavuvu, 5341 - Jd. Santa Cecília - Sorocaba/SP · WhatsApp (15)
@@ -11104,7 +11122,7 @@ function Reports({
             </span>
             <span>
               <b>Placa</b>
-              {printRow.plate || "Sem placa"}
+              <MercosulPlate plate={printRow.plate} />
             </span>
             <span>
               <b>Situação</b>
