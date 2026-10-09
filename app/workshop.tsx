@@ -9233,12 +9233,12 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       [3, /converg.ncia total dianteir/i, false],
       [4, /\bkpi\b|sai/i, false],
       [5, /angulo de inclusao/i, false],
-      [6, /setback dianteir/i, true],
+      [6, /set[\s-]*back dianteir|recuo dianteir/i, true],
       [7, /camber traseir|cambagem traseir/i, false],
       [8, /converg.ncia traseira(?! total)/i, false],
       [9, /converg.ncia total traseir/i, false],
       [10, /angulo de (impulsao|empurrao)/i, true],
-      [11, /setback traseir/i, true],
+      [11, /set[\s-]*back traseir|recuo traseir/i, true],
     ];
     const next: any = {};
     let recognized = 0;
@@ -9246,17 +9246,16 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       line.match(/[+-]?\d+\s*[°ºoO]\s*\d*[\'’′\"”″]?/g) || [];
     const applyRow = (index: number, angles: string[], single = false) => {
       if (!single && angles.length >= 6) {
-        // A tabela do alinhador apresenta cada lado completo antes de passar
-        // para o outro: referência mínima/máxima, esquerda (antes/depois) e
-        // direita (antes/depois).  Não é "todos os antes" e depois "todos os
-        // depois". Manter esta ordem evita trocar as medidas direita/esquerda
-        // na leitura de PDF e na leitura por imagem.
+        // Ordem visual da tabela do alinhador: esquerda (antes/depois),
+        // especificação (mín./máx.) e direita (antes/depois). A extração do
+        // PDF preserva esta ordem horizontal, portanto não se pode assumir
+        // que as especificações venham antes das medidas.
         next[index] = {
           ...(values[index] || {}),
-          min: formatAngle(angles[0]),
-          max: formatAngle(angles[1]),
-          beforeLeft: formatAngle(angles[2]),
-          afterLeft: formatAngle(angles[3]),
+          beforeLeft: formatAngle(angles[0]),
+          afterLeft: formatAngle(angles[1]),
+          min: formatAngle(angles[2]),
+          max: formatAngle(angles[3]),
           beforeRight: formatAngle(angles[4]),
           afterRight: formatAngle(angles[5]),
         };
@@ -9288,13 +9287,14 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
         return true;
       }
       if (!single && angles.length >= 4) {
+        // Em alguns PDFs/imagens o OCR não lê a especificação do meio e
+        // devolve somente as quatro medidas. Elas continuam na ordem por
+        // lado: antes E., após E., antes D., após D.
         next[index] = {
           ...(values[index] || {}),
-          min: formatAngle(angles[0]),
-          max: formatAngle(angles[1]),
-          beforeLeft: "",
-          beforeRight: "",
-          afterLeft: formatAngle(angles[2]),
+          beforeLeft: formatAngle(angles[0]),
+          afterLeft: formatAngle(angles[1]),
+          beforeRight: formatAngle(angles[2]),
           afterRight: formatAngle(angles[3]),
         };
         recognized += 2;
@@ -9336,15 +9336,21 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       [1, /caster/i, false],
       [4, /\bkpi\b/i, false],
       [5, /inclus/i, false],
-      [6, /setback/i, true],
+      [6, /set[\s-]*back|recuo/i, true],
     ]);
     readSection(rearLines, [
       [9, /converg.*total/i, false],
       [8, /converg/i, false],
       [7, /camber|cambagem/i, false],
-      [11, /setback/i, true],
+      [11, /set[\s-]*back|recuo/i, true],
       [10, /impuls|empurr/i, true],
     ]);
+    // Alguns alinhadores escrevem somente "Setback"/"Set-back", sem dizer
+    // dianteira ou traseira. Quando isso acontece fora de uma seção legível,
+    // a primeira ocorrência pertence ao eixo dianteiro e a segunda ao traseiro.
+    const genericSetbacks = plain.filter((line) => /set[\s-]*back|recuo/i.test(line));
+    if (!next[6] && genericSetbacks[0]) applyRow(6, angleValues(genericSetbacks[0]), true);
+    if (!next[11] && genericSetbacks[1]) applyRow(11, angleValues(genericSetbacks[1]), true);
     return { next, recognized };
   };
   const readGeometryMetadata = (text: string) => {
