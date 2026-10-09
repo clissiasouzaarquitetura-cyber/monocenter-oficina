@@ -9382,15 +9382,20 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     let pendingKpiRow: Array<{ x: number; text: string }> | null = null;
     const setRow = (index: number, parts: Array<{ x: number; text: string }>, single: boolean) => {
       const min = angleAt(parts, 110, 175);
-      const max = angleAt(parts, 175, 235);
+      // No PDF do alinhador o segundo limite pode ficar mais afastado, antes
+      // da coluna "Unidade". A faixa maior evita perder o máximo.
+      const max = angleAt(parts, 175, 295);
       const beforeLeft = angleAt(parts, 300, 380);
       const afterLeft = angleAt(parts, 380, 455);
       const beforeRight = angleAt(parts, 455, 525);
       const afterRight = angleAt(parts, 525);
       if (single) {
-        if (!beforeLeft && !afterRight) return;
-        next[index] = { ...(values[index] || {}), min, max, beforeLeft, beforeRight: "", afterLeft: afterRight, afterRight: "" };
-        recognized += Number(!!beforeLeft) + Number(!!afterRight);
+        // Linhas sem lado (totais, setback e impulso) usam a coluna de após
+        // logo à direita da medida inicial, não a última coluna da tabela.
+        const afterSingle = beforeRight || afterRight;
+        if (!beforeLeft && !afterSingle) return;
+        next[index] = { ...(values[index] || {}), min, max, beforeLeft, beforeRight: "", afterLeft: afterSingle, afterRight: "" };
+        recognized += Number(!!beforeLeft) + Number(!!afterSingle);
         return;
       }
       if (!beforeLeft && !afterLeft && !beforeRight && !afterRight) return;
