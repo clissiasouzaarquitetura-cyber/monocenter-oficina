@@ -9353,6 +9353,65 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     if (!next[11] && genericSetbacks[1]) applyRow(11, angleValues(genericSetbacks[1]), true);
     return { next, recognized };
   };
+  const readGeometryPdfTable = (items: any[]) => {
+    // Neste modelo de relatório os números não devem ser lidos como uma frase:
+    // a posição horizontal define a coluna (intervalo, E. antes/depois,
+    // D. antes/depois). Preservar essas coordenadas elimina a troca de lados.
+    const rows: Array<{ y: number; parts: Array<{ x: number; text: string }> }> = [];
+    (items || []).forEach((item: any) => {
+      const text = String(item.str || "").trim();
+      if (!text) return;
+      const x = Number(item.transform?.[4] || 0);
+      const y = Number(item.transform?.[5] || 0);
+      let row = rows.find((candidate) => Math.abs(candidate.y - y) < 2.5);
+      if (!row) { row = { y, parts: [] }; rows.push(row); }
+      row.parts.push({ x, text });
+    });
+    const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const coordinateAngles = (value: string) =>
+      value.match(/[+-]?\d+\s*[°ºoO]\s*\d*[\'’′\"”″]?/g) || [];
+    const angleAt = (parts: Array<{ x: number; text: string }>, start: number, end = Infinity) => {
+      const source = parts.find((part) => part.x >= start && part.x < end && coordinateAngles(part.text).length);
+      return source ? formatAngle(coordinateAngles(source.text)[0]) : "";
+    };
+    const next: any = {};
+    let recognized = 0;
+    let convergenceCount = 0;
+    let camberCount = 0;
+    let setbackCount = 0;
+    let pendingKpiRow: Array<{ x: number; text: string }> | null = null;
+    const setRow = (index: number, parts: Array<{ x: number; text: string }>, single: boolean) => {
+      const min = angleAt(parts, 110, 175);
+      const max = angleAt(parts, 175, 235);
+      const beforeLeft = angleAt(parts, 300, 380);
+      const afterLeft = angleAt(parts, 380, 455);
+      const beforeRight = angleAt(parts, 455, 525);
+      const afterRight = angleAt(parts, 525);
+      if (single) {
+        if (!beforeLeft && !afterRight) return;
+        next[index] = { ...(values[index] || {}), min, max, beforeLeft, beforeRight: "", afterLeft: afterRight, afterRight: "" };
+        recognized += Number(!!beforeLeft) + Number(!!afterRight);
+        return;
+      }
+      if (!beforeLeft && !afterLeft && !beforeRight && !afterRight) return;
+      next[index] = { ...(values[index] || {}), min, max, beforeLeft, beforeRight, afterLeft, afterRight };
+      recognized += [beforeLeft, afterLeft, beforeRight, afterRight].filter(Boolean).length;
+    };
+    rows.sort((a, b) => b.y - a.y).forEach((row) => {
+      const parts = row.parts.sort((a, b) => a.x - b.x);
+      const label = normalized(parts.filter((part) => part.x < 105).map((part) => part.text).join(" "));
+      if (/converg/.test(label)) setRow(convergenceCount++ < 2 ? convergenceCount - 1 + 2 : convergenceCount - 1 + 6, parts, convergenceCount === 2 || convergenceCount === 4);
+      else if (/camber|cambagem/.test(label)) setRow(camberCount++ ? 7 : 0, parts, false);
+      else if (/caster/.test(label)) setRow(1, parts, false);
+      else if (/kpi|sai/.test(label)) setRow(4, parts, false);
+      else if (/inclus/.test(label)) setRow(5, parts, false);
+      else if (/set[\s-]*back|recuo/.test(label)) setRow(setbackCount++ ? 11 : 6, parts, true);
+      else if (/impuls|empurr/.test(label)) setRow(10, parts, true);
+      else if (!pendingKpiRow && parts.filter((part) => coordinateAngles(part.text).length).length >= 6) pendingKpiRow = parts;
+    });
+    if (!next[4] && pendingKpiRow) setRow(4, pendingKpiRow, false);
+    return { next, recognized };
+  };
   const readGeometryMetadata = (text: string) => {
     const normalized = text.replace(/\u00a0/g, " ");
     const normalizedWithoutAccents = (value: string) => value
@@ -9441,7 +9500,13 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
         .sort((a, b) => b.y - a.y)
         .map((row) => row.parts.sort((a, b) => a.x - b.x).map((part) => part.text).join(" "))
         .join("\n");
-      const embeddedReading = readGeometryText(embeddedText);
+      const positionedReading = readGeometryPdfTable(textContent.items || []);
+      // Em PDFs nativos, a leitura por coordenadas é a fonte confiável; a
+      // leitura por texto corrido continua apenas como alternativa para PDFs
+      // cuja tabela não mantenha a estrutura esperada.
+      const embeddedReading = positionedReading.recognized >= 4
+        ? positionedReading
+        : readGeometryText(embeddedText);
       if (embeddedReading.recognized >= 4) {
         const metadata = readGeometryMetadata(embeddedText);
         applyGeometryMetadata(metadata);
