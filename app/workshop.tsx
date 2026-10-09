@@ -9246,13 +9246,18 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       line.match(/[+-]?\d+\s*[°ºoO]\s*\d*[\'’′\"”″]?/g) || [];
     const applyRow = (index: number, angles: string[], single = false) => {
       if (!single && angles.length >= 6) {
+        // A tabela do alinhador apresenta cada lado completo antes de passar
+        // para o outro: referência mínima/máxima, esquerda (antes/depois) e
+        // direita (antes/depois).  Não é "todos os antes" e depois "todos os
+        // depois". Manter esta ordem evita trocar as medidas direita/esquerda
+        // na leitura de PDF e na leitura por imagem.
         next[index] = {
           ...(values[index] || {}),
           min: formatAngle(angles[0]),
           max: formatAngle(angles[1]),
           beforeLeft: formatAngle(angles[2]),
-          beforeRight: formatAngle(angles[3]),
-          afterLeft: formatAngle(angles[4]),
+          afterLeft: formatAngle(angles[3]),
+          beforeRight: formatAngle(angles[4]),
           afterRight: formatAngle(angles[5]),
         };
         recognized += 4;
