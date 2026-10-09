@@ -9381,10 +9381,14 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     let setbackCount = 0;
     let pendingKpiRow: Array<{ x: number; text: string }> | null = null;
     const setRow = (index: number, parts: Array<{ x: number; text: string }>, single: boolean) => {
-      const min = angleAt(parts, 110, 175);
-      // No PDF do alinhador o segundo limite pode ficar mais afastado, antes
-      // da coluna "Unidade". A faixa maior evita perder o máximo.
-      const max = angleAt(parts, 175, 295);
+      // O intervalo de especificação ocupa a parte esquerda da tabela. Lê os
+      // dois ângulos deste intervalo juntos, sem depender de como o PDF
+      // separou visualmente o "To" entre mínimo e máximo.
+      const rangeAngles = parts
+        .filter((part) => part.x >= 105 && part.x < 300)
+        .flatMap((part) => coordinateAngles(part.text));
+      const min = rangeAngles[0] ? formatAngle(rangeAngles[0]) : "";
+      const max = rangeAngles[1] ? formatAngle(rangeAngles[1]) : "";
       const beforeLeft = angleAt(parts, 300, 380);
       const afterLeft = angleAt(parts, 380, 455);
       const beforeRight = angleAt(parts, 455, 525);
