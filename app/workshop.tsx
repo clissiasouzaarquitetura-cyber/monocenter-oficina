@@ -440,6 +440,10 @@ type Appt = {
   quoteFollowUpUpdatedAt?: string;
   quoteFollowUpPreparedBy?: string;
   quoteFollowUpPreparedAt?: string;
+  confirmationReminderEnabled?: boolean;
+  confirmationSentAt?: string;
+  confirmationSentBy?: string;
+  confirmationSentForDate?: string;
   serviceScheduled?: boolean;
   serviceScheduledFor?: string;
   serviceScheduledTime?: string;
@@ -751,6 +755,7 @@ export default function App({ initialState, user, onLogout }: any) {
     }),
     [message, setMessage] = useState(""),
     [quoteMessageFor, setQuoteMessageFor] = useState<number | null>(null),
+    [confirmationMessageFor, setConfirmationMessageFor] = useState<number | null>(null),
     [serviceScheduleDate, setServiceScheduleDate] = useState(""),
     [serviceScheduleTime, setServiceScheduleTime] = useState(""),
     [status, setStatus] = useState<Record<number, string>>({}),
@@ -838,16 +843,22 @@ export default function App({ initialState, user, onLogout }: any) {
   }, [view, viewRestored]);
   const defaultTemplates = {
     lembrete:
-      "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!",
+      "Olá, {cliente}! 👋\n\nEsta é uma mensagem automática da Monocenter para confirmar seu agendamento.\n\n📅 Dia: *{data}*\n🕒 Horário: *{hora}*\n📍 Endereço: Av. Itavuvu, 5341 — sentido Centro.\n\nPor favor, responda confirmando sua presença. Obrigada!",
     orcamento:
       "Olá, {cliente}! Segue o orçamento da Monocenter para o veículo {veiculo}, placa {placa}.",
     revisao:
       "Olá, {cliente}! Já está na hora de revisar seu veículo na Monocenter.",
   };
   const defaultParts: any[] = [];
-  const [templates, setTemplates] = useState(
-      shared.templates ?? defaultTemplates,
-    ),
+  const [templates, setTemplates] = useState({
+      ...defaultTemplates,
+      ...(shared.templates ?? {}),
+      lembrete:
+        shared.templates?.lembrete ===
+        "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!"
+          ? defaultTemplates.lembrete
+          : (shared.templates?.lembrete ?? defaultTemplates.lembrete),
+    }),
     [savedAt, setSavedAt] = useState("");
   const [parts, setParts] = useState(shared.parts ?? defaultParts),
     [selectedServices, setSelectedServices] = useState<number[]>(
@@ -1815,6 +1826,13 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
             message={(text: string) => {
               setQuoteMessageFor(null);
+              setConfirmationMessageFor(null);
+              setMessage(text);
+            }}
+            confirmationTemplate={templates.lembrete}
+            prepareConfirmation={(appointment: Appt, text: string) => {
+              setQuoteMessageFor(null);
+              setConfirmationMessageFor(appointment.id);
               setMessage(text);
             }}
           />
@@ -4477,12 +4495,20 @@ export default function App({ initialState, user, onLogout }: any) {
             close={() => {
               setMessage("");
               setQuoteMessageFor(null);
+              setConfirmationMessageFor(null);
             }}
             sent={
               quoteMessageFor
                 ? !!appointments.find((a) => a.id === quoteMessageFor)
                     ?.quoteSentAt
-                : false
+                : confirmationMessageFor
+                  ? (() => {
+                      const appointment = appointments.find(
+                        (item) => item.id === confirmationMessageFor,
+                      );
+                      return !!appointment?.confirmationSentAt && appointment.confirmationSentForDate === appointment.date;
+                    })()
+                  : false
             }
             onSent={
               quoteMessageFor
@@ -4514,8 +4540,30 @@ export default function App({ initialState, user, onLogout }: any) {
                       setActiveAppointment(updated);
                     }
                   }
-                : undefined
+                : confirmationMessageFor
+                  ? () => {
+                      const confirmationSentAt = new Date().toISOString();
+                      syncBlockedUntil.current = Date.now() + 4000;
+                      setAppointments((list) =>
+                        list.map((appointment) =>
+                          appointment.id === confirmationMessageFor
+                            ? {
+                                ...appointment,
+                                confirmationSentAt,
+                                confirmationSentBy: user.displayName,
+                                confirmationSentForDate: appointment.date,
+                                lastEditedBy: user.displayName,
+                                lastEditedAt: confirmationSentAt,
+                                _updatedAt: Date.now(),
+                              }
+                            : appointment,
+                        ),
+                      );
+                    }
+                  : undefined
             }
+            closeAfterSent={!!confirmationMessageFor}
+            sentLabel={confirmationMessageFor ? "Confirmação enviada" : "Orçamento enviado"}
           />
         )}
         <PrintDocuments
@@ -4837,9 +4885,14 @@ function Agenda({
   markNoShow,
   remove,
   message,
+  confirmationTemplate,
+  prepareConfirmation,
 }: any) {
   const today = new Date(),
-    todayIso = iso(today);
+    todayIso = iso(today),
+    tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = iso(tomorrow);
   const [date, setDate] = useState(() => {
       if (typeof window === "undefined") return todayIso;
       const savedDate = localStorage.getItem("monocenter-calendar-date");
@@ -5037,6 +5090,26 @@ function Agenda({
         : mode === "semana"
           ? `${calendarDays[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${calendarDays[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
           : fmt(date);
+  const confirmationReminders = (data as Appt[])
+      .filter(
+        (appointment) =>
+          appointment.date === tomorrowIso &&
+          appointment.type !== "bloqueio" &&
+          appointment.status === "agendado" &&
+          appointment.confirmationReminderEnabled !== false &&
+          appointment.confirmationSentForDate !== appointment.date,
+      )
+      .sort(
+        (first, second) =>
+          first.time.localeCompare(second.time, "pt-BR", { numeric: true }) ||
+          first.client.localeCompare(second.client, "pt-BR"),
+      ),
+    confirmationWindowOpen = today.getHours() >= 13 && today.getHours() < 17,
+    confirmationWindowText = confirmationWindowOpen
+      ? "Horário de envio liberado até as 17h."
+      : today.getHours() < 13
+        ? "Envios liberados após o almoço, a partir das 13h."
+        : "O horário de envio de hoje terminou às 17h.";
   const weekStartHour = 7,
     weekEndHour = 20,
     weekHourHeight = 116,
@@ -5260,6 +5333,7 @@ function Agenda({
         .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:color-mix(in srgb,var(--status-faltou,#d71920) 32%,#111)!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
+        .confirmation-reminders{display:grid;gap:8px;margin:0 0 12px;padding:11px;border:1px solid #f2c46d;border-radius:10px;background:#fff9eb}.confirmation-reminders>header{display:flex;align-items:start;justify-content:space-between;gap:8px}.confirmation-reminders>header b{display:block;color:#774500;font-size:13px}.confirmation-reminders>header small{display:block;margin-top:2px;color:#8a5a13;font-size:10px;font-weight:800}.confirmation-reminder{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px;border:1px solid #f0d69c;border-radius:8px;background:#fff}.confirmation-reminder time{display:grid;min-width:44px;place-items:center;border-radius:6px;padding:5px;background:#fff1c9;color:#754800;font-size:13px;font-weight:900}.confirmation-reminder span{display:grid;min-width:0;gap:2px}.confirmation-reminder span b{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.confirmation-reminder span small{overflow:hidden;color:#64748b;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.confirmation-reminder button{border:0;border-radius:7px;padding:8px 9px;background:#126f45;color:#fff;font-size:10px;font-weight:900;cursor:pointer}.confirmation-reminder button:disabled{cursor:not-allowed;background:#a6b1bd}.app.dark .confirmation-reminders{background:#3d3015;border-color:#80601f}.app.dark .confirmation-reminder{background:#1b2632;border-color:#685324}.app.dark .confirmation-reminder time{background:#5a4214;color:#ffeca9}@media(max-width:680px){.confirmation-reminder{grid-template-columns:auto minmax(0,1fr)}.confirmation-reminder button{grid-column:1/-1;width:100%}}
         .appointment-history-search{position:relative;margin:0 0 14px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff);box-shadow:0 5px 16px rgba(15,23,42,.06)}.appointment-history-search>label{display:grid;grid-template-columns:auto minmax(240px,1fr) auto;align-items:center;gap:10px;padding:12px 14px}.appointment-history-search>label>b{font-size:13px;white-space:nowrap}.appointment-history-search input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px 12px;background:var(--card,#fff);color:inherit;font-size:14px}.appointment-history-search .clear-search{border:0;background:transparent;color:#b3151d;font-weight:900;cursor:pointer}.appointment-search-hint{display:block;padding:0 14px 12px;color:#64748b;font-size:11px}.appointment-search-results{display:grid;gap:8px;max-height:430px;overflow:auto;padding:0 12px 12px}.appointment-search-results>header{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;color:#526274;font-size:12px}.appointment-search-result{display:grid;grid-template-columns:105px minmax(190px,1.2fr) minmax(180px,1fr) auto;align-items:center;gap:12px;padding:11px 12px;border:1px solid #d9e1ea;border-left:5px solid #df1823;border-radius:9px;background:#fff}.appointment-search-result time{display:grid;gap:2px;font-size:12px}.appointment-search-result time b{font-size:14px}.appointment-search-result .result-client,.appointment-search-result .result-vehicle{display:grid;gap:3px;min-width:0}.appointment-search-result strong,.appointment-search-result span{overflow-wrap:anywhere}.appointment-search-result small{color:#64748b}.appointment-search-result .result-plate{font-weight:900;letter-spacing:.04em}.appointment-search-result .result-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.appointment-search-result .result-actions button{border:1px solid #bac6d4;border-radius:7px;padding:8px 10px;background:#fff;font-size:11px;font-weight:900;cursor:pointer}.appointment-search-result .result-actions .primary{border-color:#16864b;background:#16864b;color:#fff}.appointment-search-empty{margin:0;padding:14px;border:1px dashed #c8d3df;border-radius:8px;color:#64748b;text-align:center}.dark .appointment-search-result{background:#172231}.dark .appointment-search-result .result-actions button{background:#223044;color:#fff}
         .calendar-print-controls{display:flex;align-items:center;gap:6px}.calendar-print-controls select{min-width:92px}.calendar-print-controls button{border-color:#172b44!important;background:#172b44!important;color:#fff!important}.calendar-print-sheet{display:none}
         @media print{
@@ -5847,6 +5921,47 @@ function Agenda({
                 Preparar WhatsApp
               </button>
             </div>
+          )}
+          {date === todayIso && confirmationReminders.length > 0 && (
+            <section className="confirmation-reminders">
+              <header>
+                <span>
+                  <b>📩 Confirmações para amanhã</b>
+                  <small>
+                    {confirmationReminders.length} {confirmationReminders.length === 1 ? "cliente aguarda contato" : "clientes aguardam contato"} · {confirmationWindowText}
+                  </small>
+                </span>
+              </header>
+              {confirmationReminders.map((appointment) => {
+                const confirmationText = String(confirmationTemplate || "")
+                  .replaceAll("{cliente}", appointment.client)
+                  .replaceAll("{data}", fmt(appointment.date))
+                  .replaceAll("{hora}", appointment.time)
+                  .replaceAll("{veiculo}", appointment.vehicle || "veículo")
+                  .replaceAll("{placa}", appointment.plate || "sem placa");
+                return (
+                  <article className="confirmation-reminder" key={appointment.id}>
+                    <time>{appointment.time}</time>
+                    <span>
+                      <b>{appointment.client}</b>
+                      <small>
+                        {appointment.vehicle || "Veículo não informado"}
+                        {appointment.plate ? ` · ${appointment.plate}` : ""}
+                        {appointment.phone ? ` · ${appointment.phone}` : " · WhatsApp não informado"}
+                      </small>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={!confirmationWindowOpen}
+                      title={confirmationWindowText}
+                      onClick={() => prepareConfirmation(appointment, confirmationText)}
+                    >
+                      Preparar mensagem
+                    </button>
+                  </article>
+                );
+              })}
+            </section>
           )}
           {list.length === 0 && (
             <div className="emptyday">
@@ -6887,6 +7002,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         internalNote: "",
         type: "cliente",
         status: "agendado",
+        confirmationReminderEnabled: true,
         tech: "",
         scheduledBy: currentUser,
         createdAt: new Date().toISOString(),
@@ -7225,8 +7341,14 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         </section>
         {f.type !== "bloqueio" && (
           <label className="toggle">
-            <input type="checkbox" defaultChecked /> Preparar lembrete um dia
-            antes
+            <input
+              type="checkbox"
+              checked={f.confirmationReminderEnabled !== false}
+              onChange={(event) =>
+                setF({ ...f, confirmationReminderEnabled: event.target.checked })
+              }
+            />{" "}
+            Preparar confirmação de horário um dia antes
           </label>
         )}
         <footer>
@@ -7255,7 +7377,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
     </div>
   );
 }
-function Message({ text, close, onSent, sent }: any) {
+function Message({ text, close, onSent, sent, closeAfterSent = false, sentLabel = "Orçamento enviado" }: any) {
   const [copied, setCopied] = useState(false),
     [markedSent, setMarkedSent] = useState(sent);
   return (
@@ -7285,9 +7407,10 @@ function Message({ text, close, onSent, sent }: any) {
               onClick={() => {
                 onSent();
                 setMarkedSent(true);
+                if (closeAfterSent) close();
               }}
             >
-              {markedSent ? "Orçamento enviado ✓" : "Marcar como enviado"}
+              {markedSent ? `${sentLabel} ✓` : "Marcar como enviado"}
             </button>
           )}
         </footer>
@@ -7808,7 +7931,7 @@ function Config({
         />
         <div className="templategrid">
           <label>
-            Lembrete de agendamento
+            Confirmação de agendamento
             <textarea
               value={templates.lembrete}
               onChange={(e) => {
