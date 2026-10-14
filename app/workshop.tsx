@@ -4916,6 +4916,7 @@ function Agenda({
     [openCal, setOpenCal] = useState(true),
     [showSaturday, setShowSaturday] = useState(false),
     [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
+    [showConfirmationReminders, setShowConfirmationReminders] = useState(false),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]),
     [appointmentSearch, setAppointmentSearch] = useState(""),
     [calendarPrintMode, setCalendarPrintMode] = useState<"semana" | "mes">(
@@ -5333,7 +5334,7 @@ function Agenda({
         .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:color-mix(in srgb,var(--status-faltou,#d71920) 32%,#111)!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
-        .confirmation-reminders{display:grid;gap:8px;margin:0 0 12px;padding:11px;border:1px solid #f2c46d;border-radius:10px;background:#fff9eb}.confirmation-reminders>header{display:flex;align-items:start;justify-content:space-between;gap:8px}.confirmation-reminders>header b{display:block;color:#774500;font-size:13px}.confirmation-reminders>header small{display:block;margin-top:2px;color:#8a5a13;font-size:10px;font-weight:800}.confirmation-reminder{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px;border:1px solid #f0d69c;border-radius:8px;background:#fff}.confirmation-reminder time{display:grid;min-width:44px;place-items:center;border-radius:6px;padding:5px;background:#fff1c9;color:#754800;font-size:13px;font-weight:900}.confirmation-reminder span{display:grid;min-width:0;gap:2px}.confirmation-reminder span b{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.confirmation-reminder span small{overflow:hidden;color:#64748b;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.confirmation-reminder button{border:0;border-radius:7px;padding:8px 9px;background:#126f45;color:#fff;font-size:10px;font-weight:900;cursor:pointer}.confirmation-reminder button:disabled{cursor:not-allowed;background:#a6b1bd}.app.dark .confirmation-reminders{background:#3d3015;border-color:#80601f}.app.dark .confirmation-reminder{background:#1b2632;border-color:#685324}.app.dark .confirmation-reminder time{background:#5a4214;color:#ffeca9}@media(max-width:680px){.confirmation-reminder{grid-template-columns:auto minmax(0,1fr)}.confirmation-reminder button{grid-column:1/-1;width:100%}}
+        .confirmation-toggle{border-color:#d99718!important;background:#fff8e5!important;color:#754800!important;font-weight:900}.confirmation-reminders{display:grid;gap:8px;margin:0 0 12px;padding:11px;border:1px solid #f2c46d;border-radius:10px;background:#fff9eb}.confirmation-reminders>header{display:flex;align-items:start;justify-content:space-between;gap:8px}.confirmation-reminders>header b{display:block;color:#774500;font-size:13px}.confirmation-reminders>header small{display:block;margin-top:2px;color:#8a5a13;font-size:10px;font-weight:800}.confirmation-reminder{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px;border:1px solid #f0d69c;border-radius:8px;background:#fff}.confirmation-reminder time{display:grid;min-width:44px;place-items:center;border-radius:6px;padding:5px;background:#fff1c9;color:#754800;font-size:13px;font-weight:900}.confirmation-reminder span{display:grid;min-width:0;gap:2px}.confirmation-reminder span b{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.confirmation-reminder span small{overflow:hidden;color:#64748b;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.confirmation-reminder button{border:0;border-radius:7px;padding:8px 9px;background:#126f45;color:#fff;font-size:10px;font-weight:900;cursor:pointer}.confirmation-reminder button:disabled{cursor:not-allowed;background:#a6b1bd}.app.dark .confirmation-toggle{background:#5a4214!important;border-color:#80601f!important;color:#ffeca9!important}.app.dark .confirmation-reminders{background:#3d3015;border-color:#80601f}.app.dark .confirmation-reminder{background:#1b2632;border-color:#685324}.app.dark .confirmation-reminder time{background:#5a4214;color:#ffeca9}@media(max-width:680px){.confirmation-reminder{grid-template-columns:auto minmax(0,1fr)}.confirmation-reminder button{grid-column:1/-1;width:100%}}
         .appointment-history-search{position:relative;margin:0 0 14px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff);box-shadow:0 5px 16px rgba(15,23,42,.06)}.appointment-history-search>label{display:grid;grid-template-columns:auto minmax(240px,1fr) auto;align-items:center;gap:10px;padding:12px 14px}.appointment-history-search>label>b{font-size:13px;white-space:nowrap}.appointment-history-search input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px 12px;background:var(--card,#fff);color:inherit;font-size:14px}.appointment-history-search .clear-search{border:0;background:transparent;color:#b3151d;font-weight:900;cursor:pointer}.appointment-search-hint{display:block;padding:0 14px 12px;color:#64748b;font-size:11px}.appointment-search-results{display:grid;gap:8px;max-height:430px;overflow:auto;padding:0 12px 12px}.appointment-search-results>header{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;color:#526274;font-size:12px}.appointment-search-result{display:grid;grid-template-columns:105px minmax(190px,1.2fr) minmax(180px,1fr) auto;align-items:center;gap:12px;padding:11px 12px;border:1px solid #d9e1ea;border-left:5px solid #df1823;border-radius:9px;background:#fff}.appointment-search-result time{display:grid;gap:2px;font-size:12px}.appointment-search-result time b{font-size:14px}.appointment-search-result .result-client,.appointment-search-result .result-vehicle{display:grid;gap:3px;min-width:0}.appointment-search-result strong,.appointment-search-result span{overflow-wrap:anywhere}.appointment-search-result small{color:#64748b}.appointment-search-result .result-plate{font-weight:900;letter-spacing:.04em}.appointment-search-result .result-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.appointment-search-result .result-actions button{border:1px solid #bac6d4;border-radius:7px;padding:8px 10px;background:#fff;font-size:11px;font-weight:900;cursor:pointer}.appointment-search-result .result-actions .primary{border-color:#16864b;background:#16864b;color:#fff}.appointment-search-empty{margin:0;padding:14px;border:1px dashed #c8d3df;border-radius:8px;color:#64748b;text-align:center}.dark .appointment-search-result{background:#172231}.dark .appointment-search-result .result-actions button{background:#223044;color:#fff}
         .calendar-print-controls{display:flex;align-items:center;gap:6px}.calendar-print-controls select{min-width:92px}.calendar-print-controls button{border-color:#172b44!important;background:#172b44!important;color:#fff!important}.calendar-print-sheet{display:none}
         @media print{
@@ -5572,6 +5573,16 @@ function Agenda({
               {showSaturday ? "Ocultar sábado" : "Mostrar sábado"}
             </button>
           )}
+          {date === todayIso && confirmationReminders.length > 0 && (
+            <button
+              type="button"
+              className="confirmation-toggle"
+              onClick={() => setShowConfirmationReminders((current) => !current)}
+              aria-expanded={showConfirmationReminders}
+            >
+              📩 Confirmações para amanhã ({confirmationReminders.length}) {showConfirmationReminders ? "▲" : "▼"}
+            </button>
+          )}
           <button onClick={() => setOpenCal(!openCal)}>
             {openCal ? "Ocultar calendário ⌃" : "Mostrar calendário ⌄"}
           </button>
@@ -5580,6 +5591,47 @@ function Agenda({
           </button>
         </div>
       </div>
+      {date === todayIso && showConfirmationReminders && confirmationReminders.length > 0 && (
+        <section className="confirmation-reminders">
+          <header>
+            <span>
+              <b>📩 Confirmações de horário para amanhã</b>
+              <small>
+                {confirmationReminders.length} {confirmationReminders.length === 1 ? "cliente aguarda contato" : "clientes aguardam contato"} · {confirmationWindowText}
+              </small>
+            </span>
+          </header>
+          {confirmationReminders.map((appointment) => {
+            const confirmationText = String(confirmationTemplate || "")
+              .replaceAll("{cliente}", appointment.client)
+              .replaceAll("{data}", fmt(appointment.date))
+              .replaceAll("{hora}", appointment.time)
+              .replaceAll("{veiculo}", appointment.vehicle || "veículo")
+              .replaceAll("{placa}", appointment.plate || "sem placa");
+            return (
+              <article className="confirmation-reminder" key={appointment.id}>
+                <time>{appointment.time}</time>
+                <span>
+                  <b>{appointment.client}</b>
+                  <small>
+                    {appointment.vehicle || "Veículo não informado"}
+                    {appointment.plate ? ` · ${appointment.plate}` : ""}
+                    {appointment.phone ? ` · ${appointment.phone}` : " · WhatsApp não informado"}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  disabled={!confirmationWindowOpen}
+                  title={confirmationWindowText}
+                  onClick={() => prepareConfirmation(appointment, confirmationText)}
+                >
+                  Preparar mensagem
+                </button>
+              </article>
+            );
+          })}
+        </section>
+      )}
       <div className="appointment-history-search">
         <label>
           <b>Pesquisar agendamentos</b>
@@ -5921,47 +5973,6 @@ function Agenda({
                 Preparar WhatsApp
               </button>
             </div>
-          )}
-          {date === todayIso && confirmationReminders.length > 0 && (
-            <section className="confirmation-reminders">
-              <header>
-                <span>
-                  <b>📩 Confirmações para amanhã</b>
-                  <small>
-                    {confirmationReminders.length} {confirmationReminders.length === 1 ? "cliente aguarda contato" : "clientes aguardam contato"} · {confirmationWindowText}
-                  </small>
-                </span>
-              </header>
-              {confirmationReminders.map((appointment) => {
-                const confirmationText = String(confirmationTemplate || "")
-                  .replaceAll("{cliente}", appointment.client)
-                  .replaceAll("{data}", fmt(appointment.date))
-                  .replaceAll("{hora}", appointment.time)
-                  .replaceAll("{veiculo}", appointment.vehicle || "veículo")
-                  .replaceAll("{placa}", appointment.plate || "sem placa");
-                return (
-                  <article className="confirmation-reminder" key={appointment.id}>
-                    <time>{appointment.time}</time>
-                    <span>
-                      <b>{appointment.client}</b>
-                      <small>
-                        {appointment.vehicle || "Veículo não informado"}
-                        {appointment.plate ? ` · ${appointment.plate}` : ""}
-                        {appointment.phone ? ` · ${appointment.phone}` : " · WhatsApp não informado"}
-                      </small>
-                    </span>
-                    <button
-                      type="button"
-                      disabled={!confirmationWindowOpen}
-                      title={confirmationWindowText}
-                      onClick={() => prepareConfirmation(appointment, confirmationText)}
-                    >
-                      Preparar mensagem
-                    </button>
-                  </article>
-                );
-              })}
-            </section>
           )}
           {list.length === 0 && (
             <div className="emptyday">
