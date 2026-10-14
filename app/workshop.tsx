@@ -843,7 +843,9 @@ export default function App({ initialState, user, onLogout }: any) {
   }, [view, viewRestored]);
   const defaultTemplates = {
     lembrete:
-      "Olá, {cliente}! 👋\n\nEsta é uma mensagem automática da Monocenter para confirmar seu agendamento.\n\n📅 Dia: *{data}*\n🕒 Horário: *{hora}*\n📍 Endereço: Av. Itavuvu, 5341 — sentido Centro.\n\nPor favor, responda confirmando sua presença. Obrigada!",
+      "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!",
+    confirmacao:
+      "Olá, {cliente}! Tudo bem? 😊\n\nEsta é uma mensagem automática da Monocenter para confirmar seu agendamento.\n\n📅 Dia: *{data}*\n🕒 Horário: *{hora}*\n📍 Endereço: Av. Itavuvu, 5341 — sentido Centro.\n\nVocê consegue confirmar sua presença, por favor?",
     orcamento:
       "Olá, {cliente}! Segue o orçamento da Monocenter para o veículo {veiculo}, placa {placa}.",
     revisao:
@@ -853,11 +855,6 @@ export default function App({ initialState, user, onLogout }: any) {
   const [templates, setTemplates] = useState({
       ...defaultTemplates,
       ...(shared.templates ?? {}),
-      lembrete:
-        shared.templates?.lembrete ===
-        "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!"
-          ? defaultTemplates.lembrete
-          : (shared.templates?.lembrete ?? defaultTemplates.lembrete),
     }),
     [savedAt, setSavedAt] = useState("");
   const [parts, setParts] = useState(shared.parts ?? defaultParts),
@@ -1009,7 +1006,11 @@ export default function App({ initialState, user, onLogout }: any) {
           );
           apply(setTechs, techs, s.techs);
           apply(setHolidays, holidays, s.holidays);
-          apply(setTemplates, templates, s.templates);
+          apply(
+            setTemplates,
+            templates,
+            s.templates ? { ...defaultTemplates, ...s.templates } : undefined,
+          );
           apply(setStatusColors, statusColors, s.statusColors ? { ...STATUS_COLOR_DEFAULTS, ...s.statusColors } : undefined);
           apply(setPurchaseChecks, purchaseChecks, s.purchaseChecks);
           apply(
@@ -1829,7 +1830,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setConfirmationMessageFor(null);
               setMessage(text);
             }}
-            confirmationTemplate={templates.lembrete}
+            confirmationTemplate={templates.confirmacao}
             prepareConfirmation={(appointment: Appt, text: string) => {
               setQuoteMessageFor(null);
               setConfirmationMessageFor(appointment.id);
@@ -7946,14 +7947,15 @@ function Config({
         />
         <div className="templategrid">
           <label>
-            Confirmação de agendamento
+            Confirmação de horário do agendamento
             <textarea
-              value={templates.lembrete}
+              value={templates.confirmacao}
               onChange={(e) => {
                 setMessagesSaved(false);
-                setTemplates({ ...templates, lembrete: e.target.value });
+                setTemplates({ ...templates, confirmacao: e.target.value });
               }}
             />
+            <small>Usada no lembrete que aparece no dia anterior ao agendamento.</small>
           </label>
           <label>
             Envio de orçamento
