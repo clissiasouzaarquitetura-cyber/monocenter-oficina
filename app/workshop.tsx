@@ -165,6 +165,30 @@ const VEHICLE_COLORS: Record<string, string> = {
   bege: "#c7b693",
   marrom: "#795548",
 };
+const STATUS_COLOR_DEFAULTS: Record<string, string> = {
+  agendado: "#2563eb",
+  orcamento: "#d6a000",
+  servico: "#159447",
+  conferencia: "#6d28d9",
+  finalizado: "#0891b2",
+  faltou: "#d71920",
+  revisao: "#9b5de5",
+  retorno: "#f97316",
+  gabaritagem: "#db2777",
+  alinhamento: "#0891b2",
+};
+const STATUS_COLOR_LABELS: Array<[string, string]> = [
+  ["agendado", "Agendado"],
+  ["orcamento", "Aguardando orçamento"],
+  ["servico", "Serviço aprovado"],
+  ["conferencia", "Aguardando conferência"],
+  ["finalizado", "Atendimento finalizado"],
+  ["faltou", "Cliente faltou"],
+  ["revisao", "Revisão de 30 dias"],
+  ["retorno", "Retorno"],
+  ["gabaritagem", "Gabaritagem"],
+  ["alinhamento", "Alinhamento e balanceamento"],
+];
 const findVehicle = (value: string) => {
   const normalized = value.trim().toLocaleLowerCase("pt-BR");
   return VEHICLE_CATALOG.find(
@@ -721,6 +745,10 @@ export default function App({ initialState, user, onLogout }: any) {
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
+    [statusColors, setStatusColors] = useState<Record<string, string>>({
+      ...STATUS_COLOR_DEFAULTS,
+      ...(shared.statusColors ?? {}),
+    }),
     [message, setMessage] = useState(""),
     [quoteMessageFor, setQuoteMessageFor] = useState<number | null>(null),
     [serviceScheduleDate, setServiceScheduleDate] = useState(""),
@@ -872,6 +900,7 @@ export default function App({ initialState, user, onLogout }: any) {
         deletedAppointmentIds,
         footerSize,
         roundStep,
+        statusColors,
         status,
         evaluationNotes,
         checks,
@@ -918,6 +947,7 @@ export default function App({ initialState, user, onLogout }: any) {
     deletedAppointmentIds,
     footerSize,
     roundStep,
+    statusColors,
     status,
     evaluationNotes,
     checks,
@@ -969,6 +999,7 @@ export default function App({ initialState, user, onLogout }: any) {
           apply(setTechs, techs, s.techs);
           apply(setHolidays, holidays, s.holidays);
           apply(setTemplates, templates, s.templates);
+          apply(setStatusColors, statusColors, s.statusColors ? { ...STATUS_COLOR_DEFAULTS, ...s.statusColors } : undefined);
           apply(setPurchaseChecks, purchaseChecks, s.purchaseChecks);
           apply(
             setPurchaseOrderStates,
@@ -1004,6 +1035,7 @@ export default function App({ initialState, user, onLogout }: any) {
     purchaseOrderStates,
     footerSize,
     roundStep,
+    statusColors,
     onLogout,
   ]);
   const tireParts = parts.filter(isTirePart),
@@ -1570,6 +1602,7 @@ export default function App({ initialState, user, onLogout }: any) {
     }`;
   return (
     <div className={darkMode ? "app dark" : "app"}>
+      <style>{`.app{${Object.entries(statusColors).map(([key, color]) => `--status-${key}:${color};`).join("")}}`}</style>
       <aside>
         <Logo />
         <nav>
@@ -4287,6 +4320,8 @@ export default function App({ initialState, user, onLogout }: any) {
             setFooterSize={setFooterSize}
             roundStep={roundStep}
             setRoundStep={setRoundStep}
+            statusColors={statusColors}
+            setStatusColors={setStatusColors}
           />
         )}
         <div className="bottom">
@@ -5212,17 +5247,17 @@ function Agenda({
         .day article .appointment-internal-note b{font-weight:900}
         .day article .appointment-customer-note{display:block;white-space:pre-wrap}
         .app.dark .day article .appointment-internal-note{background:#493713;color:#ffe29a!important}
-        .week-appointment.avaliou{border-left-color:#d6a000;background:#fff9dc}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#6d28d9;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.garantia{border-left-color:#b45309;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
-        .week-appointment.servico,.days span.servico,.day article.servico{border-color:#159447!important;border-left-color:#159447!important;background:#e6f7ec!important;color:#14532d!important}
-        .week-appointment.revisao,.days span.revisao,.day article.revisao{border-color:#9b5de5!important;border-left-color:#9b5de5!important;background:#f3e8ff!important;color:#4c1d75!important}
-        .week-appointment.retorno,.days span.retorno,.day article.retorno{border-color:#f97316!important;border-left-color:#f97316!important;background:#fff0e5!important;color:#7c2d12!important}
-        .week-appointment.orcamento,.days span.orcamento,.day article.orcamento{border-color:#d6a000!important;border-left-color:#d6a000!important;background:#fff8cf!important;color:#713f12!important}
-        .week-appointment.gabaritagem,.days span.gabaritagem,.day article.gabaritagem{border-color:#db2777!important;border-left-color:#db2777!important;background:#fce7f3!important;color:#831843!important}
-        .week-appointment.alinhamento-balanceamento,.days span.alinhamento-balanceamento,.day article.alinhamento-balanceamento{border-color:#0891b2!important;border-left-color:#0891b2!important;background:#e6f8fb!important;color:#164e63!important}
-        .week-appointment.scheduled-service,.days span.scheduled-service,.day article.scheduled-service{border-color:#2563eb!important;border-left-color:#2563eb!important;background:#eaf2ff!important;color:#1e3a8a!important}
-        .dot.approved-dot{background:#159447}.dot.review-dot{background:#9b5de5}.dot.return-dot{background:#f97316}.dot.quote-dot{background:#d6a000}.dot.gabaritagem-dot{background:#db2777}.dot.alignment-dot{background:#0891b2}
-        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}.day article .open-quote-badge{display:inline-flex;width:max-content;margin-top:4px;padding:3px 8px;border-radius:999px;background:#9a7200;color:#fff!important;font-size:9px;font-weight:900;letter-spacing:.2px}
-        .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:#4d171b!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
+        .week-appointment.avaliou,.days span.avaliou,.day article.avaliou{border-left-color:var(--status-orcamento,#d6a000);background:color-mix(in srgb,var(--status-orcamento,#d6a000) 15%,white)}.week-appointment.inprogress,.days span.inprogress,.day article.inprogress,.days span.agendado,.day article.agendado{border-left-color:var(--status-agendado,#2563eb);background:color-mix(in srgb,var(--status-agendado,#2563eb) 12%,white)}.week-appointment.conference,.days span.conference,.day article.conference{border-left-color:var(--status-conferencia,#6d28d9);background:color-mix(in srgb,var(--status-conferencia,#6d28d9) 12%,white)}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.garantia{border-left-color:#b45309;background:#fff1e5}.week-appointment.completed,.days span.completed,.day article.completed{border-left-color:var(--status-finalizado,#0891b2);background:color-mix(in srgb,var(--status-finalizado,#0891b2) 16%,white);color:#164e63}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        .week-appointment.servico,.days span.servico,.day article.servico{border-color:var(--status-servico,#159447)!important;border-left-color:var(--status-servico,#159447)!important;background:color-mix(in srgb,var(--status-servico,#159447) 13%,white)!important;color:#14532d!important}
+        .week-appointment.revisao,.days span.revisao,.day article.revisao{border-color:var(--status-revisao,#9b5de5)!important;border-left-color:var(--status-revisao,#9b5de5)!important;background:color-mix(in srgb,var(--status-revisao,#9b5de5) 14%,white)!important;color:#4c1d75!important}
+        .week-appointment.retorno,.days span.retorno,.day article.retorno{border-color:var(--status-retorno,#f97316)!important;border-left-color:var(--status-retorno,#f97316)!important;background:color-mix(in srgb,var(--status-retorno,#f97316) 13%,white)!important;color:#7c2d12!important}
+        .week-appointment.orcamento,.days span.orcamento,.day article.orcamento{border-color:var(--status-orcamento,#d6a000)!important;border-left-color:var(--status-orcamento,#d6a000)!important;background:color-mix(in srgb,var(--status-orcamento,#d6a000) 14%,white)!important;color:#713f12!important}
+        .week-appointment.gabaritagem,.days span.gabaritagem,.day article.gabaritagem{border-color:var(--status-gabaritagem,#db2777)!important;border-left-color:var(--status-gabaritagem,#db2777)!important;background:color-mix(in srgb,var(--status-gabaritagem,#db2777) 13%,white)!important;color:#831843!important}
+        .week-appointment.alinhamento-balanceamento,.days span.alinhamento-balanceamento,.day article.alinhamento-balanceamento{border-color:var(--status-alinhamento,#0891b2)!important;border-left-color:var(--status-alinhamento,#0891b2)!important;background:color-mix(in srgb,var(--status-alinhamento,#0891b2) 13%,white)!important;color:#164e63!important}
+        .week-appointment.scheduled-service,.days span.scheduled-service,.day article.scheduled-service{border-color:var(--status-agendado,#2563eb)!important;border-left-color:var(--status-agendado,#2563eb)!important;background:color-mix(in srgb,var(--status-agendado,#2563eb) 11%,white)!important;color:#1e3a8a!important}
+        .dot.approved-dot{background:var(--status-servico,#159447)}.dot.review-dot{background:var(--status-revisao,#9b5de5)}.dot.return-dot{background:var(--status-retorno,#f97316)}.dot.quote-dot{background:var(--status-orcamento,#d6a000)}.dot.gabaritagem-dot{background:var(--status-gabaritagem,#db2777)}.dot.alignment-dot{background:var(--status-alinhamento,#0891b2)}.dot.conference-dot{background:var(--status-conferencia,#6d28d9)}.dot.red{background:var(--status-faltou,#d71920)}.dot.yellow{background:var(--status-orcamento,#d6a000)}.dot.completed{background:var(--status-finalizado,#0891b2)}.dot.scheduled-service-dot{background:var(--status-agendado,#2563eb)}
+        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:var(--status-faltou,#d71920)!important;border-left:5px solid var(--status-faltou,#d71920)!important;background:color-mix(in srgb,var(--status-faltou,#d71920) 13%,white)!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--status-faltou,#d71920) 42%,white)!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:var(--status-faltou,#d71920)!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:var(--status-faltou,#d71920);background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}.day article .open-quote-badge{display:inline-flex;width:max-content;margin-top:4px;padding:3px 8px;border-radius:999px;background:var(--status-orcamento,#9a7200);color:#fff!important;font-size:9px;font-weight:900;letter-spacing:.2px}
+        .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:color-mix(in srgb,var(--status-faltou,#d71920) 32%,#111)!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
         .appointment-history-search{position:relative;margin:0 0 14px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff);box-shadow:0 5px 16px rgba(15,23,42,.06)}.appointment-history-search>label{display:grid;grid-template-columns:auto minmax(240px,1fr) auto;align-items:center;gap:10px;padding:12px 14px}.appointment-history-search>label>b{font-size:13px;white-space:nowrap}.appointment-history-search input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px 12px;background:var(--card,#fff);color:inherit;font-size:14px}.appointment-history-search .clear-search{border:0;background:transparent;color:#b3151d;font-weight:900;cursor:pointer}.appointment-search-hint{display:block;padding:0 14px 12px;color:#64748b;font-size:11px}.appointment-search-results{display:grid;gap:8px;max-height:430px;overflow:auto;padding:0 12px 12px}.appointment-search-results>header{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;color:#526274;font-size:12px}.appointment-search-result{display:grid;grid-template-columns:105px minmax(190px,1.2fr) minmax(180px,1fr) auto;align-items:center;gap:12px;padding:11px 12px;border:1px solid #d9e1ea;border-left:5px solid #df1823;border-radius:9px;background:#fff}.appointment-search-result time{display:grid;gap:2px;font-size:12px}.appointment-search-result time b{font-size:14px}.appointment-search-result .result-client,.appointment-search-result .result-vehicle{display:grid;gap:3px;min-width:0}.appointment-search-result strong,.appointment-search-result span{overflow-wrap:anywhere}.appointment-search-result small{color:#64748b}.appointment-search-result .result-plate{font-weight:900;letter-spacing:.04em}.appointment-search-result .result-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.appointment-search-result .result-actions button{border:1px solid #bac6d4;border-radius:7px;padding:8px 10px;background:#fff;font-size:11px;font-weight:900;cursor:pointer}.appointment-search-result .result-actions .primary{border-color:#16864b;background:#16864b;color:#fff}.appointment-search-empty{margin:0;padding:14px;border:1px dashed #c8d3df;border-radius:8px;color:#64748b;text-align:center}.dark .appointment-search-result{background:#172231}.dark .appointment-search-result .result-actions button{background:#223044;color:#fff}
@@ -7631,6 +7666,8 @@ function Config({
   setFooterSize,
   roundStep,
   setRoundStep,
+  statusColors,
+  setStatusColors,
 }: any) {
   const [name, setName] = useState(""),
     [h, setH] = useState({ date: "", name: "" }),
@@ -7727,6 +7764,42 @@ function Config({
           uma base veicular autorizada. O agendamento já permite deixar placa e
           quilometragem em branco e completar na chegada.
         </p>
+      </div>
+      <div className="card status-colors-card">
+        <Title
+          a="Cores dos status"
+          b="Escolha as cores usadas nos cartões do calendário e da agenda do dia. As alterações ficam salvas para toda a equipe."
+        />
+        <div className="status-colors-grid">
+          {STATUS_COLOR_LABELS.map(([key, label]) => (
+            <label className="status-color-row" key={key}>
+              <span className="status-color-preview" style={{ background: statusColors[key] || STATUS_COLOR_DEFAULTS[key] }} />
+              <b>{label}</b>
+              <input
+                type="color"
+                value={statusColors[key] || STATUS_COLOR_DEFAULTS[key]}
+                onChange={(event) => setStatusColors({ ...statusColors, [key]: event.target.value })}
+                aria-label={`Escolher cor de ${label}`}
+              />
+              <input
+                className="status-color-code"
+                value={statusColors[key] || STATUS_COLOR_DEFAULTS[key]}
+                maxLength={7}
+                onChange={(event) => {
+                  const value = event.target.value.trim();
+                  if (/^#[0-9a-fA-F]{0,6}$/.test(value)) setStatusColors({ ...statusColors, [key]: value });
+                }}
+                onBlur={(event) => {
+                  if (!/^#[0-9a-fA-F]{6}$/.test(event.target.value)) setStatusColors({ ...statusColors, [key]: STATUS_COLOR_DEFAULTS[key] });
+                }}
+                aria-label={`Código da cor de ${label}`}
+              />
+              <button type="button" onClick={() => setStatusColors({ ...statusColors, [key]: STATUS_COLOR_DEFAULTS[key] })}>Padrão</button>
+            </label>
+          ))}
+        </div>
+        <button className="status-reset-all" type="button" onClick={() => setStatusColors(STATUS_COLOR_DEFAULTS)}>Restaurar todas as cores padrão</button>
+        <style>{`.status-colors-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.status-color-row{display:grid;grid-template-columns:18px minmax(135px,1fr) 38px 82px auto;align-items:center;gap:8px;padding:9px 10px;border:1px solid #d8e0e8;border-radius:9px;background:#fff}.status-color-preview{width:18px;height:18px;border:1px solid #7d8a99;border-radius:50%}.status-color-row b{font-size:12px}.status-color-row input[type=color]{width:34px;height:30px;padding:1px;border:1px solid #b9c5d2;border-radius:6px;background:#fff;cursor:pointer}.status-color-code{width:100%;box-sizing:border-box;padding:7px;border:1px solid #b9c5d2;border-radius:6px;text-transform:uppercase;font-weight:800}.status-color-row button,.status-reset-all{border:1px solid #b9c5d2;border-radius:6px;padding:7px 8px;background:#fff;color:#314156;font-size:11px;font-weight:900;cursor:pointer}.status-reset-all{margin-top:12px;border-color:#d71920;color:#b3131b}.app.dark .status-color-row{background:#172231}.app.dark .status-color-code,.app.dark .status-color-row button{background:#111c29;color:#fff}@media(max-width:850px){.status-colors-grid{grid-template-columns:1fr}}`}</style>
       </div>
       <div className="card">
         <Title
