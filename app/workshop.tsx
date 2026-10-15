@@ -7496,7 +7496,7 @@ function ManualQuotePrintSheet({
           body.print-manual-quote .manual-quote-sheet-head>div{display:grid;justify-items:end;gap:3px;font-size:11px}
           body.print-manual-quote .manual-quote-sheet-head small{font-weight:700}
           body.print-manual-quote .manual-quote-sheet-head b{border-bottom:1px solid #172b44;padding-bottom:1px;color:#172b44;font-size:13px}
-          body.print-manual-quote .manual-quote-client-band{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:14px;padding:12px;background:#f3f5f7}
+          body.print-manual-quote .manual-quote-client-band{display:grid;grid-template-columns:1.2fr 1fr .55fr;gap:22px;margin-top:14px;padding:12px;background:#f3f5f7}
           body.print-manual-quote .manual-quote-client-band>div{display:grid;gap:4px}
           body.print-manual-quote .manual-quote-client-band>div:last-child{justify-items:start}
           body.print-manual-quote .manual-quote-client-band small{color:#718096;font-size:10px}
@@ -7527,6 +7527,7 @@ function ManualQuotePrintSheet({
       <section className="manual-quote-client-band">
         <div><small>CLIENTE</small><b>{appointment?.client || "Não informado"}</b><span>{appointment?.phone || "Telefone não informado"}</span></div>
         <div><small>VEÍCULO</small><b>{appointment?.vehicle || "Não informado"}</b><span>Km {appointment?.km || "não informado"}</span></div>
+        <div><small>PLACA</small><b>{appointment?.plate || "Não informada"}</b><span>Veículo do atendimento</span></div>
       </section>
       <strong className="manual-quote-sheet-badge">ORÇAMENTO PARA COTAÇÃO</strong>
       <h2>Peças selecionadas</h2>
