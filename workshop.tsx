@@ -165,6 +165,30 @@ const VEHICLE_COLORS: Record<string, string> = {
   bege: "#c7b693",
   marrom: "#795548",
 };
+const STATUS_COLOR_DEFAULTS: Record<string, string> = {
+  agendado: "#2563eb",
+  orcamento: "#d6a000",
+  servico: "#159447",
+  conferencia: "#6d28d9",
+  finalizado: "#0891b2",
+  faltou: "#d71920",
+  revisao: "#9b5de5",
+  retorno: "#f97316",
+  gabaritagem: "#db2777",
+  alinhamento: "#0891b2",
+};
+const STATUS_COLOR_LABELS: Array<[string, string]> = [
+  ["agendado", "Agendado"],
+  ["orcamento", "Aguardando orçamento"],
+  ["servico", "Serviço aprovado"],
+  ["conferencia", "Aguardando conferência"],
+  ["finalizado", "Atendimento finalizado"],
+  ["faltou", "Cliente faltou"],
+  ["revisao", "Revisão de 30 dias"],
+  ["retorno", "Retorno"],
+  ["gabaritagem", "Gabaritagem"],
+  ["alinhamento", "Alinhamento e balanceamento"],
+];
 const findVehicle = (value: string) => {
   const normalized = value.trim().toLocaleLowerCase("pt-BR");
   return VEHICLE_CATALOG.find(
@@ -416,6 +440,10 @@ type Appt = {
   quoteFollowUpUpdatedAt?: string;
   quoteFollowUpPreparedBy?: string;
   quoteFollowUpPreparedAt?: string;
+  confirmationReminderEnabled?: boolean;
+  confirmationSentAt?: string;
+  confirmationSentBy?: string;
+  confirmationSentForDate?: string;
   serviceScheduled?: boolean;
   serviceScheduledFor?: string;
   serviceScheduledTime?: string;
@@ -721,8 +749,13 @@ export default function App({ initialState, user, onLogout }: any) {
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
+    [statusColors, setStatusColors] = useState<Record<string, string>>({
+      ...STATUS_COLOR_DEFAULTS,
+      ...(shared.statusColors ?? {}),
+    }),
     [message, setMessage] = useState(""),
     [quoteMessageFor, setQuoteMessageFor] = useState<number | null>(null),
+    [confirmationMessageFor, setConfirmationMessageFor] = useState<number | null>(null),
     [serviceScheduleDate, setServiceScheduleDate] = useState(""),
     [serviceScheduleTime, setServiceScheduleTime] = useState(""),
     [status, setStatus] = useState<Record<number, string>>({}),
@@ -811,15 +844,18 @@ export default function App({ initialState, user, onLogout }: any) {
   const defaultTemplates = {
     lembrete:
       "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!",
+    confirmacao:
+      "Olá, {cliente}! Tudo bem? 😊\n\nEsta é uma mensagem automática da Monocenter para confirmar seu agendamento.\n\n📅 Dia: *{data}*\n🕒 Horário: *{hora}*\n📍 Endereço: Av. Itavuvu, 5341 — sentido Centro.\n\nVocê consegue confirmar sua presença, por favor?",
     orcamento:
       "Olá, {cliente}! Segue o orçamento da Monocenter para o veículo {veiculo}, placa {placa}.",
     revisao:
       "Olá, {cliente}! Já está na hora de revisar seu veículo na Monocenter.",
   };
   const defaultParts: any[] = [];
-  const [templates, setTemplates] = useState(
-      shared.templates ?? defaultTemplates,
-    ),
+  const [templates, setTemplates] = useState({
+      ...defaultTemplates,
+      ...(shared.templates ?? {}),
+    }),
     [savedAt, setSavedAt] = useState("");
   const [parts, setParts] = useState(shared.parts ?? defaultParts),
     [selectedServices, setSelectedServices] = useState<number[]>(
@@ -872,6 +908,7 @@ export default function App({ initialState, user, onLogout }: any) {
         deletedAppointmentIds,
         footerSize,
         roundStep,
+        statusColors,
         status,
         evaluationNotes,
         checks,
@@ -918,6 +955,7 @@ export default function App({ initialState, user, onLogout }: any) {
     deletedAppointmentIds,
     footerSize,
     roundStep,
+    statusColors,
     status,
     evaluationNotes,
     checks,
@@ -968,7 +1006,12 @@ export default function App({ initialState, user, onLogout }: any) {
           );
           apply(setTechs, techs, s.techs);
           apply(setHolidays, holidays, s.holidays);
-          apply(setTemplates, templates, s.templates);
+          apply(
+            setTemplates,
+            templates,
+            s.templates ? { ...defaultTemplates, ...s.templates } : undefined,
+          );
+          apply(setStatusColors, statusColors, s.statusColors ? { ...STATUS_COLOR_DEFAULTS, ...s.statusColors } : undefined);
           apply(setPurchaseChecks, purchaseChecks, s.purchaseChecks);
           apply(
             setPurchaseOrderStates,
@@ -1004,6 +1047,7 @@ export default function App({ initialState, user, onLogout }: any) {
     purchaseOrderStates,
     footerSize,
     roundStep,
+    statusColors,
     onLogout,
   ]);
   const tireParts = parts.filter(isTirePart),
@@ -1322,6 +1366,67 @@ export default function App({ initialState, user, onLogout }: any) {
         document.body.classList.remove("no-values");
       }, 500);
     },
+    printManualQuoteWorksheet = () => {
+      const escapeHtml = (value: unknown) =>
+          String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;"),
+        partsRows = reviewParts.length
+          ? reviewParts
+              .map(
+                ({ part }: any) => `
+                  <tr>
+                    <td>${escapeHtml(quantityValue(Number(part.qty) || 0))}</td>
+                    <td><b>${escapeHtml(part.item)}</b>${part.brand ? `<small>${escapeHtml(part.brand)}</small>` : ""}</td>
+                    <td>${escapeHtml(part.supplier || "")}</td>
+                    <td>${escapeHtml(part.code || "")}</td>
+                    <td></td><td></td><td></td>
+                  </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="7" class="empty">Nenhuma peça selecionada para orçamento.</td></tr>`,
+        laborRows = [
+          ...selectedServices.map((index: number) => ({
+            name: SERVICES[index]?.[0] ?? "Serviço",
+            qty: serviceQty[index] ?? 0,
+          })),
+          ...manualServices
+            .filter((service: any) => service.name?.trim())
+            .map((service: any) => ({
+              name: service.name,
+              qty: Number(service.qty) || 0,
+            })),
+        ],
+        laborTableRows = laborRows.length
+          ? laborRows
+              .map(
+                (service) => `
+                  <tr>
+                    <td>${escapeHtml(quantityValue(Number(service.qty) || 0))}</td>
+                    <td><b>${escapeHtml(service.name)}</b></td>
+                    <td></td><td></td><td></td>
+                  </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="5" class="empty">Nenhum serviço ou mão de obra selecionado.</td></tr>`,
+        printWindow = window.open("", "_blank", "noopener,noreferrer");
+      if (!printWindow) {
+        alert("O navegador bloqueou a janela de impressão. Permita pop-ups e tente novamente.");
+        return;
+      }
+      printWindow.document.write(`<!doctype html>
+        <html lang="pt-BR"><head><meta charset="utf-8"/><title>Cotação manual - Monocenter</title>
+        <style>
+          @page{size:A4 portrait;margin:10mm}.sheet{font-family:Arial,sans-serif;color:#172033}.head{display:flex;align-items:center;gap:14px;border-bottom:3px solid #d71920;padding-bottom:10px}.head img{width:145px;height:auto}.head h1{margin:0;font-size:18px}.head p{margin:3px 0 0;color:#526274;font-size:10px}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:14px 0}.meta div{border:1px solid #cfd8e3;padding:7px;border-radius:4px;font-size:11px}.meta small{display:block;color:#64748b;font-weight:700}.meta b{font-size:12px}h2{margin:17px 0 7px;font-size:13px;color:#172b44;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:10px}th{padding:7px 5px;background:#172b44;color:#fff;text-align:left}td{height:28px;padding:5px;border:1px solid #bfc9d5;vertical-align:top}td small{display:block;margin-top:2px;color:#64748b}.empty{text-align:center;color:#64748b;font-style:italic}.note{margin-top:14px;padding:8px;border:1px solid #cfd8e3;border-radius:4px;font-size:10px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:35px;font-size:10px;text-align:center}.sign span{border-top:1px solid #172033;padding-top:5px}@media print{.sheet{width:100%}}</style></head>
+        <body><main class="sheet"><header class="head"><img src="/logo-monocenter.jpg" alt="Monocenter"/><div><h1>COTAÇÃO MANUAL — PEÇAS E MÃO DE OBRA</h1><p>Av. Itavuvu, 5341 — sentido Centro · Sorocaba/SP</p></div></header>
+        <section class="meta"><div><small>CLIENTE</small><b>${escapeHtml(activeAppointment?.client || "Não informado")}</b></div><div><small>VEÍCULO / PLACA</small><b>${escapeHtml(activeAppointment?.vehicle || "Não informado")}${activeAppointment?.plate ? ` · ${escapeHtml(activeAppointment.plate)}` : ""}</b></div><div><small>DATA DA COTAÇÃO</small><b>____/____/________</b></div><div><small>RESPONSÁVEL</small><b>________________________________</b></div></section>
+        <h2>Peças selecionadas</h2><table><thead><tr><th>Qtd.</th><th>Peça / marca</th><th>Fornecedor</th><th>Código</th><th>Custo cotado</th><th>Margem</th><th>Venda</th></tr></thead><tbody>${partsRows}</tbody></table>
+        <h2>Serviços e mão de obra</h2><table><thead><tr><th>Qtd.</th><th>Serviço / mão de obra</th><th>Valor unit.</th><th>Total</th><th>Observação</th></tr></thead><tbody>${laborTableRows}</tbody></table>
+        <p class="note"><b>Observações:</b><br/><br/><br/></p><footer class="sign"><span>Responsável pela cotação</span><span>Conferência</span></footer></main><script>window.onload=()=>window.print()</script></body></html>`);
+      printWindow.document.close();
+    },
     geometrySharedState = (
       nextAppointments: Appt[],
       nextGeometryDrafts: StandaloneGeometryReport[],
@@ -1570,6 +1675,7 @@ export default function App({ initialState, user, onLogout }: any) {
     }`;
   return (
     <div className={darkMode ? "app dark" : "app"}>
+      <style>{`.app{${Object.entries(statusColors).map(([key, color]) => `--status-${key}:${color};`).join("")}}`}</style>
       <aside>
         <Logo />
         <nav>
@@ -1782,6 +1888,13 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
             message={(text: string) => {
               setQuoteMessageFor(null);
+              setConfirmationMessageFor(null);
+              setMessage(text);
+            }}
+            confirmationTemplate={templates.confirmacao}
+            prepareConfirmation={(appointment: Appt, text: string) => {
+              setQuoteMessageFor(null);
+              setConfirmationMessageFor(appointment.id);
               setMessage(text);
             }}
           />
@@ -3025,6 +3138,18 @@ export default function App({ initialState, user, onLogout }: any) {
                       Total <em>{brl(total)}</em>
                     </strong>
                   </div>
+                  <div className="manual-quote-print">
+                    <span>
+                      <b>Cotação manual</b>
+                      <small>
+                        Imprima as peças e a mão de obra para preencher valores, fornecedor e código à mão.
+                      </small>
+                    </span>
+                    <button type="button" onClick={printManualQuoteWorksheet}>
+                      🖨 Imprimir folha para cotação
+                    </button>
+                  </div>
+                  <style>{`.manual-quote-print{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:14px 0;padding:12px 14px;border:1px solid #b9cde5;border-radius:10px;background:#f4f8fd}.manual-quote-print span{display:grid;gap:3px}.manual-quote-print b{color:#172b44;font-size:13px}.manual-quote-print small{color:#526274;font-size:11px}.manual-quote-print button{border:0;border-radius:8px;padding:10px 12px;background:#172b44;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;cursor:pointer}.app.dark .manual-quote-print{background:#172231;border-color:#40536a}.app.dark .manual-quote-print b{color:#fff}@media(max-width:650px){.manual-quote-print{align-items:stretch;flex-direction:column}.manual-quote-print button{width:100%}}`}</style>
                   <Actions
                     back={() => {
                       if (activeAppointment) {
@@ -4287,6 +4412,8 @@ export default function App({ initialState, user, onLogout }: any) {
             setFooterSize={setFooterSize}
             roundStep={roundStep}
             setRoundStep={setRoundStep}
+            statusColors={statusColors}
+            setStatusColors={setStatusColors}
           />
         )}
         <div className="bottom">
@@ -4442,12 +4569,20 @@ export default function App({ initialState, user, onLogout }: any) {
             close={() => {
               setMessage("");
               setQuoteMessageFor(null);
+              setConfirmationMessageFor(null);
             }}
             sent={
               quoteMessageFor
                 ? !!appointments.find((a) => a.id === quoteMessageFor)
                     ?.quoteSentAt
-                : false
+                : confirmationMessageFor
+                  ? (() => {
+                      const appointment = appointments.find(
+                        (item) => item.id === confirmationMessageFor,
+                      );
+                      return !!appointment?.confirmationSentAt && appointment.confirmationSentForDate === appointment.date;
+                    })()
+                  : false
             }
             onSent={
               quoteMessageFor
@@ -4479,8 +4614,30 @@ export default function App({ initialState, user, onLogout }: any) {
                       setActiveAppointment(updated);
                     }
                   }
-                : undefined
+                : confirmationMessageFor
+                  ? () => {
+                      const confirmationSentAt = new Date().toISOString();
+                      syncBlockedUntil.current = Date.now() + 4000;
+                      setAppointments((list) =>
+                        list.map((appointment) =>
+                          appointment.id === confirmationMessageFor
+                            ? {
+                                ...appointment,
+                                confirmationSentAt,
+                                confirmationSentBy: user.displayName,
+                                confirmationSentForDate: appointment.date,
+                                lastEditedBy: user.displayName,
+                                lastEditedAt: confirmationSentAt,
+                                _updatedAt: Date.now(),
+                              }
+                            : appointment,
+                        ),
+                      );
+                    }
+                  : undefined
             }
+            closeAfterSent={!!confirmationMessageFor}
+            sentLabel={confirmationMessageFor ? "Confirmação enviada" : "Orçamento enviado"}
           />
         )}
         <PrintDocuments
@@ -4521,9 +4678,10 @@ function DocLogo() {
   );
 }
 function MercosulPlate({ plate, className = "" }: { plate?: string; className?: string }) {
-  const value = String(plate || "SEM PLACA")
-    .toLocaleUpperCase("pt-BR")
-    .replace(/[^A-Z0-9-]/g, "");
+  const suppliedPlate = String(plate || "").trim();
+  const value = suppliedPlate
+    ? suppliedPlate.toLocaleUpperCase("pt-BR").replace(/[^A-Z0-9-]/g, "")
+    : "SEM PLACA";
   return (
     <span className={`mercosul-plate ${className}`.trim()} aria-label={`Placa ${value}`}>
       <span className="mercosul-plate-top"><b>MERCOSUL</b><b>BRASIL</b><i aria-hidden="true" /></span>
@@ -4536,7 +4694,7 @@ function Vehicle() {
   return (
     <>
       <style>{`
-        .vehicle .mercosul-plate{display:inline-grid;grid-template-rows:7px 1fr;box-sizing:border-box;width:70px;height:29px;margin-top:3px;border:1px solid #162f82;border-radius:4px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.vehicle .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 3px;background:#153891;color:#fff;font-size:5px;letter-spacing:.3px}.vehicle .mercosul-plate-top b{font-size:5px}.vehicle .mercosul-plate-top i{position:relative;width:9px;height:5px;border-radius:1px;background:#159447}.vehicle .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.vehicle .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:16px;letter-spacing:2.2px;white-space:nowrap}
+        .vehicle .mercosul-plate{display:inline-grid;grid-template-rows:9px 1fr;box-sizing:border-box;width:138px;min-width:138px;height:43px;margin-top:3px;border:1px solid #162f82;border-radius:5px;overflow:hidden;background:#f8f8f7;color:#080808;font-family:Arial,Helvetica,sans-serif;line-height:1}.vehicle .mercosul-plate-top{display:grid;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 4px;background:#153891;color:#fff;font-size:6px;letter-spacing:.4px}.vehicle .mercosul-plate-top b{font-size:6px}.vehicle .mercosul-plate-top i{position:relative;width:11px;height:6px;border-radius:1px;background:#159447}.vehicle .mercosul-plate-top i:after{position:absolute;content:"";inset:1px 2px;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.vehicle .mercosul-plate>strong{display:flex;align-items:center;justify-content:center;padding-top:1px;color:#090909;font-size:20px;letter-spacing:2px;white-space:nowrap}.vehicle>span{overflow:visible!important}
       `}</style>
       <div className="printheader">
         <b>MONOCENTER ALINHAMENTO TÉCNICO</b>
@@ -4801,9 +4959,14 @@ function Agenda({
   markNoShow,
   remove,
   message,
+  confirmationTemplate,
+  prepareConfirmation,
 }: any) {
   const today = new Date(),
-    todayIso = iso(today);
+    todayIso = iso(today),
+    tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowIso = iso(tomorrow);
   const [date, setDate] = useState(() => {
       if (typeof window === "undefined") return todayIso;
       const savedDate = localStorage.getItem("monocenter-calendar-date");
@@ -4827,6 +4990,7 @@ function Agenda({
     [openCal, setOpenCal] = useState(true),
     [showSaturday, setShowSaturday] = useState(false),
     [showOngoingVehicles, setShowOngoingVehicles] = useState(false),
+    [showConfirmationReminders, setShowConfirmationReminders] = useState(false),
     [expandedAppointments, setExpandedAppointments] = useState<number[]>([]),
     [appointmentSearch, setAppointmentSearch] = useState(""),
     [calendarPrintMode, setCalendarPrintMode] = useState<"semana" | "mes">(
@@ -5001,6 +5165,31 @@ function Agenda({
         : mode === "semana"
           ? `${calendarDays[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${calendarDays[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
           : fmt(date);
+  const confirmationReminders = (data as Appt[])
+      .filter(
+        (appointment) =>
+          appointment.date === tomorrowIso &&
+          appointment.type !== "bloqueio" &&
+          appointment.status === "agendado" &&
+          appointment.confirmationReminderEnabled !== false &&
+          appointment.confirmationSentForDate !== appointment.date,
+      )
+      .sort(
+        (first, second) =>
+          first.time.localeCompare(second.time, "pt-BR", { numeric: true }) ||
+          first.client.localeCompare(second.client, "pt-BR"),
+      ),
+    confirmationReminderState =
+      today.getHours() >= 17
+        ? "overdue"
+        : today.getHours() >= 13
+          ? "due"
+          : "waiting",
+    confirmationWindowText = today.getHours() >= 13 && today.getHours() < 17
+      ? "Horário de envio recomendado até as 17h."
+      : today.getHours() < 13
+        ? "Envios liberados após o almoço, a partir das 13h."
+        : "Confirmação pendente: envie assim que possível.";
   const weekStartHour = 7,
     weekEndHour = 20,
     weekHourHeight = 116,
@@ -5211,19 +5400,20 @@ function Agenda({
         .day article .appointment-internal-note b{font-weight:900}
         .day article .appointment-customer-note{display:block;white-space:pre-wrap}
         .app.dark .day article .appointment-internal-note{background:#493713;color:#ffe29a!important}
-        .week-appointment.avaliou{border-left-color:#d6a000;background:#fff9dc}.week-appointment.inprogress{border-left-color:#2f74c0;background:#edf5ff}.week-appointment.conference{border-left-color:#6d28d9;background:#f5f0ff}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.garantia{border-left-color:#b45309;background:#fff1e5}.week-appointment.completed{border-left-color:#0891b2;background:#cffafe;color:#164e63}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
-        .week-appointment.servico,.days span.servico,.day article.servico{border-color:#159447!important;border-left-color:#159447!important;background:#e6f7ec!important;color:#14532d!important}
-        .week-appointment.revisao,.days span.revisao,.day article.revisao{border-color:#9b5de5!important;border-left-color:#9b5de5!important;background:#f3e8ff!important;color:#4c1d75!important}
-        .week-appointment.retorno,.days span.retorno,.day article.retorno{border-color:#f97316!important;border-left-color:#f97316!important;background:#fff0e5!important;color:#7c2d12!important}
-        .week-appointment.orcamento,.days span.orcamento,.day article.orcamento{border-color:#d6a000!important;border-left-color:#d6a000!important;background:#fff8cf!important;color:#713f12!important}
-        .week-appointment.gabaritagem,.days span.gabaritagem,.day article.gabaritagem{border-color:#db2777!important;border-left-color:#db2777!important;background:#fce7f3!important;color:#831843!important}
-        .week-appointment.alinhamento-balanceamento,.days span.alinhamento-balanceamento,.day article.alinhamento-balanceamento{border-color:#0891b2!important;border-left-color:#0891b2!important;background:#e6f8fb!important;color:#164e63!important}
-        .week-appointment.scheduled-service,.days span.scheduled-service,.day article.scheduled-service{border-color:#2563eb!important;border-left-color:#2563eb!important;background:#eaf2ff!important;color:#1e3a8a!important}
-        .dot.approved-dot{background:#159447}.dot.review-dot{background:#9b5de5}.dot.return-dot{background:#f97316}.dot.quote-dot{background:#d6a000}.dot.gabaritagem-dot{background:#db2777}.dot.alignment-dot{background:#0891b2}
-        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:#d71920!important;border-left:5px solid #d71920!important;background:#ffe5e7!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px #f5a3a8!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:#d71920!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:#d71920;background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}.day article .open-quote-badge{display:inline-flex;width:max-content;margin-top:4px;padding:3px 8px;border-radius:999px;background:#9a7200;color:#fff!important;font-size:9px;font-weight:900;letter-spacing:.2px}
-        .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:#4d171b!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
+        .week-appointment.avaliou,.days span.avaliou,.day article.avaliou{border-left-color:var(--status-orcamento,#d6a000);background:color-mix(in srgb,var(--status-orcamento,#d6a000) 15%,white)}.week-appointment.inprogress,.days span.inprogress,.day article.inprogress,.days span.agendado,.day article.agendado{border-left-color:var(--status-agendado,#2563eb);background:color-mix(in srgb,var(--status-agendado,#2563eb) 12%,white)}.week-appointment.conference,.days span.conference,.day article.conference{border-left-color:var(--status-conferencia,#6d28d9);background:color-mix(in srgb,var(--status-conferencia,#6d28d9) 12%,white)}.week-appointment.block{border-left-color:#64748b;background:#edf1f5}.week-appointment.garantia{border-left-color:#b45309;background:#fff1e5}.week-appointment.completed,.days span.completed,.day article.completed{border-left-color:var(--status-finalizado,#0891b2);background:color-mix(in srgb,var(--status-finalizado,#0891b2) 16%,white);color:#164e63}.week-appointment.vehicle-in-shop{border-right:4px solid #009c9c}
+        .week-appointment.servico,.days span.servico,.day article.servico{border-color:var(--status-servico,#159447)!important;border-left-color:var(--status-servico,#159447)!important;background:color-mix(in srgb,var(--status-servico,#159447) 13%,white)!important;color:#14532d!important}
+        .week-appointment.revisao,.days span.revisao,.day article.revisao{border-color:var(--status-revisao,#9b5de5)!important;border-left-color:var(--status-revisao,#9b5de5)!important;background:color-mix(in srgb,var(--status-revisao,#9b5de5) 14%,white)!important;color:#4c1d75!important}
+        .week-appointment.retorno,.days span.retorno,.day article.retorno{border-color:var(--status-retorno,#f97316)!important;border-left-color:var(--status-retorno,#f97316)!important;background:color-mix(in srgb,var(--status-retorno,#f97316) 13%,white)!important;color:#7c2d12!important}
+        .week-appointment.orcamento,.days span.orcamento,.day article.orcamento{border-color:var(--status-orcamento,#d6a000)!important;border-left-color:var(--status-orcamento,#d6a000)!important;background:color-mix(in srgb,var(--status-orcamento,#d6a000) 14%,white)!important;color:#713f12!important}
+        .week-appointment.gabaritagem,.days span.gabaritagem,.day article.gabaritagem{border-color:var(--status-gabaritagem,#db2777)!important;border-left-color:var(--status-gabaritagem,#db2777)!important;background:color-mix(in srgb,var(--status-gabaritagem,#db2777) 13%,white)!important;color:#831843!important}
+        .week-appointment.alinhamento-balanceamento,.days span.alinhamento-balanceamento,.day article.alinhamento-balanceamento{border-color:var(--status-alinhamento,#0891b2)!important;border-left-color:var(--status-alinhamento,#0891b2)!important;background:color-mix(in srgb,var(--status-alinhamento,#0891b2) 13%,white)!important;color:#164e63!important}
+        .week-appointment.scheduled-service,.days span.scheduled-service,.day article.scheduled-service{border-color:var(--status-agendado,#2563eb)!important;border-left-color:var(--status-agendado,#2563eb)!important;background:color-mix(in srgb,var(--status-agendado,#2563eb) 11%,white)!important;color:#1e3a8a!important}
+        .dot.approved-dot{background:var(--status-servico,#159447)}.dot.review-dot{background:var(--status-revisao,#9b5de5)}.dot.return-dot{background:var(--status-retorno,#f97316)}.dot.quote-dot{background:var(--status-orcamento,#d6a000)}.dot.gabaritagem-dot{background:var(--status-gabaritagem,#db2777)}.dot.alignment-dot{background:var(--status-alinhamento,#0891b2)}.dot.conference-dot{background:var(--status-conferencia,#6d28d9)}.dot.red{background:var(--status-faltou,#d71920)}.dot.yellow{background:var(--status-orcamento,#d6a000)}.dot.completed{background:var(--status-finalizado,#0891b2)}.dot.scheduled-service-dot{background:var(--status-agendado,#2563eb)}
+        .week-appointment.faltou,.days span.faltou,.day article.faltou{border-color:var(--status-faltou,#d71920)!important;border-left:5px solid var(--status-faltou,#d71920)!important;background:color-mix(in srgb,var(--status-faltou,#d71920) 13%,white)!important;color:#7f1d1d!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--status-faltou,#d71920) 42%,white)!important}.day article.faltou p,.day article.faltou span>small{color:#8f1f27!important}.day article.faltou .appointment-stage{display:inline-flex;width:max-content;margin-top:5px;border-radius:999px;padding:3px 8px;background:var(--status-faltou,#d71920)!important;color:#fff!important;font-weight:900}.appointment-actions .no-show-action{border-color:var(--status-faltou,#d71920);background:#fff1f2;color:#b30f19}.appointment-actions .no-show-action.undo{border-color:#64748b;background:#f1f5f9;color:#334155}.day article .open-quote-badge{display:inline-flex;width:max-content;margin-top:4px;padding:3px 8px;border-radius:999px;background:var(--status-orcamento,#9a7200);color:#fff!important;font-size:9px;font-weight:900;letter-spacing:.2px}
+        .app.dark .week-appointment.faltou,.app.dark .days span.faltou,.app.dark .day article.faltou{background:color-mix(in srgb,var(--status-faltou,#d71920) 32%,#111)!important;color:#fff!important}.app.dark .day article.faltou p,.app.dark .day article.faltou span>small{color:#ffd7da!important}
         .week-appointment.review-30-days.completed,.days span.review-30-days.completed,.day article.review-30-days.completed{border-left-color:#7c3aed!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}.day article.review-30-days.completed p,.day article.review-30-days.completed span>small{color:#4c3a76!important}.app.dark .week-appointment.review-30-days.completed,.app.dark .days span.review-30-days.completed,.app.dark .day article.review-30-days.completed{border-left-color:#a78bfa!important;background:#f4efff!important;color:#312e81!important;box-shadow:inset 0 0 0 1px #c4b5fd!important}
         .team-agenda-reminder{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:10px 12px;border:1px solid #b8d5ff;border-radius:9px;background:#eef6ff}.team-agenda-reminder span{display:grid;gap:2px}.team-agenda-reminder small{color:#2563eb;font-size:10px;font-weight:900;text-transform:uppercase}.team-agenda-reminder b{font-size:13px;text-transform:capitalize}.team-agenda-reminder em{color:#526274;font-size:11px;font-style:normal}.team-agenda-reminder button{flex:0 0 auto;border:0;border-radius:7px;padding:8px 10px;background:#16864b;color:#fff;font-size:11px;font-weight:900}
+        .confirmation-toggle{border-color:#d99718!important;background:#fff8e5!important;color:#754800!important;font-weight:900}.confirmation-reminders{display:grid;gap:8px;margin:0 0 12px;padding:11px;border:1px solid #f2c46d;border-radius:10px;background:#fff9eb}.confirmation-reminders>header{display:flex;align-items:start;justify-content:space-between;gap:8px}.confirmation-reminders>header b{display:block;color:#774500;font-size:13px}.confirmation-reminders>header small{display:block;margin-top:2px;color:#8a5a13;font-size:10px;font-weight:800}.confirmation-reminder{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px;border:1px solid #f0d69c;border-radius:8px;background:#fff}.confirmation-reminder.overdue{border-color:#e78c93;background:#fff1f2;box-shadow:inset 4px 0 #cf2028}.confirmation-reminder.overdue time{background:#ffe1e3;color:#9e1720}.confirmation-reminder.overdue span b{color:#971720}.confirmation-reminder time{display:grid;min-width:44px;place-items:center;border-radius:6px;padding:5px;background:#fff1c9;color:#754800;font-size:13px;font-weight:900}.confirmation-reminder span{display:grid;min-width:0;gap:2px}.confirmation-reminder span b{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.confirmation-reminder span small{overflow:hidden;color:#64748b;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.confirmation-reminder button{border:0;border-radius:7px;padding:8px 9px;background:#172b44;color:#fff;font-size:10px;font-weight:900;cursor:pointer}.app.dark .confirmation-toggle{background:#5a4214!important;border-color:#80601f!important;color:#ffeca9!important}.app.dark .confirmation-reminders{background:#3d3015;border-color:#80601f}.app.dark .confirmation-reminder{background:#1b2632;border-color:#685324}.app.dark .confirmation-reminder.overdue{background:#451d23;border-color:#94414a}.app.dark .confirmation-reminder time{background:#5a4214;color:#ffeca9}@media(max-width:680px){.confirmation-reminder{grid-template-columns:auto minmax(0,1fr)}.confirmation-reminder button{grid-column:1/-1;width:100%}}
         .appointment-history-search{position:relative;margin:0 0 14px;border:1px solid #c8d3df;border-radius:12px;background:var(--card,#fff);box-shadow:0 5px 16px rgba(15,23,42,.06)}.appointment-history-search>label{display:grid;grid-template-columns:auto minmax(240px,1fr) auto;align-items:center;gap:10px;padding:12px 14px}.appointment-history-search>label>b{font-size:13px;white-space:nowrap}.appointment-history-search input{width:100%;box-sizing:border-box;border:1px solid #9fb0c3;border-radius:8px;padding:10px 12px;background:var(--card,#fff);color:inherit;font-size:14px}.appointment-history-search .clear-search{border:0;background:transparent;color:#b3151d;font-weight:900;cursor:pointer}.appointment-search-hint{display:block;padding:0 14px 12px;color:#64748b;font-size:11px}.appointment-search-results{display:grid;gap:8px;max-height:430px;overflow:auto;padding:0 12px 12px}.appointment-search-results>header{display:flex;justify-content:space-between;gap:10px;padding:8px 2px;color:#526274;font-size:12px}.appointment-search-result{display:grid;grid-template-columns:105px minmax(190px,1.2fr) minmax(180px,1fr) auto;align-items:center;gap:12px;padding:11px 12px;border:1px solid #d9e1ea;border-left:5px solid #df1823;border-radius:9px;background:#fff}.appointment-search-result time{display:grid;gap:2px;font-size:12px}.appointment-search-result time b{font-size:14px}.appointment-search-result .result-client,.appointment-search-result .result-vehicle{display:grid;gap:3px;min-width:0}.appointment-search-result strong,.appointment-search-result span{overflow-wrap:anywhere}.appointment-search-result small{color:#64748b}.appointment-search-result .result-plate{font-weight:900;letter-spacing:.04em}.appointment-search-result .result-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.appointment-search-result .result-actions button{border:1px solid #bac6d4;border-radius:7px;padding:8px 10px;background:#fff;font-size:11px;font-weight:900;cursor:pointer}.appointment-search-result .result-actions .primary{border-color:#16864b;background:#16864b;color:#fff}.appointment-search-empty{margin:0;padding:14px;border:1px dashed #c8d3df;border-radius:8px;color:#64748b;text-align:center}.dark .appointment-search-result{background:#172231}.dark .appointment-search-result .result-actions button{background:#223044;color:#fff}
         .calendar-print-controls{display:flex;align-items:center;gap:6px}.calendar-print-controls select{min-width:92px}.calendar-print-controls button{border-color:#172b44!important;background:#172b44!important;color:#fff!important}.calendar-print-sheet{display:none}
         @media print{
@@ -5462,6 +5652,16 @@ function Agenda({
               {showSaturday ? "Ocultar sábado" : "Mostrar sábado"}
             </button>
           )}
+          {date === todayIso && confirmationReminders.length > 0 && (
+            <button
+              type="button"
+              className="confirmation-toggle"
+              onClick={() => setShowConfirmationReminders((current) => !current)}
+              aria-expanded={showConfirmationReminders}
+            >
+              📩 Confirmações para amanhã ({confirmationReminders.length}) {showConfirmationReminders ? "▲" : "▼"}
+            </button>
+          )}
           <button onClick={() => setOpenCal(!openCal)}>
             {openCal ? "Ocultar calendário ⌃" : "Mostrar calendário ⌄"}
           </button>
@@ -5470,6 +5670,46 @@ function Agenda({
           </button>
         </div>
       </div>
+      {date === todayIso && showConfirmationReminders && confirmationReminders.length > 0 && (
+        <section className="confirmation-reminders">
+          <header>
+            <span>
+              <b>📩 Confirmações de horário para amanhã</b>
+              <small>
+                {confirmationReminders.length} {confirmationReminders.length === 1 ? "cliente aguarda contato" : "clientes aguardam contato"} · {confirmationWindowText}
+              </small>
+            </span>
+          </header>
+          {confirmationReminders.map((appointment) => {
+            const confirmationText = String(confirmationTemplate || "")
+              .replaceAll("{cliente}", appointment.client)
+              .replaceAll("{data}", fmt(appointment.date))
+              .replaceAll("{hora}", appointment.time)
+              .replaceAll("{veiculo}", appointment.vehicle || "veículo")
+              .replaceAll("{placa}", appointment.plate || "sem placa");
+            return (
+              <article className={`confirmation-reminder ${confirmationReminderState}`} key={appointment.id}>
+                <time>{appointment.time}</time>
+                <span>
+                  <b>{appointment.client}</b>
+                  <small>
+                    {appointment.vehicle || "Veículo não informado"}
+                    {appointment.plate ? ` · ${appointment.plate}` : ""}
+                    {appointment.phone ? ` · ${appointment.phone}` : " · WhatsApp não informado"}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  title={confirmationWindowText}
+                  onClick={() => prepareConfirmation(appointment, confirmationText)}
+                >
+                  Preparar mensagem
+                </button>
+              </article>
+            );
+          })}
+        </section>
+      )}
       <div className="appointment-history-search">
         <label>
           <b>Pesquisar agendamentos</b>
@@ -6851,6 +7091,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         internalNote: "",
         type: "cliente",
         status: "agendado",
+        confirmationReminderEnabled: true,
         tech: "",
         scheduledBy: currentUser,
         createdAt: new Date().toISOString(),
@@ -7189,8 +7430,14 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
         </section>
         {f.type !== "bloqueio" && (
           <label className="toggle">
-            <input type="checkbox" defaultChecked /> Preparar lembrete um dia
-            antes
+            <input
+              type="checkbox"
+              checked={f.confirmationReminderEnabled !== false}
+              onChange={(event) =>
+                setF({ ...f, confirmationReminderEnabled: event.target.checked })
+              }
+            />{" "}
+            Preparar confirmação de horário um dia antes
           </label>
         )}
         <footer>
@@ -7219,7 +7466,7 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
     </div>
   );
 }
-function Message({ text, close, onSent, sent }: any) {
+function Message({ text, close, onSent, sent, closeAfterSent = false, sentLabel = "Orçamento enviado" }: any) {
   const [copied, setCopied] = useState(false),
     [markedSent, setMarkedSent] = useState(sent);
   return (
@@ -7249,9 +7496,10 @@ function Message({ text, close, onSent, sent }: any) {
               onClick={() => {
                 onSent();
                 setMarkedSent(true);
+                if (closeAfterSent) close();
               }}
             >
-              {markedSent ? "Orçamento enviado ✓" : "Marcar como enviado"}
+              {markedSent ? `${sentLabel} ✓` : "Marcar como enviado"}
             </button>
           )}
         </footer>
@@ -7630,6 +7878,8 @@ function Config({
   setFooterSize,
   roundStep,
   setRoundStep,
+  statusColors,
+  setStatusColors,
 }: any) {
   const [name, setName] = useState(""),
     [h, setH] = useState({ date: "", name: "" }),
@@ -7727,6 +7977,42 @@ function Config({
           quilometragem em branco e completar na chegada.
         </p>
       </div>
+      <div className="card status-colors-card">
+        <Title
+          a="Cores dos status"
+          b="Escolha as cores usadas nos cartões do calendário e da agenda do dia. As alterações ficam salvas para toda a equipe."
+        />
+        <div className="status-colors-grid">
+          {STATUS_COLOR_LABELS.map(([key, label]) => (
+            <label className="status-color-row" key={key}>
+              <span className="status-color-preview" style={{ background: statusColors[key] || STATUS_COLOR_DEFAULTS[key] }} />
+              <b>{label}</b>
+              <input
+                type="color"
+                value={statusColors[key] || STATUS_COLOR_DEFAULTS[key]}
+                onChange={(event) => setStatusColors({ ...statusColors, [key]: event.target.value })}
+                aria-label={`Escolher cor de ${label}`}
+              />
+              <input
+                className="status-color-code"
+                value={statusColors[key] || STATUS_COLOR_DEFAULTS[key]}
+                maxLength={7}
+                onChange={(event) => {
+                  const value = event.target.value.trim();
+                  if (/^#[0-9a-fA-F]{0,6}$/.test(value)) setStatusColors({ ...statusColors, [key]: value });
+                }}
+                onBlur={(event) => {
+                  if (!/^#[0-9a-fA-F]{6}$/.test(event.target.value)) setStatusColors({ ...statusColors, [key]: STATUS_COLOR_DEFAULTS[key] });
+                }}
+                aria-label={`Código da cor de ${label}`}
+              />
+              <button type="button" onClick={() => setStatusColors({ ...statusColors, [key]: STATUS_COLOR_DEFAULTS[key] })}>Padrão</button>
+            </label>
+          ))}
+        </div>
+        <button className="status-reset-all" type="button" onClick={() => setStatusColors(STATUS_COLOR_DEFAULTS)}>Restaurar todas as cores padrão</button>
+        <style>{`.status-colors-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.status-color-row{display:grid;grid-template-columns:18px minmax(135px,1fr) 38px 82px auto;align-items:center;gap:8px;padding:9px 10px;border:1px solid #d8e0e8;border-radius:9px;background:#fff}.status-color-preview{width:18px;height:18px;border:1px solid #7d8a99;border-radius:50%}.status-color-row b{font-size:12px}.status-color-row input[type=color]{width:34px;height:30px;padding:1px;border:1px solid #b9c5d2;border-radius:6px;background:#fff;cursor:pointer}.status-color-code{width:100%;box-sizing:border-box;padding:7px;border:1px solid #b9c5d2;border-radius:6px;text-transform:uppercase;font-weight:800}.status-color-row button,.status-reset-all{border:1px solid #b9c5d2;border-radius:6px;padding:7px 8px;background:#fff;color:#314156;font-size:11px;font-weight:900;cursor:pointer}.status-reset-all{margin-top:12px;border-color:#d71920;color:#b3131b}.app.dark .status-color-row{background:#172231}.app.dark .status-color-code,.app.dark .status-color-row button{background:#111c29;color:#fff}@media(max-width:850px){.status-colors-grid{grid-template-columns:1fr}}`}</style>
+      </div>
       <div className="card">
         <Title
           a="Mensagens automáticas"
@@ -7734,14 +8020,15 @@ function Config({
         />
         <div className="templategrid">
           <label>
-            Lembrete de agendamento
+            Confirmação de horário do agendamento
             <textarea
-              value={templates.lembrete}
+              value={templates.confirmacao}
               onChange={(e) => {
                 setMessagesSaved(false);
-                setTemplates({ ...templates, lembrete: e.target.value });
+                setTemplates({ ...templates, confirmacao: e.target.value });
               }}
             />
+            <small>Usada no lembrete que aparece no dia anterior ao agendamento.</small>
           </label>
           <label>
             Envio de orçamento
@@ -9368,9 +9655,11 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       row.parts.push({ x, text });
     });
     const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const coordinateAngles = (value: string) =>
+      value.match(/[+-]?\d+\s*[°ºoO]\s*\d*[\'’′\"”″]?/g) || [];
     const angleAt = (parts: Array<{ x: number; text: string }>, start: number, end = Infinity) => {
-      const source = parts.find((part) => part.x >= start && part.x < end && angleValues(part.text).length);
-      return source ? formatAngle(angleValues(source.text)[0]) : "";
+      const source = parts.find((part) => part.x >= start && part.x < end && coordinateAngles(part.text).length);
+      return source ? formatAngle(coordinateAngles(source.text)[0]) : "";
     };
     const next: any = {};
     let recognized = 0;
@@ -9379,16 +9668,25 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
     let setbackCount = 0;
     let pendingKpiRow: Array<{ x: number; text: string }> | null = null;
     const setRow = (index: number, parts: Array<{ x: number; text: string }>, single: boolean) => {
-      const min = angleAt(parts, 110, 175);
-      const max = angleAt(parts, 175, 235);
+      // O intervalo de especificação ocupa a parte esquerda da tabela. Lê os
+      // dois ângulos deste intervalo juntos, sem depender de como o PDF
+      // separou visualmente o "To" entre mínimo e máximo.
+      const rangeAngles = parts
+        .filter((part) => part.x >= 105 && part.x < 300)
+        .flatMap((part) => coordinateAngles(part.text));
+      const min = rangeAngles[0] ? formatAngle(rangeAngles[0]) : "";
+      const max = rangeAngles[1] ? formatAngle(rangeAngles[1]) : "";
       const beforeLeft = angleAt(parts, 300, 380);
       const afterLeft = angleAt(parts, 380, 455);
       const beforeRight = angleAt(parts, 455, 525);
       const afterRight = angleAt(parts, 525);
       if (single) {
-        if (!beforeLeft && !afterRight) return;
-        next[index] = { ...(values[index] || {}), min, max, beforeLeft, beforeRight: "", afterLeft: afterRight, afterRight: "" };
-        recognized += Number(!!beforeLeft) + Number(!!afterRight);
+        // Linhas sem lado (totais, setback e impulso) usam a coluna de após
+        // logo à direita da medida inicial, não a última coluna da tabela.
+        const afterSingle = beforeRight || afterRight;
+        if (!beforeLeft && !afterSingle) return;
+        next[index] = { ...(values[index] || {}), min, max, beforeLeft, beforeRight: "", afterLeft: afterSingle, afterRight: "" };
+        recognized += Number(!!beforeLeft) + Number(!!afterSingle);
         return;
       }
       if (!beforeLeft && !afterLeft && !beforeRight && !afterRight) return;
@@ -9405,7 +9703,7 @@ function GeometryTechnicalReport({ appointment, currentUser, onBack, onContinue,
       else if (/inclus/.test(label)) setRow(5, parts, false);
       else if (/set[\s-]*back|recuo/.test(label)) setRow(setbackCount++ ? 11 : 6, parts, true);
       else if (/impuls|empurr/.test(label)) setRow(10, parts, true);
-      else if (!pendingKpiRow && parts.filter((part) => angleValues(part.text).length).length >= 6) pendingKpiRow = parts;
+      else if (!pendingKpiRow && parts.filter((part) => coordinateAngles(part.text).length).length >= 6) pendingKpiRow = parts;
     });
     if (!next[4] && pendingKpiRow) setRow(4, pendingKpiRow, false);
     return { next, recognized };
@@ -10186,6 +10484,36 @@ function Reports({
     ["Garantias", weeklyRows.filter((a) => a.type === "garantia").length],
     ["Revisões 30 dias", weeklyRows.filter((a) => a.type === "revisao").length],
   ];
+  const weeklyDashboard = {
+    appointments: weeklyRows.length,
+    attended: weeklyRows.filter((a) => a.status !== "faltou").length,
+    evaluated: weeklyRows.filter((a) => !!a.evaluation).length,
+    approved: weeklyRows.filter((a) => a.status === "servico" || a.budget?.processStatus === "Finalizado").length,
+    notApproved: weeklyRows.filter(
+      (a) =>
+        a.status === "avaliou" &&
+        a.type === "cliente" &&
+        a.quoteFollowUpDecision !== "declined" &&
+        !a.serviceAppointmentId &&
+        a.budget?.processStatus !== "Finalizado",
+    ).length,
+    completed: weeklyRows.filter((a) => a.budget?.processStatus === "Finalizado").length,
+    missed: weeklyRows.filter((a) => a.status === "faltou").length,
+  };
+  const weeklyDayBars = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    const dateIso = iso(date);
+    return {
+      label: date.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", ""),
+      day: String(date.getDate()).padStart(2, "0"),
+      total: weeklyRows.filter((appointment) => appointment.date === dateIso).length,
+      completed: weeklyRows.filter(
+        (appointment) => appointment.date === dateIso && appointment.budget?.processStatus === "Finalizado",
+      ).length,
+    };
+  });
+  const weeklyMaxDayTotal = Math.max(1, ...weeklyDayBars.map((item) => item.total));
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowIso = iso(tomorrow);
@@ -10463,39 +10791,36 @@ function Reports({
                 Imprimir resumo
               </button>
             </div>
-            <div className="weekly-metrics">
-              {weeklyMetrics.map(([label, value]) => (
-                <div key={String(label)}>
-                  <b>{value}</b>
-                  <span>{label}</span>
+            <style>{`
+              .weekly-report-panel{max-width:1120px}.weekly-dashboard{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:16px}.weekly-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.weekly-kpi{min-height:94px;padding:14px;border:1px solid #d8e0e8;border-radius:11px;background:#fff;box-shadow:0 4px 12px #0f172a0a}.weekly-kpi b{display:block;font-size:28px;line-height:1;color:#111d2b}.weekly-kpi span{display:block;margin-top:8px;color:#536477;font-size:12px;font-weight:800;line-height:1.2}.weekly-kpi.approved{border-top:5px solid #168b4b}.weekly-kpi.open{border-top:5px solid #d39c00}.weekly-kpi.completed{border-top:5px solid #1d78a8}.weekly-kpi.missed{border-top:5px solid #d71920}.weekly-chart,.weekly-followup{padding:16px;border:1px solid #d8e0e8;border-radius:11px;background:#fff}.weekly-chart h3,.weekly-followup h3{margin:0 0 12px;color:#111d2b;font-size:15px}.weekly-bars{display:grid;grid-template-columns:repeat(6,1fr);align-items:end;gap:10px;height:172px;padding-top:10px;border-bottom:1px solid #cad4df}.weekly-bar{display:grid;grid-template-rows:20px 1fr auto;align-items:end;min-width:0;height:100%;text-align:center}.weekly-bar b{font-size:13px}.weekly-bar i{display:block;width:100%;min-height:6px;border-radius:7px 7px 0 0;background:#1d78a8}.weekly-bar i.done{background:#168b4b}.weekly-bar span{padding-top:7px;color:#5d6b7b;font-size:11px;font-weight:900;text-transform:capitalize}.weekly-followup{display:grid;align-content:start;gap:10px}.weekly-followup>div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #e1e7ee;font-size:13px}.weekly-followup>div:last-child{border:0}.weekly-followup span{color:#536477;font-weight:800}.weekly-followup b{color:#111d2b}.weekly-note{margin:14px 0 0;padding:11px 14px;border-radius:9px;background:#f3f6f9;color:#526274;font-size:12px;font-weight:700}.weekly-note b{color:#111d2b}@media(max-width:850px){.weekly-dashboard{grid-template-columns:1fr}.weekly-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media print{body.print-weekly .app>aside,body.print-weekly main>header,body.print-weekly .management-report-tabs,body.print-weekly .weekly-report-panel .management-report-head label,body.print-weekly .weekly-report-panel .management-report-head button{display:none!important}body.print-weekly .reports-page{padding:0!important;background:#fff!important}body.print-weekly .report-screen>*:not(.weekly-report-panel):not(style){display:none!important}body.print-weekly .weekly-report-panel{max-width:none!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important}body.print-weekly .weekly-dashboard{grid-template-columns:1.15fr .85fr!important;gap:10px!important}.weekly-kpi{min-height:68px!important;padding:9px!important}.weekly-kpi b{font-size:21px!important}.weekly-kpi span{margin-top:5px!important;font-size:9px!important}.weekly-chart,.weekly-followup{padding:10px!important}.weekly-bars{height:110px!important}.weekly-note{margin-top:10px!important;font-size:9px!important}@page{size:A4 landscape;margin:10mm}}
+            `}</style>
+            <div className="weekly-dashboard">
+              <section className="weekly-kpis" aria-label="Indicadores da semana">
+                <div className="weekly-kpi"><b>{weeklyDashboard.appointments}</b><span>Atendimentos agendados</span></div>
+                <div className="weekly-kpi"><b>{weeklyDashboard.attended}</b><span>Clientes atendidos</span></div>
+                <div className="weekly-kpi"><b>{weeklyDashboard.evaluated}</b><span>Avaliações realizadas</span></div>
+                <div className="weekly-kpi approved"><b>{weeklyDashboard.approved}</b><span>Orçamentos aprovados</span></div>
+                <div className="weekly-kpi open"><b>{weeklyDashboard.notApproved}</b><span>Não aprovados / em aberto</span></div>
+                <div className="weekly-kpi completed"><b>{weeklyDashboard.completed}</b><span>Serviços concluídos</span></div>
+                <div className="weekly-kpi missed"><b>{weeklyDashboard.missed}</b><span>Faltas</span></div>
+                <div className="weekly-kpi"><b>{weeklyRows.filter((a) => a.type === "retorno" || a.type === "garantia" || a.type === "revisao").length}</b><span>Retornos, garantias e revisões</span></div>
+              </section>
+              <section className="weekly-chart">
+                <h3>Atendimentos por dia</h3>
+                <div className="weekly-bars">
+                  {weeklyDayBars.map((item) => <div className="weekly-bar" key={item.day}><b>{item.total}</b><i className={item.completed ? "done" : ""} style={{height:`${Math.max(6, Math.round((item.total / weeklyMaxDayTotal) * 100))}%`}}/><span>{item.label} {item.day}</span></div>)}
                 </div>
-              ))}
+              </section>
+              <section className="weekly-followup">
+                <h3>Pontos de acompanhamento</h3>
+                <div><span>Orçamentos enviados</span><b>{weeklyRows.filter((a) => a.quoteSentAt).length}</b></div>
+                <div><span>Orçamentos em aberto</span><b>{weeklyDashboard.notApproved}</b></div>
+                <div><span>Retornos</span><b>{weeklyRows.filter((a) => a.type === "retorno").length}</b></div>
+                <div><span>Garantias</span><b>{weeklyRows.filter((a) => a.type === "garantia").length}</b></div>
+                <div><span>Revisões de 30 dias</span><b>{weeklyRows.filter((a) => a.type === "revisao").length}</b></div>
+              </section>
             </div>
-            <h3>Movimentação da semana</h3>
-            <div className="weekly-list">
-              {weeklyRows.length ? (
-                weeklyRows
-                  .sort((a, b) =>
-                    `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`),
-                  )
-                  .map((a) => (
-                    <div key={a.id}>
-                      <span>
-                        <b>{a.client}</b>
-                        <small>
-                          {new Date(a.date + "T12:00:00").toLocaleDateString(
-                            "pt-BR",
-                          )}{" "}
-                          · {a.time} · {a.vehicle || "Veículo não informado"}
-                        </small>
-                      </span>
-                      <strong>{category(a)}</strong>
-                    </div>
-                  ))
-              ) : (
-                <p>Nenhum atendimento registrado nesta semana.</p>
-              )}
-            </div>
+            <p className="weekly-note"><b>Resumo visual:</b> a relação detalhada continua em <b>Registros</b>; este painel foi feito para acompanhar a semana e imprimir em uma única folha.</p>
           </div>
         )}
         {reportMode === "amanha" && (
