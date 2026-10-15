@@ -7489,11 +7489,12 @@ function ManualQuotePrintSheet({
         .manual-quote-print-sheet{display:none}
         @media print{
           body.print-manual-quote .app>aside,body.print-manual-quote main>header,body.print-manual-quote main>*{display:none!important}
-          body.print-manual-quote main>.manual-quote-print-sheet{display:block!important;font-family:Arial,sans-serif;color:#172033}
+          body.print-manual-quote main>.manual-quote-print-sheet{display:block!important;position:relative;min-height:277mm;box-sizing:border-box;padding-bottom:24mm;font-family:Arial,sans-serif;color:#172033}
           body.print-manual-quote .manual-quote-sheet-head{display:flex;align-items:center;gap:14px;border-bottom:3px solid #d71920;padding-bottom:10px}
           body.print-manual-quote .manual-quote-sheet-head img{width:145px;height:auto}
           body.print-manual-quote .manual-quote-sheet-head h1{margin:0;font-size:18px}
           body.print-manual-quote .manual-quote-sheet-head p{margin:3px 0 0;color:#526274;font-size:10px}
+          body.print-manual-quote .manual-quote-sheet-badge{display:inline-block;margin-top:6px;padding:4px 8px;background:#f6cf2d;color:#172033;font-size:10px;font-weight:900;letter-spacing:.05em}
           body.print-manual-quote .manual-quote-sheet-meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:14px 0}
           body.print-manual-quote .manual-quote-sheet-meta div{border:1px solid #cfd8e3;padding:7px;border-radius:4px;font-size:11px}
           body.print-manual-quote .manual-quote-sheet-meta small{display:block;color:#64748b;font-weight:700}
@@ -7505,7 +7506,9 @@ function ManualQuotePrintSheet({
           body.print-manual-quote .manual-quote-print-sheet td small{display:block;margin-top:2px;color:#64748b}
           body.print-manual-quote .manual-quote-empty{text-align:center;color:#64748b;font-style:italic}
           body.print-manual-quote .manual-quote-note{margin-top:14px;padding:8px;border:1px solid #cfd8e3;border-radius:4px;font-size:10px}
-          body.print-manual-quote .manual-quote-sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:35px;font-size:10px;text-align:center}
+          body.print-manual-quote .manual-quote-writing-lines{display:grid;gap:8px;margin-top:7px}
+          body.print-manual-quote .manual-quote-writing-lines span{display:block;border-bottom:1px solid #9eabb9;height:12px}
+          body.print-manual-quote .manual-quote-sign{position:absolute;right:0;bottom:0;left:0;display:grid;grid-template-columns:1fr 1fr;gap:35px;font-size:10px;text-align:center}
           body.print-manual-quote .manual-quote-sign span{border-top:1px solid #172033;padding-top:5px}
           @page{size:A4 portrait;margin:10mm}
         }
@@ -7513,23 +7516,24 @@ function ManualQuotePrintSheet({
       <header className="manual-quote-sheet-head">
         <img src="/logo-monocenter.jpg" alt="Monocenter" />
         <div>
-          <h1>COTAÇÃO MANUAL — PEÇAS E MÃO DE OBRA</h1>
+          <h1>MONOCENTER ALINHAMENTO TÉCNICO</h1>
           <p>Av. Itavuvu, 5341 — sentido Centro · Sorocaba/SP</p>
+          <strong className="manual-quote-sheet-badge">ORÇAMENTO PARA COTAÇÃO</strong>
         </div>
       </header>
       <section className="manual-quote-sheet-meta">
         <div><small>CLIENTE</small><b>{appointment?.client || "Não informado"}</b></div>
         <div><small>VEÍCULO / PLACA</small><b>{appointment?.vehicle || "Não informado"}{appointment?.plate ? ` · ${appointment.plate}` : ""}</b></div>
         <div><small>DATA DA COTAÇÃO</small><b>____/____/________</b></div>
-        <div><small>RESPONSÁVEL</small><b>________________________________</b></div>
+        <div><small>CONTATO</small><b>{appointment?.phone || "_______________________________"}</b></div>
       </section>
       <h2>Peças selecionadas</h2>
       <table>
-        <thead><tr><th>Qtd.</th><th>Peça / marca</th><th>Fornecedor</th><th>Código</th><th>Custo cotado</th><th>Margem</th><th>Venda</th></tr></thead>
+        <thead><tr><th>Qtd.</th><th>Peça / marca</th><th>Fornecedor</th><th>Código</th><th>Custo cotado</th><th>Venda</th></tr></thead>
         <tbody>
           {quoteParts.length ? quoteParts.map((part: any, index: number) => (
-            <tr key={`${part.item}-${index}`}><td>{quantityValue(Number(part.qty) || 0)}</td><td><b>{part.item}</b>{part.brand && <small>{part.brand}</small>}</td><td>{part.supplier}</td><td>{part.code}</td><td></td><td></td><td></td></tr>
-          )) : <tr><td colSpan={7} className="manual-quote-empty">Nenhuma peça selecionada para orçamento.</td></tr>}
+            <tr key={`${part.item}-${index}`}><td>{quantityValue(Number(part.qty) || 0)}</td><td><b>{part.item}</b>{part.brand && <small>{part.brand}</small>}</td><td>{part.supplier}</td><td>{part.code}</td><td></td><td></td></tr>
+          )) : <tr><td colSpan={6} className="manual-quote-empty">Nenhuma peça selecionada para orçamento.</td></tr>}
         </tbody>
       </table>
       <h2>Serviços e mão de obra</h2>
@@ -7541,7 +7545,7 @@ function ManualQuotePrintSheet({
           )) : <tr><td colSpan={5} className="manual-quote-empty">Nenhum serviço ou mão de obra selecionado.</td></tr>}
         </tbody>
       </table>
-      <p className="manual-quote-note"><b>Observações:</b><br /><br /><br /></p>
+      <div className="manual-quote-note"><b>Observações / anotações da cotação:</b><div className="manual-quote-writing-lines"><span></span><span></span><span></span><span></span><span></span></div></div>
       <footer className="manual-quote-sign"><span>Responsável pela cotação</span><span>Conferência</span></footer>
     </section>
   );
