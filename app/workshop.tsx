@@ -1366,6 +1366,67 @@ export default function App({ initialState, user, onLogout }: any) {
         document.body.classList.remove("no-values");
       }, 500);
     },
+    printManualQuoteWorksheet = () => {
+      const escapeHtml = (value: unknown) =>
+          String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;"),
+        partsRows = reviewParts.length
+          ? reviewParts
+              .map(
+                ({ part }: any) => `
+                  <tr>
+                    <td>${escapeHtml(quantityValue(Number(part.qty) || 0))}</td>
+                    <td><b>${escapeHtml(part.item)}</b>${part.brand ? `<small>${escapeHtml(part.brand)}</small>` : ""}</td>
+                    <td>${escapeHtml(part.supplier || "")}</td>
+                    <td>${escapeHtml(part.code || "")}</td>
+                    <td></td><td></td><td></td>
+                  </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="7" class="empty">Nenhuma peça selecionada para orçamento.</td></tr>`,
+        laborRows = [
+          ...selectedServices.map((index: number) => ({
+            name: SERVICES[index]?.[0] ?? "Serviço",
+            qty: serviceQty[index] ?? 0,
+          })),
+          ...manualServices
+            .filter((service: any) => service.name?.trim())
+            .map((service: any) => ({
+              name: service.name,
+              qty: Number(service.qty) || 0,
+            })),
+        ],
+        laborTableRows = laborRows.length
+          ? laborRows
+              .map(
+                (service) => `
+                  <tr>
+                    <td>${escapeHtml(quantityValue(Number(service.qty) || 0))}</td>
+                    <td><b>${escapeHtml(service.name)}</b></td>
+                    <td></td><td></td><td></td>
+                  </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="5" class="empty">Nenhum serviço ou mão de obra selecionado.</td></tr>`,
+        printWindow = window.open("", "_blank", "noopener,noreferrer");
+      if (!printWindow) {
+        alert("O navegador bloqueou a janela de impressão. Permita pop-ups e tente novamente.");
+        return;
+      }
+      printWindow.document.write(`<!doctype html>
+        <html lang="pt-BR"><head><meta charset="utf-8"/><title>Cotação manual - Monocenter</title>
+        <style>
+          @page{size:A4 portrait;margin:10mm}.sheet{font-family:Arial,sans-serif;color:#172033}.head{display:flex;align-items:center;gap:14px;border-bottom:3px solid #d71920;padding-bottom:10px}.head img{width:145px;height:auto}.head h1{margin:0;font-size:18px}.head p{margin:3px 0 0;color:#526274;font-size:10px}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:14px 0}.meta div{border:1px solid #cfd8e3;padding:7px;border-radius:4px;font-size:11px}.meta small{display:block;color:#64748b;font-weight:700}.meta b{font-size:12px}h2{margin:17px 0 7px;font-size:13px;color:#172b44;text-transform:uppercase}table{width:100%;border-collapse:collapse;font-size:10px}th{padding:7px 5px;background:#172b44;color:#fff;text-align:left}td{height:28px;padding:5px;border:1px solid #bfc9d5;vertical-align:top}td small{display:block;margin-top:2px;color:#64748b}.empty{text-align:center;color:#64748b;font-style:italic}.note{margin-top:14px;padding:8px;border:1px solid #cfd8e3;border-radius:4px;font-size:10px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:35px;font-size:10px;text-align:center}.sign span{border-top:1px solid #172033;padding-top:5px}@media print{.sheet{width:100%}}</style></head>
+        <body><main class="sheet"><header class="head"><img src="/logo-monocenter.jpg" alt="Monocenter"/><div><h1>COTAÇÃO MANUAL — PEÇAS E MÃO DE OBRA</h1><p>Av. Itavuvu, 5341 — sentido Centro · Sorocaba/SP</p></div></header>
+        <section class="meta"><div><small>CLIENTE</small><b>${escapeHtml(activeAppointment?.client || "Não informado")}</b></div><div><small>VEÍCULO / PLACA</small><b>${escapeHtml(activeAppointment?.vehicle || "Não informado")}${activeAppointment?.plate ? ` · ${escapeHtml(activeAppointment.plate)}` : ""}</b></div><div><small>DATA DA COTAÇÃO</small><b>____/____/________</b></div><div><small>RESPONSÁVEL</small><b>________________________________</b></div></section>
+        <h2>Peças selecionadas</h2><table><thead><tr><th>Qtd.</th><th>Peça / marca</th><th>Fornecedor</th><th>Código</th><th>Custo cotado</th><th>Margem</th><th>Venda</th></tr></thead><tbody>${partsRows}</tbody></table>
+        <h2>Serviços e mão de obra</h2><table><thead><tr><th>Qtd.</th><th>Serviço / mão de obra</th><th>Valor unit.</th><th>Total</th><th>Observação</th></tr></thead><tbody>${laborTableRows}</tbody></table>
+        <p class="note"><b>Observações:</b><br/><br/><br/></p><footer class="sign"><span>Responsável pela cotação</span><span>Conferência</span></footer></main><script>window.onload=()=>window.print()</script></body></html>`);
+      printWindow.document.close();
+    },
     geometrySharedState = (
       nextAppointments: Appt[],
       nextGeometryDrafts: StandaloneGeometryReport[],
@@ -3077,6 +3138,18 @@ export default function App({ initialState, user, onLogout }: any) {
                       Total <em>{brl(total)}</em>
                     </strong>
                   </div>
+                  <div className="manual-quote-print">
+                    <span>
+                      <b>Cotação manual</b>
+                      <small>
+                        Imprima as peças e a mão de obra para preencher valores, fornecedor e código à mão.
+                      </small>
+                    </span>
+                    <button type="button" onClick={printManualQuoteWorksheet}>
+                      🖨 Imprimir folha para cotação
+                    </button>
+                  </div>
+                  <style>{`.manual-quote-print{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:14px 0;padding:12px 14px;border:1px solid #b9cde5;border-radius:10px;background:#f4f8fd}.manual-quote-print span{display:grid;gap:3px}.manual-quote-print b{color:#172b44;font-size:13px}.manual-quote-print small{color:#526274;font-size:11px}.manual-quote-print button{border:0;border-radius:8px;padding:10px 12px;background:#172b44;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;cursor:pointer}.app.dark .manual-quote-print{background:#172231;border-color:#40536a}.app.dark .manual-quote-print b{color:#fff}@media(max-width:650px){.manual-quote-print{align-items:stretch;flex-direction:column}.manual-quote-print button{width:100%}}`}</style>
                   <Actions
                     back={() => {
                       if (activeAppointment) {
