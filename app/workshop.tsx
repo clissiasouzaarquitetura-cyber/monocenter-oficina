@@ -7490,7 +7490,7 @@ function ManualQuotePrintSheet({
         .manual-quote-print-sheet{display:none}
         @media print{
           body.print-manual-quote .app>aside,body.print-manual-quote main>header,body.print-manual-quote main>*{display:none!important}
-          body.print-manual-quote main>.manual-quote-print-sheet{display:block!important;position:relative;min-height:277mm;box-sizing:border-box;padding-bottom:24mm;font-family:Arial,sans-serif;color:#172033}
+          body.print-manual-quote main>.manual-quote-print-sheet{display:flex!important;min-height:277mm;box-sizing:border-box;flex-direction:column;font-family:Arial,sans-serif;color:#172033}
           body.print-manual-quote .manual-quote-sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-bottom:3px solid #111c29;padding:0 0 6px}
           body.print-manual-quote .manual-quote-sheet-head img{width:125px;height:auto}
           body.print-manual-quote .manual-quote-sheet-head>div{display:grid;justify-items:end;gap:3px;font-size:11px}
@@ -7504,15 +7504,17 @@ function ManualQuotePrintSheet({
           body.print-manual-quote .manual-quote-client-band span{color:#718096;font-size:10px}
           body.print-manual-quote .manual-quote-sheet-badge{display:inline-block;margin-top:10px;padding:4px 8px;background:#f6cf2d;color:#172033;font-size:10px;font-weight:900;letter-spacing:.05em}
           body.print-manual-quote .manual-quote-print-sheet h2{margin:17px 0 7px;font-size:13px;color:#172b44;text-transform:uppercase}
-          body.print-manual-quote .manual-quote-print-sheet table{width:100%;border-collapse:collapse;font-size:10px}
+          body.print-manual-quote .manual-quote-print-sheet table{width:100%;border-collapse:collapse;font-size:10px;break-inside:auto;page-break-inside:auto}
           body.print-manual-quote .manual-quote-print-sheet th{padding:7px 5px;background:#172b44!important;color:#fff!important;text-align:left}
           body.print-manual-quote .manual-quote-print-sheet td{height:28px;padding:5px;border:1px solid #bfc9d5;vertical-align:top}
+          body.print-manual-quote .manual-quote-print-sheet thead{display:table-header-group}
+          body.print-manual-quote .manual-quote-print-sheet tr{break-inside:avoid;page-break-inside:avoid}
           body.print-manual-quote .manual-quote-print-sheet td small{display:block;margin-top:2px;color:#64748b}
           body.print-manual-quote .manual-quote-empty{text-align:center;color:#64748b;font-style:italic}
           body.print-manual-quote .manual-quote-note{margin-top:14px;padding:8px;border:1px solid #cfd8e3;border-radius:4px;font-size:10px}
           body.print-manual-quote .manual-quote-writing-lines{display:grid;gap:8px;margin-top:7px}
           body.print-manual-quote .manual-quote-writing-lines span{display:block;border-bottom:1px solid #9eabb9;height:12px}
-          body.print-manual-quote .manual-quote-sign{position:absolute;right:0;bottom:0;left:0;display:grid;grid-template-columns:1fr 1fr;gap:35px;font-size:10px;text-align:center}
+          body.print-manual-quote .manual-quote-sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:auto;padding-top:18px;font-size:10px;text-align:center;break-inside:avoid;page-break-inside:avoid}
           body.print-manual-quote .manual-quote-sign span{border-top:1px solid #172033;padding-top:5px}
           @page{size:A4 portrait;margin:10mm}
         }
