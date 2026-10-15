@@ -7471,6 +7471,7 @@ function ManualQuotePrintSheet({
   const quoteParts = (parts ?? []).filter(
       (part: any) => String(part.item ?? "").trim() && Number(part.qty) > 0,
     ),
+    printDate = new Date().toLocaleDateString("pt-BR"),
     labor = [
       ...(selectedServices ?? []).map((index: number) => ({
         name: SERVICES[index]?.[0] ?? "Serviço",
@@ -7490,15 +7491,18 @@ function ManualQuotePrintSheet({
         @media print{
           body.print-manual-quote .app>aside,body.print-manual-quote main>header,body.print-manual-quote main>*{display:none!important}
           body.print-manual-quote main>.manual-quote-print-sheet{display:block!important;position:relative;min-height:277mm;box-sizing:border-box;padding-bottom:24mm;font-family:Arial,sans-serif;color:#172033}
-          body.print-manual-quote .manual-quote-sheet-head{display:flex;align-items:center;gap:14px;border-bottom:3px solid #d71920;padding-bottom:10px}
-          body.print-manual-quote .manual-quote-sheet-head img{width:145px;height:auto}
-          body.print-manual-quote .manual-quote-sheet-head h1{margin:0;font-size:18px}
-          body.print-manual-quote .manual-quote-sheet-head p{margin:3px 0 0;color:#526274;font-size:10px}
-          body.print-manual-quote .manual-quote-sheet-badge{display:inline-block;margin-top:6px;padding:4px 8px;background:#f6cf2d;color:#172033;font-size:10px;font-weight:900;letter-spacing:.05em}
-          body.print-manual-quote .manual-quote-sheet-meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:14px 0}
-          body.print-manual-quote .manual-quote-sheet-meta div{border:1px solid #cfd8e3;padding:7px;border-radius:4px;font-size:11px}
-          body.print-manual-quote .manual-quote-sheet-meta small{display:block;color:#64748b;font-weight:700}
-          body.print-manual-quote .manual-quote-sheet-meta b{font-size:12px}
+          body.print-manual-quote .manual-quote-sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-bottom:3px solid #111c29;padding:0 0 6px}
+          body.print-manual-quote .manual-quote-sheet-head img{width:125px;height:auto}
+          body.print-manual-quote .manual-quote-sheet-head>div{display:grid;justify-items:end;gap:3px;font-size:11px}
+          body.print-manual-quote .manual-quote-sheet-head small{font-weight:700}
+          body.print-manual-quote .manual-quote-sheet-head b{border-bottom:1px solid #172b44;padding-bottom:1px;color:#172b44;font-size:13px}
+          body.print-manual-quote .manual-quote-client-band{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:14px;padding:12px;background:#f3f5f7}
+          body.print-manual-quote .manual-quote-client-band>div{display:grid;gap:4px}
+          body.print-manual-quote .manual-quote-client-band>div:last-child{justify-items:start}
+          body.print-manual-quote .manual-quote-client-band small{color:#718096;font-size:10px}
+          body.print-manual-quote .manual-quote-client-band b{font-size:12px}
+          body.print-manual-quote .manual-quote-client-band span{color:#718096;font-size:10px}
+          body.print-manual-quote .manual-quote-sheet-badge{display:inline-block;margin-top:10px;padding:4px 8px;background:#f6cf2d;color:#172033;font-size:10px;font-weight:900;letter-spacing:.05em}
           body.print-manual-quote .manual-quote-print-sheet h2{margin:17px 0 7px;font-size:13px;color:#172b44;text-transform:uppercase}
           body.print-manual-quote .manual-quote-print-sheet table{width:100%;border-collapse:collapse;font-size:10px}
           body.print-manual-quote .manual-quote-print-sheet th{padding:7px 5px;background:#172b44!important;color:#fff!important;text-align:left}
@@ -7516,17 +7520,15 @@ function ManualQuotePrintSheet({
       <header className="manual-quote-sheet-head">
         <img src="/logo-monocenter.jpg" alt="Monocenter" />
         <div>
-          <h1>MONOCENTER ALINHAMENTO TÉCNICO</h1>
-          <p>Av. Itavuvu, 5341 — sentido Centro · Sorocaba/SP</p>
-          <strong className="manual-quote-sheet-badge">ORÇAMENTO PARA COTAÇÃO</strong>
+          <small>{printDate}</small>
+          <b>{appointment?.plate || "SEM PLACA"}</b>
         </div>
       </header>
-      <section className="manual-quote-sheet-meta">
-        <div><small>CLIENTE</small><b>{appointment?.client || "Não informado"}</b></div>
-        <div><small>VEÍCULO / PLACA</small><b>{appointment?.vehicle || "Não informado"}{appointment?.plate ? ` · ${appointment.plate}` : ""}</b></div>
-        <div><small>DATA DA COTAÇÃO</small><b>____/____/________</b></div>
-        <div><small>CONTATO</small><b>{appointment?.phone || "_______________________________"}</b></div>
+      <section className="manual-quote-client-band">
+        <div><small>CLIENTE</small><b>{appointment?.client || "Não informado"}</b><span>{appointment?.phone || "Telefone não informado"}</span></div>
+        <div><small>VEÍCULO</small><b>{appointment?.vehicle || "Não informado"}</b><span>Km {appointment?.km || "não informado"}</span></div>
       </section>
+      <strong className="manual-quote-sheet-badge">ORÇAMENTO PARA COTAÇÃO</strong>
       <h2>Peças selecionadas</h2>
       <table>
         <thead><tr><th>Qtd.</th><th>Peça / marca</th><th>Fornecedor</th><th>Código</th><th>Custo cotado</th><th>Venda</th></tr></thead>
