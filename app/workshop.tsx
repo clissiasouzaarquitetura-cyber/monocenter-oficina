@@ -774,6 +774,15 @@ export default function App({ initialState, user, onLogout }: any) {
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
+    [printPalette, setPrintPalette] = useState<"pastel" | "gray" | "mono">(
+      () =>
+        typeof window !== "undefined" &&
+        ["pastel", "gray", "mono"].includes(
+          localStorage.getItem("monocenter:print-palette") || "",
+        )
+          ? (localStorage.getItem("monocenter:print-palette") as "pastel" | "gray" | "mono")
+          : "pastel",
+    ),
     [statusColors, setStatusColors] = useState<Record<string, string>>({
       ...STATUS_COLOR_DEFAULTS,
       ...(shared.statusColors ?? {}),
@@ -857,6 +866,9 @@ export default function App({ initialState, user, onLogout }: any) {
   useEffect(() => {
     localStorage.setItem("monocenter-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
+  useEffect(() => {
+    localStorage.setItem("monocenter:print-palette", printPalette);
+  }, [printPalette]);
   useEffect(() => setViewRestored(true), []);
   useEffect(() => {
     if (viewRestored && RESTORABLE_VIEWS.has(view))
@@ -1375,16 +1387,20 @@ export default function App({ initialState, user, onLogout }: any) {
       scrollTo(0, 0);
     },
     printStage = (kind: string) => {
-      document.body.classList.add("print-" + kind);
+      document.body.classList.add("print-" + kind, "print-palette-" + printPalette);
       window.print();
-      setTimeout(() => document.body.classList.remove("print-" + kind), 500);
+      setTimeout(() => {
+        document.body.classList.remove("print-" + kind);
+        document.body.classList.remove("print-palette-" + printPalette);
+      }, 500);
     },
     printNoValues = (kind: string) => {
-      document.body.classList.add("print-" + kind, "no-values");
+      document.body.classList.add("print-" + kind, "no-values", "print-palette-" + printPalette);
       window.print();
       setTimeout(() => {
         document.body.classList.remove("print-" + kind);
         document.body.classList.remove("no-values");
+        document.body.classList.remove("print-palette-" + printPalette);
       }, 500);
     },
     printManualQuoteWorksheet = () => {
@@ -1977,6 +1993,8 @@ export default function App({ initialState, user, onLogout }: any) {
                 view={view}
                 status={processStatus}
                 setStatus={setProcessStatus}
+                printPalette={printPalette}
+                setPrintPalette={setPrintPalette}
                 printNoValues={printNoValues}
                 printStage={printStage}
                 exit={() => {
@@ -4715,6 +4733,8 @@ function StageActions({
   view,
   status,
   setStatus,
+  printPalette,
+  setPrintPalette,
   printNoValues,
   printStage,
   exit,
@@ -4747,6 +4767,7 @@ function StageActions({
   }[view as string];
   return (
     <div className="stageactions">
+      <style>{`.stageactions .print-palette-choice{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.stageactions .print-palette-choice select{min-width:150px;padding:7px 9px;border:1px solid #b9c5d2;border-radius:7px;background:#fff;color:#172033;font-weight:800}`}</style>
       <b>{label}</b>
       <label>
         Status da OS
@@ -4780,9 +4801,19 @@ function StageActions({
       </div>
       <button onClick={() => printStage(view)}>Imprimir relatório A4</button>
       {["orcamento", "proposta"].includes(view) && (
-        <button onClick={() => printNoValues(view)}>
-          Imprimir sem valores - pátio
-        </button>
+        <>
+          <label className="print-palette-choice">
+            Cor da impressão
+            <select value={printPalette} onChange={(event) => setPrintPalette(event.target.value)}>
+              <option value="pastel">Pastel econômico</option>
+              <option value="gray">Cinza econômico</option>
+              <option value="mono">Preto e branco</option>
+            </select>
+          </label>
+          <button onClick={() => printNoValues(view)}>
+            Imprimir sem valores - pátio
+          </button>
+        </>
       )}
       {savedAt && <small>Último salvamento: {savedAt}</small>}
     </div>
@@ -7583,6 +7614,50 @@ function PrintDocuments({
             : "Não avaliado";
   return (
     <div className="print-documents">
+      <style>{`
+        @media print{
+          /* A escolha de cor é aplicada apenas às folhas de orçamento/pátio. */
+          body.print-palette-pastel .print-documents .budget-a4 .a4-head,
+          body.print-palette-pastel .print-documents .proposal-a4 .a4-head{background:#edf3f8!important;border-color:#b8c9d9!important;color:#203448!important}
+          body.print-palette-pastel .print-documents .budget-a4 .a4-head *,
+          body.print-palette-pastel .print-documents .proposal-a4 .a4-head *{color:#203448!important}
+          body.print-palette-pastel .print-documents .budget-a4 h3,
+          body.print-palette-pastel .print-documents .proposal-a4 h3{background:#fbe6e7!important;color:#8b2730!important;border-color:#e7bdc2!important}
+          body.print-palette-pastel .print-documents .budget-a4 .a4-client,
+          body.print-palette-pastel .print-documents .proposal-a4 .a4-client{background:#f6f8fa!important}
+          body.print-palette-pastel .print-documents .budget-a4 .a4-line,
+          body.print-palette-pastel .print-documents .proposal-a4 .a4-line{background:#fbfcfd!important;border-color:#d3dce5!important}
+          body.print-palette-pastel .print-documents .budget-a4 .print-summary,
+          body.print-palette-pastel .print-documents .proposal-a4 .print-summary{background:#f2f5f8!important}
+          body.print-palette-pastel .print-documents .budget-a4 .print-summary strong,
+          body.print-palette-pastel .print-documents .proposal-a4 .print-summary strong{background:#f9dfe2!important;color:#7e2029!important}
+          body.print-palette-pastel .print-documents .budget-a4 .print-notes,
+          body.print-palette-pastel .print-documents .proposal-a4 .print-notes{background:#fffdf4!important;border-color:#e8dcc3!important}
+          body.print-palette-pastel .print-documents .print-approval-banner{background:#e6f3e9!important;color:#276443!important;border-color:#b7d8c0!important}
+
+          body.print-palette-gray .print-documents .budget-a4 .a4-head,
+          body.print-palette-gray .print-documents .proposal-a4 .a4-head,
+          body.print-palette-gray .print-documents .budget-a4 h3,
+          body.print-palette-gray .print-documents .proposal-a4 h3{background:#edf0f2!important;color:#27313a!important;border-color:#c7cdd2!important}
+          body.print-palette-gray .print-documents .budget-a4 .a4-line,
+          body.print-palette-gray .print-documents .proposal-a4 .a4-line,
+          body.print-palette-gray .print-documents .budget-a4 .a4-client,
+          body.print-palette-gray .print-documents .proposal-a4 .a4-client,
+          body.print-palette-gray .print-documents .budget-a4 .print-summary,
+          body.print-palette-gray .print-documents .proposal-a4 .print-summary,
+          body.print-palette-gray .print-documents .budget-a4 .print-notes,
+          body.print-palette-gray .print-documents .proposal-a4 .print-notes{background:#fafafa!important;border-color:#d4d7da!important;color:#27313a!important}
+          body.print-palette-gray .print-documents .budget-a4 .print-summary strong,
+          body.print-palette-gray .print-documents .proposal-a4 .print-summary strong{background:#e6e9ec!important;color:#1f2933!important}
+
+          body.print-palette-mono .print-documents .budget-a4 *,
+          body.print-palette-mono .print-documents .proposal-a4 *{background:#fff!important;color:#111!important;border-color:#777!important;box-shadow:none!important}
+          body.print-palette-mono .print-documents .budget-a4 .a4-head img,
+          body.print-palette-mono .print-documents .proposal-a4 .a4-head img{filter:grayscale(1)!important}
+          body.print-palette-mono .print-documents .budget-a4 h3,
+          body.print-palette-mono .print-documents .proposal-a4 h3{border-left:3px solid #111!important}
+        }
+      `}</style>
       <section className="a4 evaluation-a4">
         <PrintHead title="RELATÓRIO DE AVALIAÇÃO VEICULAR" />
         <div className="a4-client">
