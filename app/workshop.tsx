@@ -332,6 +332,19 @@ type InternalBudgetReview = {
   confirmedAt: string;
   confirmedBy: string;
 };
+type VehicleEntryChecklist = {
+  startedAt?: string;
+  completedAt?: string;
+  completedBy?: string;
+  skipped?: boolean;
+  skippedAt?: string;
+  skippedBy?: string;
+  photos: Record<string, { data: string; capturedAt: string }>;
+  protections: { steering: boolean; seat: boolean; gear: boolean };
+  lights: { front: boolean; rear: boolean; turnSignal: boolean };
+  wipers: "ok" | "attention" | "replace" | "";
+  notes: string;
+};
 type BudgetState = {
   parts: any[];
   selectedServices: number[];
@@ -486,6 +499,7 @@ type Appt = {
   statusBeforeNoShow?: Appt["status"];
   inProgressBeforeNoShow?: boolean;
   geometryReport?: GeometryReportData;
+  entryChecklist?: VehicleEntryChecklist;
   noShowMarkedBy?: string;
   noShowMarkedAt?: string;
   _updatedAt?: number;
@@ -771,6 +785,7 @@ export default function App({ initialState, user, onLogout }: any) {
     [modal, setModal] = useState<Appt | boolean>(false),
     [evaluationEntry, setEvaluationEntry] = useState<Appt | null>(null),
     [attendancePreview, setAttendancePreview] = useState<Appt | null>(null),
+    [vehicleEntryChecklist, setVehicleEntryChecklist] = useState<Appt | null>(null),
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
@@ -3665,6 +3680,7 @@ export default function App({ initialState, user, onLogout }: any) {
                               a.id === updated.id ? updated : a,
                             ),
                           );
+                          setVehicleEntryChecklist(updated);
                         }
                         setProcessStatus("Em andamento");
                         setSavedAt(
@@ -3790,8 +3806,10 @@ export default function App({ initialState, user, onLogout }: any) {
                             minute: "2-digit",
                           }),
                         );
-                        setView("agenda");
-                        scrollTo(0, 0);
+                        if (!activeAppointment) {
+                          setView("agenda");
+                          scrollTo(0, 0);
+                        }
                       }}
                     >
                       Aprovar e salvar serviço
@@ -4467,6 +4485,27 @@ export default function App({ initialState, user, onLogout }: any) {
             }
             roundStep={roundStep}
             close={() => setAttendancePreview(null)}
+          />
+        )}
+        {vehicleEntryChecklist && (
+          <VehicleEntryChecklistModal
+            appointment={vehicleEntryChecklist}
+            currentUser={user.displayName}
+            close={() => {
+              setVehicleEntryChecklist(null);
+              setView("agenda");
+              scrollTo(0, 0);
+            }}
+            save={(entryChecklist: VehicleEntryChecklist) => {
+              const now = new Date().toISOString();
+              const updated = { ...vehicleEntryChecklist, entryChecklist, lastEditedBy: user.displayName, lastEditedAt: now, _updatedAt: Date.now() };
+              DISPLAY_APPT = updated;
+              setActiveAppointment((current) => current?.id === updated.id ? updated : current);
+              setAppointments((list) => list.map((item) => item.id === updated.id ? updated : item));
+              setVehicleEntryChecklist(null);
+              setView("agenda");
+              scrollTo(0, 0);
+            }}
           />
         )}
         {evaluationEntry && (
@@ -7465,6 +7504,67 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
           <button className="primary">Salvar agendamento</button>
         </footer>
       </form>
+    </div>
+  );
+}
+const ENTRY_PHOTOS: Array<[string, string]> = [
+  ["front", "Frente do veículo"], ["rear", "Traseira do veículo"],
+  ["leftSide", "Lateral esquerda"], ["rightSide", "Lateral direita"],
+  ["wheelFL", "Roda dianteira esquerda"], ["wheelFR", "Roda dianteira direita"],
+  ["wheelRL", "Roda traseira esquerda"], ["wheelRR", "Roda traseira direita"],
+  ["panel", "Painel interno ligado"], ["trunk", "Porta-malas e estepe"],
+  ["frontLights", "Luzes dianteiras"], ["rearLights", "Luzes traseiras"], ["turnSignal", "Seta funcionando"],
+];
+const emptyEntryChecklist = (): VehicleEntryChecklist => ({
+  startedAt: new Date().toISOString(), photos: {},
+  protections: { steering: false, seat: false, gear: false },
+  lights: { front: false, rear: false, turnSignal: false },
+  wipers: "", notes: "",
+});
+function VehicleEntryChecklistModal({ appointment, currentUser, close, save }: any) {
+  const existing = appointment.entryChecklist as VehicleEntryChecklist | undefined,
+    [started, setStarted] = useState(!!existing?.startedAt && !existing.skipped),
+    [draft, setDraft] = useState<VehicleEntryChecklist>(() => existing ?? emptyEntryChecklist()),
+    [copied, setCopied] = useState(false),
+    formatTime = (value?: string) => value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Não registrada",
+    addPhoto = (key: string, file?: File) => {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => setDraft((current) => ({ ...current, photos: { ...current.photos, [key]: { data: String(reader.result), capturedAt: new Date().toISOString() } } }));
+      reader.readAsDataURL(file);
+    },
+    saveChecklist = () => save({ ...draft, skipped: false, completedAt: new Date().toISOString(), completedBy: currentUser }),
+    skipChecklist = () => save({ ...draft, skipped: true, skippedAt: new Date().toISOString(), skippedBy: currentUser }),
+    reportStatus = draft.notes.trim() ? "Com observação" : "Sem observações registradas",
+    whatsapp = String(appointment.phone || "").replace(/\D/g, ""),
+    whatsappNumber = whatsapp.length >= 10 && whatsapp.length <= 11 ? `55${whatsapp}` : whatsapp;
+  return (
+    <div className="backdrop entry-checklist-backdrop">
+      <div className="modal entry-checklist-modal">
+        <style>{`
+          .entry-checklist-modal{width:min(1120px,calc(100vw - 34px));max-width:1120px;max-height:calc(100vh - 30px);overflow:auto;padding:0}.entry-checklist-modal>header{position:sticky;z-index:3;top:0;display:flex;justify-content:space-between;gap:16px;padding:17px 20px;border-bottom:4px solid #df1823;background:#111d2b;color:#fff}.entry-checklist-modal h2{margin:0;font-size:21px}.entry-checklist-modal header p{margin:4px 0 0;color:#d9e3ed;font-size:12px}.entry-checklist-modal header button{border:0;background:transparent;color:#fff;font-size:28px;cursor:pointer}.entry-checklist-intro{padding:24px}.entry-checklist-intro p{line-height:1.55;color:#4a5b6e}.entry-checklist-intro aside{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0;padding:14px;border-radius:11px;background:#f4f7fa}.entry-checklist-intro aside span{display:grid;gap:3px;font-size:12px}.entry-checklist-intro aside b{font-size:13px}.entry-checklist-intro footer,.entry-checklist-footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:20px}.entry-checklist-intro button,.entry-checklist-footer button{border:1px solid #bac6d4;border-radius:8px;padding:10px 13px;background:#fff;font-weight:900;cursor:pointer}.entry-checklist-intro .primary,.entry-checklist-footer .primary{border-color:#16864b;background:#16864b;color:#fff}.entry-checklist-intro .skip{color:#8b2730}.entry-checklist-form{padding:18px 20px 22px}.entry-checklist-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}.entry-checklist-summary span{display:grid;gap:3px;padding:9px 10px;border:1px solid #d8e0e8;border-radius:8px;background:#f8fafc;font-size:12px}.entry-checklist-summary small{color:#64748b;font-size:9px;font-weight:900}.entry-checklist-summary b{overflow-wrap:anywhere}.entry-checklist-section{margin-top:14px;border:1px solid #d8e0e8;border-radius:11px;overflow:hidden}.entry-checklist-section>h3{margin:0;padding:10px 12px;background:#eef3f8;color:#172b44;font-size:14px}.entry-checklist-section>p{margin:0;padding:8px 12px;color:#64748b;font-size:11px}.entry-photo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:12px}.entry-photo{display:grid;gap:6px;min-width:0;padding:8px;border:1px solid #d4dde7;border-radius:9px;background:#fff}.entry-photo b{font-size:11px;line-height:1.2}.entry-photo figure{display:grid;place-items:center;min-height:108px;margin:0;border:1px dashed #aebccb;border-radius:6px;background:#f7f9fb;overflow:hidden}.entry-photo figure img{display:block;width:100%;height:108px;object-fit:cover}.entry-photo small{color:#617084;font-size:9px;line-height:1.2}.entry-photo input{width:100%;font-size:10px}.entry-checks{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;padding:12px}.entry-protections,.entry-lights,.entry-wipers{display:grid;gap:8px}.entry-protections label,.entry-lights label{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid #d8e0e8;border-radius:7px;font-size:12px;font-weight:800}.entry-protections input,.entry-lights input{width:17px;height:17px}.entry-wipers>span{font-size:12px;font-weight:900}.entry-wiper-options{display:flex;flex-wrap:wrap;gap:8px}.entry-wiper-options label{display:flex;align-items:center;gap:5px;padding:7px 9px;border:1px solid #d8e0e8;border-radius:7px;font-size:11px;font-weight:900}.entry-wiper-options .ok{background:#e8f7ed;color:#08783b}.entry-wiper-options .attention{background:#fff7d7;color:#8a6200}.entry-wiper-options .replace{background:#ffe8ea;color:#b3131b}.entry-notes{display:grid;gap:7px;padding:12px}.entry-notes textarea{min-height:78px;padding:9px;border:1px solid #b8c5d3;border-radius:8px;font:inherit;resize:vertical}.entry-checklist-status{padding:8px 10px;border-radius:7px;font-size:12px;font-weight:900}.entry-checklist-status.ok{background:#e8f7ed;color:#08783b}.entry-checklist-status.attention{background:#fff7d7;color:#8a6200}.entry-checklist-print-sheet{display:none}@media(max-width:800px){.entry-photo-grid{grid-template-columns:repeat(2,1fr)}.entry-checklist-summary,.entry-checks{grid-template-columns:1fr 1fr}}@media print{body.print-entry-checklist .app>aside,body.print-entry-checklist main>header{display:none!important}body.print-entry-checklist main>*:not(.entry-checklist-backdrop):not(style){display:none!important}body.print-entry-checklist .entry-checklist-backdrop{position:static!important;display:block!important;padding:0!important;background:#fff!important}body.print-entry-checklist .entry-checklist-modal{width:0!important;max-width:none!important;max-height:none!important;overflow:visible!important;border:0!important;box-shadow:none!important}body.print-entry-checklist .entry-checklist-modal>*:not(.entry-checklist-print-sheet):not(style){display:none!important}body.print-entry-checklist .entry-checklist-print-sheet{display:block!important;position:fixed!important;inset:0!important;width:210mm!important;height:297mm!important;box-sizing:border-box;padding:8mm!important;background:#fff!important;color:#111!important;font-family:Arial,sans-serif;overflow:hidden!important}.entry-checklist-print-sheet *{box-sizing:border-box}.entry-checklist-print-head{display:flex;justify-content:space-between;gap:8mm;padding-bottom:3mm;border-bottom:1mm solid #df1823}.entry-checklist-print-head h1{margin:0;font-size:16pt}.entry-checklist-print-head p{margin:1mm 0 0;font-size:8pt}.entry-checklist-print-status{align-self:start;padding:2mm 3mm;border-radius:2mm;font-size:8pt;font-weight:900}.entry-checklist-print-status.ok{background:#e8f7ed!important;color:#08783b!important}.entry-checklist-print-status.attention{background:#fff7d7!important;color:#8a6200!important}.entry-checklist-print-data{display:grid;grid-template-columns:repeat(3,1fr);gap:2mm;margin:3mm 0}.entry-checklist-print-data span{padding:2mm;border:.25mm solid #cbd5df;font-size:7pt}.entry-checklist-print-data b{display:block;margin-bottom:.5mm;font-size:6pt;color:#526274}.entry-checklist-print-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:2mm}.entry-checklist-print-photo{height:27mm;overflow:hidden;border:.25mm solid #cbd5df}.entry-checklist-print-photo img{width:100%;height:20mm;object-fit:cover}.entry-checklist-print-photo b,.entry-checklist-print-photo small{display:block;padding:0 1.4mm;font-size:5.6pt;line-height:1.2}.entry-checklist-print-checks{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-top:3mm;padding:2mm;border:.25mm solid #cbd5df;font-size:7pt}.entry-checklist-print-checks p{margin:0 0 1mm}.entry-checklist-print-notes{margin-top:3mm;padding:2mm;border:.25mm solid #cbd5df;font-size:7pt;min-height:18mm}.entry-checklist-print-notes b{display:block;margin-bottom:1mm}.entry-checklist-print-footer{position:absolute;right:8mm;bottom:7mm;left:8mm;border-top:.25mm solid #cbd5df;padding-top:1.5mm;color:#526274;font-size:6pt;text-align:center}}
+        `}</style>
+        {!started ? <>
+          <header><span><h2>Checklist de entrada do veículo</h2><p>Serviço aprovado — escolha se fará a conferência de entrada agora.</p></span><button onClick={close}>×</button></header>
+          <section className="entry-checklist-intro"><p>O checklist registra o estado do veículo antes do serviço, com fotos datadas e orientação para proteger o interior. O relatório poderá ser salvo em PDF e enviado ao cliente.</p><aside><span><b>Fotos externas</b>Frente, traseira, laterais e quatro rodas.</span><span><b>Conferência</b>Luzes, seta, palhetas e estepe.</span><span><b>Proteção</b>Volante, banco e câmbio.</span></aside><footer><button className="skip" onClick={skipChecklist}>Não fazer agora</button><button className="primary" onClick={() => setStarted(true)}>Sim, fazer checklist de entrada</button></footer></section>
+        </> : <>
+          <header><span><h2>Checklist de entrada do veículo</h2><p>As fotos recebem automaticamente a data e o horário do registro.</p></span><button onClick={close}>×</button></header>
+          <section className="entry-checklist-form">
+            <div className="entry-checklist-summary"><span><small>CLIENTE</small><b>{appointment.client}</b></span><span><small>VEÍCULO</small><b>{appointment.vehicle || "Não informado"}</b></span><span><small>PLACA</small><b>{appointment.plate || "Não informada"}</b></span><span><small>RESPONSÁVEL</small><b>{currentUser}</b></span></div>
+            <section className="entry-checklist-section"><h3>1. Fotos do veículo</h3><p>Inclua as imagens solicitadas. Cada registro exibe data e hora no relatório.</p><div className="entry-photo-grid">{ENTRY_PHOTOS.map(([key,label]) => { const photo=draft.photos[key]; return <label className="entry-photo" key={key}><b>{label}</b><figure>{photo ? <img src={photo.data} alt={label}/> : <span>Adicionar foto</span>}</figure><small>{photo ? `Registrada: ${formatTime(photo.capturedAt)}` : "Ainda não registrada"}</small><input type="file" accept="image/*" onChange={(event)=>addPhoto(key,event.target.files?.[0])}/></label>; })}</div></section>
+            <section className="entry-checklist-section"><h3>2. Conferências e proteção</h3><div className="entry-checks"><div className="entry-protections"><b>Proteções internas aplicadas</b>{([['steering','Proteger o volante'],['seat','Proteger o banco'],['gear','Proteger o câmbio']] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={draft.protections[key]} onChange={(event)=>setDraft({...draft,protections:{...draft.protections,[key]:event.target.checked}})}/>{label}</label>)}</div><div className="entry-lights"><b>Funcionamento verificado</b>{([['front','Luzes dianteiras'],['rear','Luzes traseiras'],['turnSignal','Seta']] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={draft.lights[key]} onChange={(event)=>setDraft({...draft,lights:{...draft.lights,[key]:event.target.checked}})}/>{label} — foto na seção anterior</label>)}<div className="entry-wipers"><span>Condição das palhetas</span><div className="entry-wiper-options">{([['ok','Verde · OK'],['attention','Amarelo · atenção'],['replace','Vermelho · substituir']] as const).map(([value,label])=><label className={value} key={value}><input type="radio" name="wipers" checked={draft.wipers===value} onChange={()=>setDraft({...draft,wipers:value})}/>{label}</label>)}</div></div></div></div></section>
+            <section className="entry-checklist-section"><h3>3. Lataria e observações</h3><div className="entry-notes"><div className={`entry-checklist-status ${draft.notes.trim() ? 'attention' : 'ok'}`}>{draft.notes.trim() ? '⚠ Há observação registrada — aparecerá em amarelo no relatório.' : '✓ Sem observações — o relatório sairá com confirmação verde.'}</div><textarea value={draft.notes} onChange={(event)=>setDraft({...draft,notes:event.target.value})} placeholder="Descreva riscos, marcas na lataria ou qualquer observação encontrada na entrada."/></div></section>
+            <footer className="entry-checklist-footer"><button onClick={()=>printWithTemporaryPage('print-entry-checklist','size:A4 portrait;margin:0')}>Imprimir / salvar PDF</button>{whatsappNumber && <button onClick={async()=>{await navigator.clipboard.writeText(`Olá, ${appointment.client}! Segue o checklist de entrada do seu veículo ${appointment.vehicle || ''}, placa ${appointment.plate || ''}.`);setCopied(true);window.open(`https://wa.me/${whatsappNumber}`,'_blank','noopener,noreferrer')}}>{copied ? 'Mensagem copiada ✓' : 'Abrir WhatsApp para enviar PDF'}</button>}<button className="primary" onClick={saveChecklist}>Salvar checklist e continuar</button></footer>
+          </section>
+        </>}
+        <article className="entry-checklist-print-sheet">
+          <header className="entry-checklist-print-head"><div><h1>MONOCENTER ALINHAMENTO TÉCNICO</h1><p>CHECKLIST DE ENTRADA DO VEÍCULO · {formatTime(draft.completedAt || draft.startedAt)}</p></div><span className={`entry-checklist-print-status ${draft.notes.trim() ? 'attention' : 'ok'}`}>{reportStatus}</span></header>
+          <section className="entry-checklist-print-data"><span><b>CLIENTE</b>{appointment.client}</span><span><b>VEÍCULO / PLACA</b>{appointment.vehicle || 'Não informado'} · {appointment.plate || 'Não informada'}</span><span><b>RESPONSÁVEL</b>{draft.completedBy || currentUser}</span></section>
+          <section className="entry-checklist-print-photos">{ENTRY_PHOTOS.map(([key,label])=>{const photo=draft.photos[key];return <div className="entry-checklist-print-photo" key={key}>{photo ? <img src={photo.data} alt=""/> : <div/>}<b>{label}</b><small>{photo ? formatTime(photo.capturedAt) : 'Foto não registrada'}</small></div>})}</section>
+          <section className="entry-checklist-print-checks"><div><p><b>PROTEÇÕES</b></p><p>{draft.protections.steering ? '✓' : '○'} Volante · {draft.protections.seat ? '✓' : '○'} Banco · {draft.protections.gear ? '✓' : '○'} Câmbio</p><p><b>PALHETAS:</b> {draft.wipers === 'ok' ? '✓ Verde — OK' : draft.wipers === 'attention' ? '⚠ Amarelo — atenção' : draft.wipers === 'replace' ? '✕ Vermelho — substituir' : 'Não verificado'}</p></div><div><p><b>ILUMINAÇÃO</b></p><p>{draft.lights.front ? '✓' : '○'} Luzes dianteiras · {draft.lights.rear ? '✓' : '○'} Luzes traseiras</p><p>{draft.lights.turnSignal ? '✓' : '○'} Seta funcionando</p></div></section>
+          <section className="entry-checklist-print-notes"><b>OBSERVAÇÕES DE ENTRADA</b>{draft.notes.trim() || '✓ Nenhuma observação de lataria registrada na entrada.'}</section><footer className="entry-checklist-print-footer">Monocenter Alinhamento Técnico · Av. Itavuvu, 5341 · Sorocaba/SP</footer>
+        </article>
+      </div>
     </div>
   );
 }
@@ -11039,7 +11139,7 @@ function Reports({
           <>
           <div className="open-quotes-print-sheet" aria-hidden="true">
             <div className="open-quotes-print-header">
-              <span><b>MONOCENTER</b><small>Centro Automotivo</small></span>
+              <span><b>MONOCENTER</b><small>Alinhamento Técnico</small></span>
               <div>
                 <h1>Orçamentos em aberto</h1>
                 <p>{quotePrintPeriodLabel} · Emitido em {new Date().toLocaleDateString("pt-BR")}</p>
