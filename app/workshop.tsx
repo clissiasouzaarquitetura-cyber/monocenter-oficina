@@ -1968,12 +1968,8 @@ export default function App({ initialState, user, onLogout }: any) {
             />
           </section>
         )}
-        {view !== "agenda" &&
-          view !== "historico" &&
-          view !== "config" &&
-          view !== "atendimento" &&
-          view !== "revisao" &&
-          view !== "compras" && (
+        {["avaliacao", "orcamento", "proposta", "geometria", "torque"].includes(view) &&
+          activeAppointment && (
             <section className="page">
               <Vehicle />
               <Steps view={view} go={go} />
