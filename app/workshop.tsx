@@ -788,6 +788,7 @@ export default function App({ initialState, user, onLogout }: any) {
       ...(shared.statusColors ?? {}),
     }),
     [message, setMessage] = useState(""),
+    [messagePhone, setMessagePhone] = useState(""),
     [quoteMessageFor, setQuoteMessageFor] = useState<number | null>(null),
     [confirmationMessageFor, setConfirmationMessageFor] = useState<number | null>(null),
     [serviceScheduleDate, setServiceScheduleDate] = useState(""),
@@ -1868,12 +1869,14 @@ export default function App({ initialState, user, onLogout }: any) {
             message={(text: string) => {
               setQuoteMessageFor(null);
               setConfirmationMessageFor(null);
+              setMessagePhone("");
               setMessage(text);
             }}
             confirmationTemplate={templates.confirmacao}
             prepareConfirmation={(appointment: Appt, text: string) => {
               setQuoteMessageFor(null);
               setConfirmationMessageFor(appointment.id);
+              setMessagePhone(appointment.phone || "");
               setMessage(text);
             }}
           />
@@ -4423,6 +4426,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setModal(false);
             }}
             save={(a: Appt) => {
+              const isNewAppointment = !appointments.some((x) => x.id === a.id);
               const updated = {
                 ...a,
                 scheduledBy: a.scheduledBy || user.displayName,
@@ -4435,11 +4439,23 @@ export default function App({ initialState, user, onLogout }: any) {
                 ids.filter((id) => id !== a.id),
               );
               setAppointments(
-                appointments.some((x) => x.id === a.id)
+                !isNewAppointment
                   ? appointments.map((x) => (x.id === a.id ? updated : x))
                   : [...appointments, updated],
               );
               setModal(false);
+              if (isNewAppointment && updated.type !== "bloqueio") {
+                const confirmationText = String(templates.confirmacao || "")
+                  .replaceAll("{cliente}", updated.client || "cliente")
+                  .replaceAll("{data}", fmt(updated.date))
+                  .replaceAll("{hora}", updated.time || "horário combinado")
+                  .replaceAll("{veiculo}", updated.vehicle || "veículo")
+                  .replaceAll("{placa}", updated.plate || "sem placa");
+                setQuoteMessageFor(null);
+                setConfirmationMessageFor(null);
+                setMessagePhone(updated.phone || "");
+                setMessage(confirmationText);
+              }
             }}
           />
         )}
@@ -4543,8 +4559,10 @@ export default function App({ initialState, user, onLogout }: any) {
         {message && (
           <Message
             text={message}
+            phone={messagePhone}
             close={() => {
               setMessage("");
+              setMessagePhone("");
               setQuoteMessageFor(null);
               setConfirmationMessageFor(null);
             }}
@@ -7450,17 +7468,28 @@ function Modal({ initial, currentUser, close, save, remove }: any) {
     </div>
   );
 }
-function Message({ text, close, onSent, sent, closeAfterSent = false, sentLabel = "Orçamento enviado" }: any) {
-  const [copied, setCopied] = useState(false),
+function Message({ text, phone = "", close, onSent, sent, closeAfterSent = false, sentLabel = "Orçamento enviado" }: any) {
+  const normalizedPhone = String(phone || "").replace(/\D/g, ""),
+    whatsappNumber = normalizedPhone.length >= 10 && normalizedPhone.length <= 11
+      ? `55${normalizedPhone}`
+      : normalizedPhone,
+    [copied, setCopied] = useState(false),
+    [phoneCopied, setPhoneCopied] = useState(false),
     [markedSent, setMarkedSent] = useState(sent);
   return (
     <div className="backdrop">
       <div className="messagebox">
-        <h2>Mensagem para WhatsApp</h2>
+        <style>{`.message-phone{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0;padding:10px 12px;border:1px solid #bfd0e3;border-radius:9px;background:#f3f8fd}.message-phone span{display:grid;gap:2px}.message-phone small{color:#5b6f82;font-weight:800}.message-phone b{font-size:16px;color:#172b44;letter-spacing:.03em}.message-phone button{flex:0 0 auto;border:1px solid #aabed2;border-radius:7px;padding:7px 9px;background:#fff;color:#172b44;font-size:11px;font-weight:900;cursor:pointer}.message-phone button:disabled{opacity:.55;cursor:not-allowed}`}</style>
+        <h2>{phone ? "Confirmação do agendamento" : "Mensagem para WhatsApp"}</h2>
         <p>
-          Copie e cole no WhatsApp. O sistema não abrirá nem enviará
-          automaticamente.
+          Copie e cole no WhatsApp. O sistema não enviará automaticamente.
         </p>
+        {phone && <div className="message-phone">
+          <span><small>WHATSAPP DO CLIENTE</small><b>{phone}</b></span>
+          <button onClick={async () => { await navigator.clipboard.writeText(phone); setPhoneCopied(true); }}>
+            {phoneCopied ? "Número copiado ✓" : "Copiar número"}
+          </button>
+        </div>}
         <textarea readOnly value={text} />
         <footer>
           <button onClick={close}>Fechar</button>
@@ -7473,6 +7502,13 @@ function Message({ text, close, onSent, sent, closeAfterSent = false, sentLabel 
           >
             {copied ? "Copiado ✓" : "Copiar mensagem"}
           </button>
+          {whatsappNumber && <button onClick={async () => {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            window.open(`https://wa.me/${whatsappNumber}`, "_blank", "noopener,noreferrer");
+          }}>
+            Copiar e abrir WhatsApp
+          </button>}
           {onSent && (
             <button
               className="sent-action"
