@@ -1,6 +1,27 @@
 "use client";
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
+
+// A regra @page é global no navegador. Ela só deve existir durante a
+// impressão que a solicitou, para não alterar os demais relatórios.
+function printWithTemporaryPage(printClass: string, pageRule: string, delay = 0) {
+  const pageStyle = document.createElement("style");
+  pageStyle.textContent = `@page{${pageRule}}`;
+  document.body.appendChild(pageStyle);
+  document.body.classList.add(printClass);
+
+  let finished = false;
+  const cleanup = () => {
+    if (finished) return;
+    finished = true;
+    document.body.classList.remove(printClass);
+    pageStyle.remove();
+  };
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+  window.setTimeout(() => window.print(), delay);
+  window.setTimeout(cleanup, 2500);
+}
 const ITEMS = [
   "Amortecedor Dianteiro Direito",
   "Amortecedor Dianteiro Esquerdo",
@@ -1367,12 +1388,7 @@ export default function App({ initialState, user, onLogout }: any) {
       }, 500);
     },
     printManualQuoteWorksheet = () => {
-      document.body.classList.add("print-manual-quote");
-      window.print();
-      window.setTimeout(
-        () => document.body.classList.remove("print-manual-quote"),
-        500,
-      );
+      printWithTemporaryPage("print-manual-quote", "size:A4 portrait;margin:10mm");
     },
     geometrySharedState = (
       nextAppointments: Appt[],
@@ -5294,11 +5310,7 @@ function Agenda({
       setCursor(new Date(next.getFullYear(), next.getMonth(), 1));
     },
     printCalendar = () => {
-      document.body.classList.add("print-calendar-page");
-      const cleanup = () =>
-        document.body.classList.remove("print-calendar-page");
-      window.addEventListener("afterprint", cleanup, { once: true });
-      window.setTimeout(() => window.print(), 60);
+      printWithTemporaryPage("print-calendar-page", "size:A4 landscape;margin:0", 60);
     },
     changeMode = (value: "dia" | "semana" | "mes") => {
       setMode(value);
@@ -7508,7 +7520,6 @@ function ManualQuotePrintSheet({
           body.print-manual-quote .manual-quote-writing-lines span{display:block;border-bottom:1px solid #9eabb9;height:12px}
           body.print-manual-quote .manual-quote-sign{display:grid;grid-template-columns:1fr 1fr;gap:35px;margin-top:auto;padding-top:18px;font-size:10px;text-align:center;break-inside:avoid;page-break-inside:avoid}
           body.print-manual-quote .manual-quote-sign span{border-top:1px solid #172033;padding-top:5px}
-          @page{size:A4 portrait;margin:10mm}
         }
       `}</style>
       <header className="manual-quote-sheet-head">
@@ -10820,12 +10831,7 @@ function Reports({
               </label>
               <button
                 onClick={() => {
-                  document.body.classList.add("print-weekly");
-                  setTimeout(() => window.print(), 50);
-                  setTimeout(
-                    () => document.body.classList.remove("print-weekly"),
-                    600,
-                  );
+                  printWithTemporaryPage("print-weekly", "size:A4 landscape;margin:10mm", 50);
                 }}
               >
                 Imprimir resumo
@@ -10994,10 +11000,7 @@ function Reports({
               </>}
               <button className="print-open-quotes-button" onClick={() => {
                 if (!printableOpenQuotes.length) return alert("Não há orçamentos em aberto no período escolhido.");
-                document.body.classList.add("print-open-quotes");
-                window.addEventListener("afterprint", () => document.body.classList.remove("print-open-quotes"), { once: true });
-                setTimeout(() => window.print(), 50);
-                setTimeout(() => document.body.classList.remove("print-open-quotes"), 1200);
+                printWithTemporaryPage("print-open-quotes", "size:A4 landscape;margin:0", 50);
               }}>Imprimir listagem</button>
               <span className="quote-print-count">{printableOpenQuotes.length} {printableOpenQuotes.length === 1 ? "orçamento" : "orçamentos"} no período</span>
             </div>
