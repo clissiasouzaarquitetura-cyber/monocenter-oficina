@@ -728,7 +728,11 @@ const EMPTY_APPT: Appt = {
 let DISPLAY_APPT: Appt = EMPTY_APPT;
 export default function App({ initialState, user, onLogout }: any) {
   const shared = initialState ?? {};
-  const [view, setView] = useState<View>("agenda"),
+  const [view, setView] = useState<View>(() => {
+      if (typeof window === "undefined") return "agenda";
+      const savedView = localStorage.getItem(LAST_VIEW_STORAGE_KEY) as View | null;
+      return savedView && RESTORABLE_VIEWS.has(savedView) ? savedView : "agenda";
+    }),
     [viewRestored, setViewRestored] = useState(false),
     [reportStartMode, setReportStartMode] = useState<
       "registros" | "abertos" | "andamento"
@@ -832,11 +836,7 @@ export default function App({ initialState, user, onLogout }: any) {
   useEffect(() => {
     localStorage.setItem("monocenter-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
-  useEffect(() => {
-    const savedView = localStorage.getItem(LAST_VIEW_STORAGE_KEY) as View | null;
-    if (savedView && RESTORABLE_VIEWS.has(savedView)) setView(savedView);
-    setViewRestored(true);
-  }, []);
+  useEffect(() => setViewRestored(true), []);
   useEffect(() => {
     if (viewRestored && RESTORABLE_VIEWS.has(view))
       localStorage.setItem(LAST_VIEW_STORAGE_KEY, view);
@@ -4921,13 +4921,7 @@ function Agenda({
     tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowIso = iso(tomorrow);
-  const [date, setDate] = useState(() => {
-      if (typeof window === "undefined") return todayIso;
-      const savedDate = localStorage.getItem("monocenter-calendar-date");
-      return savedDate && /^\d{4}-\d{2}-\d{2}$/.test(savedDate)
-        ? savedDate
-        : todayIso;
-    }),
+  const [date, setDate] = useState(todayIso),
     [cursor, setCursor] = useState(() => {
       const selected = new Date(`${date}T12:00:00`);
       return new Date(selected.getFullYear(), selected.getMonth(), 1);
@@ -4953,9 +4947,6 @@ function Agenda({
   useEffect(() => {
     localStorage.setItem("monocenter-calendar-mode", mode);
   }, [mode]);
-  useEffect(() => {
-    localStorage.setItem("monocenter-calendar-date", date);
-  }, [date]);
   const editCalendarAbsence = (appointment: Appt) =>
     edit(
       appointment.type === "bloqueio"
@@ -7489,8 +7480,9 @@ function ManualQuotePrintSheet({
       <style>{`
         .manual-quote-print-sheet{display:none}
         @media print{
+          body.print-manual-quote,body.print-manual-quote .app,body.print-manual-quote main{margin:0!important;min-height:0!important;padding:0!important;background:#fff!important}
           body.print-manual-quote .app>aside,body.print-manual-quote main>header,body.print-manual-quote main>*{display:none!important}
-          body.print-manual-quote main>.manual-quote-print-sheet{display:flex!important;min-height:277mm;box-sizing:border-box;flex-direction:column;font-family:Arial,sans-serif;color:#172033}
+          body.print-manual-quote main>.manual-quote-print-sheet{display:flex!important;min-height:255mm;box-sizing:border-box;flex-direction:column;font-family:Arial,sans-serif;color:#172033}
           body.print-manual-quote .manual-quote-sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-bottom:3px solid #111c29;padding:0 0 6px}
           body.print-manual-quote .manual-quote-sheet-head img{width:125px;height:auto}
           body.print-manual-quote .manual-quote-sheet-head>div{display:grid;justify-items:end;gap:3px;font-size:11px}
