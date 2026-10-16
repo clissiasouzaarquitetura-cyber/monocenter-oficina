@@ -7617,10 +7617,27 @@ function PrintDocuments({
       <style>{`
         @media print{
           /* A escolha de cor é aplicada apenas às folhas de orçamento/pátio. */
+          body.print-orcamento .print-documents .budget-head>div,
+          body.print-orcamento .print-documents .budget-head>strong,
+          body.print-proposta .print-documents .budget-head>div,
+          body.print-proposta .print-documents .budget-head>strong,
+          body.no-values .print-documents .budget-head>div,
+          body.no-values .print-documents .budget-head>strong{background:#edf3f8!important;color:#203448!important;border-color:#b8c9d9!important}
+          body.print-orcamento .print-documents .budget-head>strong,
+          body.print-proposta .print-documents .budget-head>strong,
+          body.no-values .print-documents .budget-head>strong{background:#f9dfe2!important;color:#7e2029!important}
+          body.print-orcamento .print-documents .budget-head>div *,
+          body.print-orcamento .print-documents .budget-head>strong *,
+          body.print-proposta .print-documents .budget-head>div *,
+          body.print-proposta .print-documents .budget-head>strong *,
+          body.no-values .print-documents .budget-head>div *,
+          body.no-values .print-documents .budget-head>strong *{background:transparent!important;color:inherit!important}
           body.print-palette-pastel .print-documents .budget-a4 .a4-head,
           body.print-palette-pastel .print-documents .proposal-a4 .a4-head{background:#edf3f8!important;border-color:#b8c9d9!important;color:#203448!important}
           body.print-palette-pastel .print-documents .budget-a4 .a4-head *,
           body.print-palette-pastel .print-documents .proposal-a4 .a4-head *{color:#203448!important}
+          body.print-palette-pastel .print-documents .budget-head>div{background:#edf3f8!important}
+          body.print-palette-pastel .print-documents .budget-head>strong{background:#f9dfe2!important;color:#7e2029!important}
           body.print-palette-pastel .print-documents .budget-a4 h3,
           body.print-palette-pastel .print-documents .proposal-a4 h3{background:#fbe6e7!important;color:#8b2730!important;border-color:#e7bdc2!important}
           body.print-palette-pastel .print-documents .budget-a4 .a4-client,
