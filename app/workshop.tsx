@@ -6942,7 +6942,12 @@ function AttendancePreviewModal({ appointment, roundStep, close, openEntryCheckl
 
         <footer className="attendance-preview-footer">
           <small>Consulta rápida — nenhuma informação é alterada nesta janela.</small>
-          <button className="primary" onClick={close}>Fechar resumo</button>
+          <span className="attendance-preview-footer-actions">
+            <button className="entry-checklist-open" onClick={() => openEntryChecklist?.(appointment)}>
+              {appointment.entryChecklist?.completedAt ? "Checklist de entrada" : "Abrir checklist de entrada"}
+            </button>
+            <button className="primary" onClick={close}>Fechar resumo</button>
+          </span>
         </footer>
       </section>
       <style>{`
@@ -6978,7 +6983,7 @@ function AttendancePreviewModal({ appointment, roundStep, close, openEntryCheckl
         .attendance-preview-note b{display:block;margin-bottom:4px}
         .attendance-preview-internal-note{background:#fff4cc!important;border-left:4px solid #d98b00;color:#5d3b00}
         .entry-checklist-summary-card{display:grid;gap:9px}.entry-checklist-summary-card .attendance-preview-section-title strong{font-size:13px}.entry-checklist-open{justify-self:start;border:1px solid #7ca0c7;border-radius:8px;padding:9px 11px;background:#eef5fc;color:#173e68;font-size:12px;font-weight:900;cursor:pointer}
-        .attendance-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 24px 24px}
+        .attendance-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 24px 24px}.attendance-preview-footer-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
         .attendance-preview-footer small{color:var(--muted,#5d6878)}
         .attendance-preview-footer button{white-space:nowrap}
         .dark .attendance-preview-items>div,.dark .attendance-preview-note,.dark .attendance-preview-badges>*,.dark .attendance-evaluation-items .evaluation-result{background:#1c2938}
