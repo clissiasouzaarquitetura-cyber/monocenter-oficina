@@ -1079,7 +1079,11 @@ export default function App({ initialState, user, onLogout }: any) {
           if (changed) skipSave.current = true;
         } catch {}
       };
-    const timer = setInterval(sync, 8000);
+    // A sincronização completa devolve toda a agenda e os dados compartilhados.
+    // Conferir a cada 8 segundos multiplicava o tráfego mesmo quando ninguém
+    // fazia alterações. Mantemos a atualização periódica e ao voltar à tela,
+    // mas com um intervalo adequado para o uso da oficina.
+    const timer = setInterval(sync, 60_000);
     window.addEventListener("focus", sync);
     return () => {
       alive = false;
