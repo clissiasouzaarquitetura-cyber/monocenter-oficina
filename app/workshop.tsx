@@ -4485,6 +4485,10 @@ export default function App({ initialState, user, onLogout }: any) {
             }
             roundStep={roundStep}
             close={() => setAttendancePreview(null)}
+            openEntryChecklist={(appointment: Appt) => {
+              setAttendancePreview(null);
+              setVehicleEntryChecklist(appointment);
+            }}
           />
         )}
         {vehicleEntryChecklist && (
@@ -6679,7 +6683,7 @@ function ReviewScreen({
     </>
   );
 }
-function AttendancePreviewModal({ appointment, roundStep, close }: any) {
+function AttendancePreviewModal({ appointment, roundStep, close, openEntryChecklist }: any) {
   const budget = appointment.budget as BudgetState | undefined,
     evaluationRows = [...ITEMS, ...(appointment.evaluation?.custom ?? [])]
       .map((name, index) => ({
@@ -6819,6 +6823,23 @@ function AttendancePreviewModal({ appointment, roundStep, close }: any) {
           </section>
         </div>
 
+        <section className="attendance-preview-section entry-checklist-summary-card">
+          <div className="attendance-preview-section-title">
+            <h3>Checklist de entrada</h3>
+            <strong>{appointment.entryChecklist?.completedAt ? "Concluído" : appointment.entryChecklist?.skipped ? "Não feito" : "Pendente"}</strong>
+          </div>
+          <p className="attendance-preview-empty">
+            {appointment.entryChecklist?.completedAt
+              ? `Registrado em ${dateTime(appointment.entryChecklist.completedAt)}${appointment.entryChecklist.completedBy ? ` por ${appointment.entryChecklist.completedBy}` : ""}.`
+              : appointment.entryChecklist?.skipped
+                ? "Foi optado por não fazer o checklist na aprovação."
+                : "Ainda não registrado para este atendimento."}
+          </p>
+          <button className="entry-checklist-open" onClick={() => openEntryChecklist?.(appointment)}>
+            {appointment.entryChecklist?.completedAt ? "Ver / editar checklist" : "Abrir checklist de entrada"}
+          </button>
+        </section>
+
         <section className="attendance-preview-section attendance-preview-evaluation">
           <div className="attendance-preview-section-title">
             <h3>Itens avaliados</h3>
@@ -6956,6 +6977,7 @@ function AttendancePreviewModal({ appointment, roundStep, close }: any) {
         .attendance-preview-note{display:block!important;padding:10px;border-radius:8px;background:#f4f7fa;white-space:pre-wrap}
         .attendance-preview-note b{display:block;margin-bottom:4px}
         .attendance-preview-internal-note{background:#fff4cc!important;border-left:4px solid #d98b00;color:#5d3b00}
+        .entry-checklist-summary-card{display:grid;gap:9px}.entry-checklist-summary-card .attendance-preview-section-title strong{font-size:13px}.entry-checklist-open{justify-self:start;border:1px solid #7ca0c7;border-radius:8px;padding:9px 11px;background:#eef5fc;color:#173e68;font-size:12px;font-weight:900;cursor:pointer}
         .attendance-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 24px 24px}
         .attendance-preview-footer small{color:var(--muted,#5d6878)}
         .attendance-preview-footer button{white-space:nowrap}
