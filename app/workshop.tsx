@@ -1079,11 +1079,7 @@ export default function App({ initialState, user, onLogout }: any) {
           if (changed) skipSave.current = true;
         } catch {}
       };
-    // A sincronização completa devolve toda a agenda e os dados compartilhados.
-    // Conferir a cada 8 segundos multiplicava o tráfego mesmo quando ninguém
-    // fazia alterações. Mantemos a atualização periódica e ao voltar à tela,
-    // mas com um intervalo adequado para o uso da oficina.
-    const timer = setInterval(sync, 60_000);
+    const timer = setInterval(sync, 8000);
     window.addEventListener("focus", sync);
     return () => {
       alive = false;
@@ -3772,38 +3768,36 @@ export default function App({ initialState, user, onLogout }: any) {
                     <button
                       className="primary"
                       onClick={() => {
-                        if (activeAppointment) {
-                          const budget: BudgetState = {
-                            parts,
-                            selectedServices,
-                            serviceQty,
-                            servicePrices,
-                            manualServices,
-                            proposalPaymentOptions,
-                            patioNotes,
-                            processStatus: "Em andamento",
-                            internalReview:
-                              activeAppointment.budget?.internalReview,
-                          };
-                          const updated: Appt = {
-                            ...activeAppointment,
-                            status: "servico",
-                            inProgress: true,
-                            budget,
-                            budgetEditedBy: user.displayName,
-                            budgetEditedAt: new Date().toISOString(),
-                            lastEditedBy: user.displayName,
-                            lastEditedAt: new Date().toISOString(),
-                            _updatedAt: Date.now(),
-                          };
-                          DISPLAY_APPT = updated;
-                          setActiveAppointment(updated);
-                          setAppointments((list) =>
-                            list.map((a) =>
-                              a.id === updated.id ? updated : a,
-                            ),
-                          );
+                        if (!activeAppointment) {
+                          alert("Selecione um atendimento antes de aprovar o serviço.");
+                          return;
                         }
+                        const budget: BudgetState = {
+                          parts,
+                          selectedServices,
+                          serviceQty,
+                          servicePrices,
+                          manualServices,
+                          proposalPaymentOptions,
+                          patioNotes,
+                          processStatus: "Em andamento",
+                          internalReview:
+                            activeAppointment.budget?.internalReview,
+                        };
+                        const updated: Appt = {
+                          ...activeAppointment,
+                          status: "servico",
+                          inProgress: true,
+                          budget,
+                          budgetEditedBy: user.displayName,
+                          budgetEditedAt: new Date().toISOString(),
+                          lastEditedBy: user.displayName,
+                          lastEditedAt: new Date().toISOString(),
+                          _updatedAt: Date.now(),
+                        };
+                        DISPLAY_APPT = updated;
+                        setActiveAppointment(updated);
+                        setAppointments((list) => list.map((a) => a.id === updated.id ? updated : a));
                         setProcessStatus("Em andamento");
                         setSavedAt(
                           new Date().toLocaleTimeString("pt-BR", {
@@ -3811,10 +3805,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             minute: "2-digit",
                           }),
                         );
-                        if (!activeAppointment) {
-                          setView("agenda");
-                          scrollTo(0, 0);
-                        }
+                        setVehicleEntryChecklist(updated);
                       }}
                     >
                       Aprovar e salvar serviço
@@ -7576,7 +7567,7 @@ function VehicleEntryChecklistModal({ appointment, currentUser, close, save }: a
         `}</style>
         {!started ? <>
           <header><span><h2>Checklist de entrada do veículo</h2><p>Serviço aprovado — escolha se fará a conferência de entrada agora.</p></span><button onClick={close}>×</button></header>
-          <section className="entry-checklist-intro"><p>O checklist registra o estado do veículo antes do serviço, com fotos datadas e orientação para proteger o interior. O relatório poderá ser salvo em PDF e enviado ao cliente.</p><aside><span><b>Fotos externas</b>Frente, traseira, laterais e quatro rodas.</span><span><b>Conferência</b>Luzes, seta, palhetas e estepe.</span><span><b>Proteção</b>Volante, banco e câmbio.</span></aside><footer><button className="skip" onClick={skipChecklist}>Não fazer agora</button><button className="primary" onClick={() => setStarted(true)}>Sim, fazer checklist de entrada</button></footer></section>
+          <section className="entry-checklist-intro"><p>O checklist confirma o estado do veículo antes do serviço sem armazenar imagens. Marque as fotos que foram tiradas e as proteções internas aplicadas. O resumo poderá ser salvo em PDF.</p><aside><span><b>Fotos confirmadas</b>Frente, traseira, laterais, rodas, painel, estepe e iluminação.</span><span><b>Sem envio de imagens</b>O sistema salva somente as marcações feitas.</span><span><b>Proteção</b>Volante e câmbio.</span></aside><footer><button className="skip" onClick={skipChecklist}>Não fazer agora</button><button className="primary" onClick={() => setStarted(true)}>Sim, fazer checklist de entrada</button></footer></section>
         </> : <>
           <header><span><h2>Checklist de entrada do veículo</h2><p>Marque cada foto depois de tirá-la. As imagens não são enviadas nem armazenadas.</p></span><button onClick={close}>×</button></header>
           <section className="entry-checklist-form">
