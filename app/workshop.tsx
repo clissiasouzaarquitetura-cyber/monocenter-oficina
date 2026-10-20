@@ -1698,8 +1698,8 @@ export default function App({ initialState, user, onLogout }: any) {
       <main>
         <header>
           <div>
-            <h1>{TITLES[view][0]}</h1>
-            <p>{TITLES[view][1]}</p>
+            <h1>{view === "proposta" && activeAppointment?.status === "servico" ? "Orçamento aprovado" : TITLES[view][0]}</h1>
+            <p>{view === "proposta" && activeAppointment?.status === "servico" ? "Confira e imprima o orçamento aprovado para o cliente." : TITLES[view][1]}</p>
           </div>
           <div className="header-actions">
             <button onClick={() => setDarkMode(!darkMode)}>
@@ -3643,7 +3643,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       ← Voltar e alterar
                     </button>
                     <button onClick={() => printStage("orcamento")}>
-                      Imprimir com valores
+                      {activeAppointment?.status === "servico" ? "Imprimir orçamento aprovado" : "Imprimir com valores"}
                     </button>
                     <button onClick={() => printNoValues("proposta")}>
                       Imprimir sem valores - pátio
@@ -3681,7 +3681,6 @@ export default function App({ initialState, user, onLogout }: any) {
                               a.id === updated.id ? updated : a,
                             ),
                           );
-                          setVehicleEntryChecklist(updated);
                         }
                         setProcessStatus("Em andamento");
                         setSavedAt(
@@ -3805,7 +3804,8 @@ export default function App({ initialState, user, onLogout }: any) {
                             minute: "2-digit",
                           }),
                         );
-                        setVehicleEntryChecklist(updated);
+                        setView("proposta");
+                        scrollTo(0, 0);
                       }}
                     >
                       Aprovar e salvar serviço
