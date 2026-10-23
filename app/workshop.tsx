@@ -314,6 +314,7 @@ type ReviewState = {
 type EvaluationState = {
   status: Record<number, string>;
   quoteItems: Record<number, boolean>;
+  quoteExclusions?: Record<number, string>;
   custom: string[];
   notes?: Record<number, string>;
 };
@@ -352,7 +353,7 @@ type BudgetState = {
   serviceQty: Record<number, number>;
   servicePrices?: Record<number, number>;
   manualServices: any[];
-  proposalPaymentOptions?: { pix: boolean; card: boolean };
+  proposalPaymentOptions?: { pix: boolean; card: boolean; card10?: boolean };
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
   internalReview?: InternalBudgetReview;
@@ -811,6 +812,7 @@ export default function App({ initialState, user, onLogout }: any) {
     [serviceScheduleTime, setServiceScheduleTime] = useState(""),
     [status, setStatus] = useState<Record<number, string>>({}),
     [quoteItems, setQuoteItems] = useState<Record<number, boolean>>({}),
+    [quoteExclusions, setQuoteExclusions] = useState<Record<number, string>>({}),
     [evaluationNotes, setEvaluationNotes] = useState<Record<number, string>>(
       {},
     ),
@@ -921,7 +923,8 @@ export default function App({ initialState, user, onLogout }: any) {
     [proposalPaymentOptions, setProposalPaymentOptions] = useState<{
       pix: boolean;
       card: boolean;
-    }>(shared.proposalPaymentOptions ?? { pix: true, card: true }),
+      card10?: boolean;
+    }>({ pix: true, card: true, card10: false, ...(shared.proposalPaymentOptions ?? {}) }),
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
       shared.processStatus ?? "Em andamento",
@@ -937,6 +940,7 @@ export default function App({ initialState, user, onLogout }: any) {
       Record<number, boolean>
     >({}),
     [budgetReviewCopied, setBudgetReviewCopied] = useState(false);
+  const [budgetEvaluationPickerOpen, setBudgetEvaluationPickerOpen] = useState(false);
   const firstSave = useRef(true),
     skipSave = useRef(false),
     syncBlockedUntil = useRef(0),
@@ -1137,7 +1141,47 @@ export default function App({ initialState, user, onLogout }: any) {
       0,
     ),
     pixDiscountBase = Math.max(0, total - tireTotal),
-    pixTotal = pixDiscountBase * 0.95 + tireTotal;
+    pixTotal = pixDiscountBase * 0.95 + tireTotal,
+    card10Base = tireParts.length > 0 ? totalInstallment : total,
+    card10VisaMasterTotal = card10Base * 1.075,
+    card10CieloTotal = card10Base * 1.08;
+  const evaluationBudgetItems = [...ITEMS, ...custom].map((name, index) => ({
+      name,
+      index: index + 1,
+      selected: !!quoteItems[index + 1],
+      exclusion: quoteExclusions[index + 1] ?? "",
+      state: status[index + 1] ?? "",
+      note: evaluationNotes[index + 1] ?? "",
+    })),
+    evaluationIndexForPart = (part: any) => {
+      const saved = Number(part.evaluationIndex);
+      if (saved > 0) return saved;
+      const itemName = String(part.item ?? "").trim().toLocaleUpperCase("pt-BR");
+      return evaluationBudgetItems.find((item) => item.name.trim().toLocaleUpperCase("pt-BR") === itemName)?.index ?? 0;
+    };
+  const persistEvaluationBudgetSelection = (
+    nextQuoteItems: Record<number, boolean>,
+    nextQuoteExclusions: Record<number, string>,
+  ) => {
+    if (!activeAppointment) return;
+    const now = new Date().toISOString(),
+      updated: Appt = {
+        ...activeAppointment,
+        evaluation: {
+          status,
+          quoteItems: nextQuoteItems,
+          quoteExclusions: nextQuoteExclusions,
+          custom,
+          notes: evaluationNotes,
+        },
+        lastEditedBy: user.displayName,
+        lastEditedAt: now,
+        _updatedAt: Date.now(),
+      };
+    DISPLAY_APPT = updated;
+    setActiveAppointment(updated);
+    setAppointments((list) => list.map((appointment) => appointment.id === updated.id ? updated : appointment));
+  };
   const reviewParts = parts
       .map((part: any, index: number) => ({ part, index }))
       .filter(
@@ -1297,6 +1341,7 @@ export default function App({ initialState, user, onLogout }: any) {
     );
     setStatus({});
     setQuoteItems({});
+    setQuoteExclusions({});
     setCustom([]);
     setEvaluationNotes({});
     setParts([]);
@@ -1304,7 +1349,7 @@ export default function App({ initialState, user, onLogout }: any) {
     setServiceQty({});
     setServicePrices({});
     setManualServices([]);
-    setProposalPaymentOptions({ pix: true, card: true });
+    setProposalPaymentOptions({ pix: true, card: true, card10: false });
     setPatioNotes("");
     setChecks({});
     setGeometry({});
@@ -1641,7 +1686,7 @@ export default function App({ initialState, user, onLogout }: any) {
     }\n\n${
       tireParts.length
         ? `TOTAL À VISTA: ${brl(totalCash)}\nTOTAL PARCELADO: ${brl(totalInstallment)}\n(Pneus com acréscimo de 10% no parcelamento)${
-            proposalPaymentOptions.pix || proposalPaymentOptions.card
+            proposalPaymentOptions.pix || proposalPaymentOptions.card || proposalPaymentOptions.card10
               ? `\n\nPagamento:\n${[
                   proposalPaymentOptions.pix
                     ? `• Pix com 5% de desconto em peças e serviços (pneus sem desconto): ${brl(pixTotal)}`
@@ -1649,19 +1694,25 @@ export default function App({ initialState, user, onLogout }: any) {
                   proposalPaymentOptions.card
                     ? `• Cartão: total parcelado ${brl(totalInstallment)} em até 5x sem juros de ${brl(totalInstallment / 5)}`
                     : "",
+                  proposalPaymentOptions.card10
+                    ? `• Cartão em 10x: Visa/Master ${brl(card10VisaMasterTotal / 10)} por parcela (taxa de 7,5%) ou Cielo ${brl(card10CieloTotal / 10)} por parcela (taxa de 8%)`
+                    : "",
                 ]
                   .filter(Boolean)
                   .join("\n")}`
               : ""
           }`
         : `TOTAL: ${brl(total)}${
-            proposalPaymentOptions.pix || proposalPaymentOptions.card
+            proposalPaymentOptions.pix || proposalPaymentOptions.card || proposalPaymentOptions.card10
               ? `\n\nPagamento:\n${[
                   proposalPaymentOptions.pix
                     ? `• Pix com 5% de desconto: ${brl(pixTotal)}`
                     : "",
                   proposalPaymentOptions.card
                     ? `• Cartão: até 5x sem juros de ${brl(total / 5)}`
+                    : "",
+                  proposalPaymentOptions.card10
+                    ? `• Cartão em 10x: Visa/Master ${brl(card10VisaMasterTotal / 10)} por parcela (taxa de 7,5%) ou Cielo ${brl(card10CieloTotal / 10)} por parcela (taxa de 8%)`
                     : "",
                 ]
                   .filter(Boolean)
@@ -1769,6 +1820,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 );
               setStatus(a.evaluation?.status ?? {});
               setQuoteItems(a.evaluation?.quoteItems ?? {});
+              setQuoteExclusions(a.evaluation?.quoteExclusions ?? {});
               setCustom(a.evaluation?.custom ?? []);
               setEvaluationNotes(a.evaluation?.notes ?? {});
               setChecks(a.conference?.checks ?? {});
@@ -1800,9 +1852,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
-                setProposalPaymentOptions(
-                  a.budget.proposalPaymentOptions ?? { pix: true, card: true },
-                );
+                setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(a.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else if (
@@ -1814,7 +1864,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
-                setProposalPaymentOptions({ pix: true, card: true });
+                setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
@@ -1936,11 +1986,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       activeAppointment.budget?.servicePrices ?? {},
                     manualServices:
                       activeAppointment.budget?.manualServices ?? [],
-                    proposalPaymentOptions:
-                      activeAppointment.budget?.proposalPaymentOptions ?? {
-                        pix: true,
-                        card: true,
-                      },
+                    proposalPaymentOptions: { pix: true, card: true, card10: false, ...(activeAppointment.budget?.proposalPaymentOptions ?? {}) },
                     patioNotes: activeAppointment.budget?.patioNotes ?? "",
                     processStatus: "Finalizado",
                     internalReview:
@@ -2210,7 +2256,7 @@ export default function App({ initialState, user, onLogout }: any) {
                       </span>
                       <button
                         className="clear-quotes"
-                        onClick={() => setQuoteItems({})}
+                        onClick={() => { setQuoteItems({}); setQuoteExclusions({}); }}
                       >
                         Desmarcar todos (Orçar)
                       </button>
@@ -2278,6 +2324,9 @@ export default function App({ initialState, user, onLogout }: any) {
                             />
                           ) : (
                             <b>{x}</b>
+                          )}
+                          {quoteItems[i + 1] && quoteExclusions[i + 1] && (
+                            <small className="quote-excluded-note">Fora do orçamento: {quoteExclusions[i + 1]}</small>
                           )}
                           <div className="lights">
                             {[
@@ -2353,11 +2402,11 @@ export default function App({ initialState, user, onLogout }: any) {
                   <Actions
                     back={() => go("agenda")}
                     next={() => {
-                      const names = [...ITEMS, ...custom].filter(
-                          (_, i) => quoteItems[i + 1],
-                        ),
+                      const names = [...ITEMS, ...custom]
+                          .map((name, i) => ({ name, index: i + 1 }))
+                          .filter(({ index }) => quoteItems[index] && !quoteExclusions[index]),
                         nextParts = [...parts];
-                      for (const name of names) {
+                      for (const { name, index } of names) {
                         if (
                           !nextParts.some(
                             (p) =>
@@ -2375,6 +2424,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             margin: 0,
                             saleOverride: null,
                             manual: false,
+                            evaluationIndex: index,
                           });
                       }
                       setParts(nextParts);
@@ -2401,6 +2451,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           evaluation: {
                             status,
                             quoteItems,
+                            quoteExclusions,
                             custom,
                             notes: evaluationNotes,
                           },
@@ -2454,6 +2505,23 @@ export default function App({ initialState, user, onLogout }: any) {
                         >
                           + Inserir peça manual
                         </button>
+                      </div>
+                      <div className="budget-evaluation-picker">
+                        <button type="button" onClick={() => setBudgetEvaluationPickerOpen((open) => !open)}>
+                          {budgetEvaluationPickerOpen ? "Fechar itens da avaliação" : "+ Incluir item da avaliação"}
+                        </button>
+                        <small>Adicione ao orçamento qualquer item que já aparece na avaliação, inclusive um que tenha sido retirado antes.</small>
+                        {budgetEvaluationPickerOpen && <div className="budget-evaluation-options">{evaluationBudgetItems.map((entry) => {
+                          const alreadyInBudget = parts.some((part: any) => evaluationIndexForPart(part) === entry.index || String(part.item ?? "").trim().toLocaleUpperCase("pt-BR") === entry.name.trim().toLocaleUpperCase("pt-BR"));
+                          return <div className={alreadyInBudget ? "included" : ""} key={entry.index}><span><b>{entry.name}</b><small>{entry.exclusion ? `Retirado antes: ${entry.exclusion}` : entry.note || (entry.state ? "Item avaliado" : "Não avaliado")}</small></span><button type="button" disabled={alreadyInBudget} onClick={() => {
+                            const nextQuoteItems = { ...quoteItems, [entry.index]: true }, nextQuoteExclusions = { ...quoteExclusions };
+                            delete nextQuoteExclusions[entry.index];
+                            setParts((current: any[]) => [...current, { item: titleCase(entry.name), brand: "", supplier: "", code: "", qty: 1, cost: 0, margin: 0, saleOverride: null, manual: false, evaluationIndex: entry.index }]);
+                            setQuoteItems(nextQuoteItems);
+                            setQuoteExclusions(nextQuoteExclusions);
+                            persistEvaluationBudgetSelection(nextQuoteItems, nextQuoteExclusions);
+                          }}>{alreadyInBudget ? "Já incluído" : "Incluir"}</button></div>;
+                        })}</div>}
                       </div>
                       <div className="budget-field-legend">
                         <span className="description-swatch">
@@ -2695,12 +2763,24 @@ export default function App({ initialState, user, onLogout }: any) {
                               aria-label={`Excluir ${p.item || "peça"}`}
                               title="Excluir peça"
                               onClick={() => {
-                                if (
-                                  confirm(
-                                    `Excluir ${p.item || "esta peça"} do orçamento?`,
-                                  )
-                                )
+                                const evaluationIndex = evaluationIndexForPart(p);
+                                if (evaluationIndex) {
+                                  const observation = prompt(
+                                    `Por que ${p.item || "esta peça"} não entrará no orçamento?`,
+                                    quoteExclusions[evaluationIndex] || "Cliente não irá fazer a troca no momento.",
+                                  );
+                                  if (observation === null) return;
+                                  if (!observation.trim()) {
+                                    alert("Informe a observação antes de retirar o item do orçamento.");
+                                    return;
+                                  }
+                                  const nextQuoteExclusions = { ...quoteExclusions, [evaluationIndex]: observation.trim() };
+                                  setQuoteExclusions(nextQuoteExclusions);
+                                  persistEvaluationBudgetSelection(quoteItems, nextQuoteExclusions);
                                   setParts(parts.filter((_, j) => j !== i));
+                                  return;
+                                }
+                                if (confirm(`Excluir ${p.item || "esta peça"} do orçamento?`)) setParts(parts.filter((_, j) => j !== i));
                               }}
                             >
                               🗑
@@ -3145,7 +3225,8 @@ export default function App({ initialState, user, onLogout }: any) {
                       🖨 Imprimir folha para cotação
                     </button>
                   </div>
-                  <style>{`.manual-quote-print{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:14px 0;padding:12px 14px;border:1px solid #b9cde5;border-radius:10px;background:#f4f8fd}.manual-quote-print span{display:grid;gap:3px}.manual-quote-print b{color:#172b44;font-size:13px}.manual-quote-print small{color:#526274;font-size:11px}.manual-quote-print button{border:0;border-radius:8px;padding:10px 12px;background:#172b44;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;cursor:pointer}.app.dark .manual-quote-print{background:#172231;border-color:#40536a}.app.dark .manual-quote-print b{color:#fff}@media(max-width:650px){.manual-quote-print{align-items:stretch;flex-direction:column}.manual-quote-print button{width:100%}}`}</style>
+                  <style>{`.budget-evaluation-picker{margin:0 0 12px;padding:11px 12px;border:1px solid #b9cde5;border-radius:9px;background:#f4f8fd}.budget-evaluation-picker>button{border:0;border-radius:7px;padding:8px 10px;background:#172b44;color:#fff;font-weight:900;cursor:pointer}.budget-evaluation-picker>small{margin-left:10px;color:#526274;font-size:11px}.budget-evaluation-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:290px;overflow:auto;margin-top:10px}.budget-evaluation-options>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px;border:1px solid #d5e0eb;border-radius:7px;background:#fff}.budget-evaluation-options>div.included{background:#edf8f0;border-color:#a9d7b7}.budget-evaluation-options span{display:grid;gap:3px;min-width:0}.budget-evaluation-options b{font-size:12px}.budget-evaluation-options small{overflow-wrap:anywhere;color:#607085;font-size:10px}.budget-evaluation-options button{flex:0 0 auto;border:1px solid #7c95ae;border-radius:6px;padding:6px 8px;background:#fff;color:#172b44;font-size:11px;font-weight:900;cursor:pointer}.budget-evaluation-options button:disabled{opacity:.65;cursor:default}.manual-quote-print{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:14px 0;padding:12px 14px;border:1px solid #b9cde5;border-radius:10px;background:#f4f8fd}.manual-quote-print span{display:grid;gap:3px}.manual-quote-print b{color:#172b44;font-size:13px}.manual-quote-print small{color:#526274;font-size:11px}.manual-quote-print button{border:0;border-radius:8px;padding:10px 12px;background:#172b44;color:#fff;font-size:12px;font-weight:900;white-space:nowrap;cursor:pointer}.app.dark .manual-quote-print{background:#172231;border-color:#40536a}.app.dark .manual-quote-print b{color:#fff}@media(max-width:650px){.budget-evaluation-options{grid-template-columns:1fr}.budget-evaluation-picker>small{display:block;margin:8px 0 0}.manual-quote-print{align-items:stretch;flex-direction:column}.manual-quote-print button{width:100%}}`}</style>
+                  <style>{`.quote-excluded-note{grid-column:2/-1;color:#8a6200!important;font-size:10px!important;font-weight:800}`}</style>
                   <Actions
                     back={() => {
                       if (activeAppointment) {
@@ -3490,13 +3571,28 @@ export default function App({ initialState, user, onLogout }: any) {
                         />
                         Cartão em até 5x sem juros
                       </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={!!proposalPaymentOptions.card10}
+                          onChange={(e) =>
+                            setProposalPaymentOptions({
+                              ...proposalPaymentOptions,
+                              card10: e.target.checked,
+                            })
+                          }
+                        />
+                        Cartão em 10x com taxa
+                      </label>
                       {!proposalPaymentOptions.pix &&
-                        !proposalPaymentOptions.card && (
+                        !proposalPaymentOptions.card &&
+                        !proposalPaymentOptions.card10 && (
                           <small>Nenhuma forma de pagamento será enviada.</small>
                         )}
                     </div>
                     {(proposalPaymentOptions.pix ||
-                      proposalPaymentOptions.card) && (
+                      proposalPaymentOptions.card ||
+                      proposalPaymentOptions.card10) && (
                       <div className="payments">
                         {proposalPaymentOptions.pix && (
                           <label>
@@ -3525,6 +3621,14 @@ export default function App({ initialState, user, onLogout }: any) {
                                   : total) / 5,
                               )}
                             </b>
+                          </label>
+                        )}
+                        {proposalPaymentOptions.card10 && (
+                          <label className="payment-card10">
+                            Cartão em 10x com taxa
+                            <small>Visa / Master: acréscimo de 7,5% · Cielo: acréscimo de 8%.</small>
+                            <b>Visa / Master: 10x de {brl(card10VisaMasterTotal / 10)}</b>
+                            <b>Cielo: 10x de {brl(card10CieloTotal / 10)}</b>
                           </label>
                         )}
                       </div>
@@ -4243,6 +4347,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setEvaluator(a.tech ?? availableTechs[0] ?? "");
               setStatus(a.evaluation?.status ?? {});
               setQuoteItems(a.evaluation?.quoteItems ?? {});
+              setQuoteExclusions(a.evaluation?.quoteExclusions ?? {});
               setCustom(a.evaluation?.custom ?? []);
               setEvaluationNotes(a.evaluation?.notes ?? {});
               setChecks(a.conference?.checks ?? {});
@@ -4264,9 +4369,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
                 setManualServices(a.budget.manualServices ?? []);
-                setProposalPaymentOptions(
-                  a.budget.proposalPaymentOptions ?? { pix: true, card: true },
-                );
+                setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(a.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(a.budget.patioNotes ?? "");
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else {
@@ -4275,7 +4378,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
-                setProposalPaymentOptions({ pix: true, card: true });
+                setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
@@ -4547,6 +4650,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setStarted(startedAt);
               setStatus(opened.evaluation?.status ?? {});
               setQuoteItems(opened.evaluation?.quoteItems ?? {});
+              setQuoteExclusions(opened.evaluation?.quoteExclusions ?? {});
               setCustom(opened.evaluation?.custom ?? []);
               setEvaluationNotes(opened.evaluation?.notes ?? {});
               setChecks(opened.conference?.checks ?? {});
@@ -4568,12 +4672,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty(opened.budget.serviceQty ?? {});
                 setServicePrices(opened.budget.servicePrices ?? {});
                 setManualServices(opened.budget.manualServices ?? []);
-                setProposalPaymentOptions(
-                  opened.budget.proposalPaymentOptions ?? {
-                    pix: true,
-                    card: true,
-                  },
-                );
+                setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(opened.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(opened.budget.patioNotes ?? "");
                 setProcessStatus(opened.budget.processStatus ?? "Em andamento");
               } else {
@@ -4582,7 +4681,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setServiceQty({});
                 setServicePrices({});
                 setManualServices([]);
-                setProposalPaymentOptions({ pix: true, card: true });
+                setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
                 setProcessStatus("Em andamento");
               }
