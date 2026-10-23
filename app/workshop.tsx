@@ -3544,7 +3544,7 @@ export default function App({ initialState, user, onLogout }: any) {
               )}
               {view === "proposta" && (
                 <>
-                  <style>{`.propactions .edit-budget-action{background:#f2b705!important;border-color:#d59700!important;color:#172033!important;font-weight:950!important;box-shadow:0 2px 0 #b97800}.card10-provider-choice{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;width:100%;margin-top:4px;padding:9px 10px;border-radius:7px;background:#fff8dc;color:#5f4700;font-size:11px}.card10-provider-choice label{display:flex;align-items:center;gap:5px;font-weight:800}.card10-provider-choice input{width:15px;height:15px}.payment-card10{border-color:#d59700!important;background:#fff8dc!important}.payment-card10 b{color:#a53812!important}`}</style>
+                  <style>{`.propactions .edit-budget-action{background:#f2b705!important;border-color:#d59700!important;color:#172033!important;font-weight:950!important;box-shadow:0 2px 0 #b97800}.proposal-print-menu{position:relative;z-index:2}.proposal-print-menu summary{list-style:none;background:#1877c9;border:1px solid #0d5eaa;border-radius:8px;color:#fff;padding:11px 15px;font-weight:900;cursor:pointer;white-space:nowrap}.proposal-print-menu summary::-webkit-details-marker{display:none}.proposal-print-menu[open] summary{border-radius:8px 8px 0 0}.proposal-print-menu>div{position:absolute;left:0;top:100%;min-width:235px;background:#fff;border:1px solid #0d5eaa;border-radius:0 8px 8px 8px;box-shadow:0 8px 18px #17203333;padding:6px}.proposal-print-menu>div button{display:block!important;width:100%!important;text-align:left!important;margin:0!important;border:0!important;border-radius:5px!important;background:#fff!important;color:#172033!important;padding:10px!important;font-weight:800!important}.proposal-print-menu>div button:hover{background:#e9f4ff!important}.card10-provider-choice{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;width:100%;margin-top:4px;padding:9px 10px;border-radius:7px;background:#fff8dc;color:#5f4700;font-size:11px}.card10-provider-choice label{display:flex;align-items:center;gap:5px;font-weight:800}.card10-provider-choice input{width:15px;height:15px}.payment-card10{border-color:#d59700!important;background:#fff8dc!important}.payment-card10 b{color:#a53812!important}`}</style>
                   <div className="proposal printable">
                     <div className="prophead">
                       <DocLogo />
@@ -3841,12 +3841,17 @@ export default function App({ initialState, user, onLogout }: any) {
                     <button className="edit-budget-action" onClick={() => { setBudgetEditMode(true); setView("orcamento"); scrollTo(0, 0); }}>
                       ✎ Alterar orçamento
                     </button>
-                    <button onClick={() => printStage("orcamento")}>
-                      {activeAppointment?.status === "servico" ? "Imprimir orçamento aprovado" : "Imprimir com valores"}
-                    </button>
-                    <button onClick={() => printNoValues("proposta")}>
-                      Imprimir sem valores - pátio
-                    </button>
+                    <details className="proposal-print-menu">
+                      <summary>🖨 Impressão</summary>
+                      <div>
+                        <button type="button" onClick={() => printStage("orcamento")}>
+                          {activeAppointment?.status === "servico" ? "Imprimir orçamento aprovado" : "Imprimir com valores"}
+                        </button>
+                        <button type="button" onClick={() => printNoValues("proposta")}>
+                          Imprimir sem valores - pátio
+                        </button>
+                      </div>
+                    </details>
                     <button
                       className="wa"
                       onClick={() => {
@@ -5025,9 +5030,9 @@ function StageActions({
   }[view as string];
   return (
     <div className="stageactions">
-      <style>{`.stageactions .print-palette-choice{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.stageactions .print-palette-choice select{min-width:150px;padding:7px 9px;border:1px solid #b9c5d2;border-radius:7px;background:#fff;color:#172033;font-weight:800}.page:has(.proposal){padding-bottom:155px!important}`}</style>
+      <style>{`.stageactions .status-os-field{display:grid;gap:4px;padding:7px 10px;border:2px solid #e3a600;border-radius:9px;background:#fff4c8;color:#6b4d00;font-weight:950;box-shadow:0 1px 0 #d19300}.stageactions .status-os-field select{min-width:138px;padding:7px 9px;border:1px solid #c99100;border-radius:6px;background:#fff;color:#172033;font-weight:850}.stageactions .print-palette-choice{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.stageactions .print-palette-choice select{min-width:150px;padding:7px 9px;border:1px solid #b9c5d2;border-radius:7px;background:#fff;color:#172033;font-weight:800}.stageactions .stage-print-menu{position:relative;z-index:3}.stageactions .stage-print-menu summary{list-style:none;background:#1877c9;border:1px solid #0d5eaa;border-radius:8px;color:#fff;padding:10px 14px;font-weight:900;cursor:pointer}.stageactions .stage-print-menu summary::-webkit-details-marker{display:none}.stageactions .stage-print-menu[open] summary{border-radius:8px 8px 0 0}.stageactions .stage-print-menu>div{position:absolute;right:0;top:100%;min-width:225px;padding:6px;background:#fff;border:1px solid #0d5eaa;border-radius:8px 0 8px 8px;box-shadow:0 8px 18px #17203333}.stageactions .stage-print-menu button{display:block;width:100%;padding:9px;border:0;border-radius:5px;background:#fff;color:#172033;text-align:left;font-weight:800}.stageactions .stage-print-menu button:hover{background:#e9f4ff}.page:has(.proposal){padding-bottom:155px!important}`}</style>
       <b>{label}</b>
-      <label>
+      <label className="status-os-field">
         Status da OS
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option>Em andamento</option>
@@ -5057,8 +5062,14 @@ function StageActions({
           {saveLabel}
         </button>
       </div>
-      <button onClick={() => printStage(view)}>Imprimir relatório A4</button>
-      {["orcamento", "proposta"].includes(view) && (
+      {view !== "proposta" && <details className="stage-print-menu">
+        <summary>🖨 Impressão</summary>
+        <div>
+          <button type="button" onClick={() => printStage(view)}>Imprimir relatório A4</button>
+          {view === "orcamento" && <button type="button" onClick={() => printNoValues(view)}>Imprimir sem valores - pátio</button>}
+        </div>
+      </details>}
+      {view === "orcamento" && (
         <>
           <label className="print-palette-choice">
             Cor da impressão
@@ -5068,9 +5079,6 @@ function StageActions({
               <option value="mono">Preto e branco</option>
             </select>
           </label>
-          <button onClick={() => printNoValues(view)}>
-            Imprimir sem valores - pátio
-          </button>
         </>
       )}
       {savedAt && <small>Último salvamento: {savedAt}</small>}
