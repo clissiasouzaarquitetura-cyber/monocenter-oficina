@@ -353,7 +353,7 @@ type BudgetState = {
   serviceQty: Record<number, number>;
   servicePrices?: Record<number, number>;
   manualServices: any[];
-  proposalPaymentOptions?: { pix: boolean; card: boolean; card10?: boolean };
+  proposalPaymentOptions?: { pix: boolean; card: boolean; card10?: boolean; card10Provider?: "visa_master" | "cielo" };
   patioNotes?: string;
   processStatus: "Em andamento" | "Finalizado";
   internalReview?: InternalBudgetReview;
@@ -924,7 +924,8 @@ export default function App({ initialState, user, onLogout }: any) {
       pix: boolean;
       card: boolean;
       card10?: boolean;
-    }>({ pix: true, card: true, card10: false, ...(shared.proposalPaymentOptions ?? {}) }),
+      card10Provider?: "visa_master" | "cielo";
+    }>({ pix: true, card: true, card10: false, card10Provider: "visa_master", ...(shared.proposalPaymentOptions ?? {}) }),
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
       shared.processStatus ?? "Em andamento",
@@ -1144,7 +1145,11 @@ export default function App({ initialState, user, onLogout }: any) {
     pixTotal = pixDiscountBase * 0.95 + tireTotal,
     card10Base = tireParts.length > 0 ? totalInstallment : total,
     card10VisaMasterTotal = card10Base * 1.075,
-    card10CieloTotal = card10Base * 1.08;
+    card10CieloTotal = card10Base * 1.08,
+    card10Provider = proposalPaymentOptions.card10Provider === "cielo" ? "cielo" : "visa_master",
+    card10ProviderLabel = card10Provider === "cielo" ? "Cielo" : "Visa / Master",
+    card10ProviderRate = card10Provider === "cielo" ? 8 : 7.5,
+    card10ProviderTotal = card10Provider === "cielo" ? card10CieloTotal : card10VisaMasterTotal;
   const evaluationBudgetItems = [...ITEMS, ...custom].map((name, index) => ({
       name,
       index: index + 1,
@@ -1695,7 +1700,7 @@ export default function App({ initialState, user, onLogout }: any) {
                     ? `• Cartão: total parcelado ${brl(totalInstallment)} em até 5x sem juros de ${brl(totalInstallment / 5)}`
                     : "",
                   proposalPaymentOptions.card10
-                    ? `• Cartão em 10x: Visa/Master ${brl(card10VisaMasterTotal / 10)} por parcela (taxa de 7,5%) ou Cielo ${brl(card10CieloTotal / 10)} por parcela (taxa de 8%)`
+                    ? `• Cartão em 10x (${card10ProviderLabel}): 10x de ${brl(card10ProviderTotal / 10)} (taxa de ${card10ProviderRate}%)`
                     : "",
                 ]
                   .filter(Boolean)
@@ -1712,7 +1717,7 @@ export default function App({ initialState, user, onLogout }: any) {
                     ? `• Cartão: até 5x sem juros de ${brl(total / 5)}`
                     : "",
                   proposalPaymentOptions.card10
-                    ? `• Cartão em 10x: Visa/Master ${brl(card10VisaMasterTotal / 10)} por parcela (taxa de 7,5%) ou Cielo ${brl(card10CieloTotal / 10)} por parcela (taxa de 8%)`
+                    ? `• Cartão em 10x (${card10ProviderLabel}): 10x de ${brl(card10ProviderTotal / 10)} (taxa de ${card10ProviderRate}%)`
                     : "",
                 ]
                   .filter(Boolean)
@@ -3458,6 +3463,7 @@ export default function App({ initialState, user, onLogout }: any) {
               )}
               {view === "proposta" && (
                 <>
+                  <style>{`.propactions .edit-budget-action{background:#f2b705!important;border-color:#d59700!important;color:#172033!important;font-weight:950!important;box-shadow:0 2px 0 #b97800}.card10-provider-choice{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;width:100%;margin-top:4px;padding:9px 10px;border-radius:7px;background:#fff8dc;color:#5f4700;font-size:11px}.card10-provider-choice label{display:flex;align-items:center;gap:5px;font-weight:800}.card10-provider-choice input{width:15px;height:15px}.payment-card10{border-color:#d59700!important;background:#fff8dc!important}.payment-card10 b{color:#a53812!important}`}</style>
                   <div className="proposal printable">
                     <div className="prophead">
                       <DocLogo />
@@ -3584,6 +3590,13 @@ export default function App({ initialState, user, onLogout }: any) {
                         />
                         Cartão em 10x com taxa
                       </label>
+                      {proposalPaymentOptions.card10 && (
+                        <span className="card10-provider-choice">
+                          <b>Maquininha do 10x:</b>
+                          <label><input type="radio" name="card10-provider" checked={card10Provider === "visa_master"} onChange={() => setProposalPaymentOptions({ ...proposalPaymentOptions, card10Provider: "visa_master" })}/> Visa / Master — 7,5%</label>
+                          <label><input type="radio" name="card10-provider" checked={card10Provider === "cielo"} onChange={() => setProposalPaymentOptions({ ...proposalPaymentOptions, card10Provider: "cielo" })}/> Cielo — 8%</label>
+                        </span>
+                      )}
                       {!proposalPaymentOptions.pix &&
                         !proposalPaymentOptions.card &&
                         !proposalPaymentOptions.card10 && (
@@ -3625,10 +3638,10 @@ export default function App({ initialState, user, onLogout }: any) {
                         )}
                         {proposalPaymentOptions.card10 && (
                           <label className="payment-card10">
-                            Cartão em 10x com taxa
-                            <small>Visa / Master: acréscimo de 7,5% · Cielo: acréscimo de 8%.</small>
-                            <b>Visa / Master: 10x de {brl(card10VisaMasterTotal / 10)}</b>
-                            <b>Cielo: 10x de {brl(card10CieloTotal / 10)}</b>
+                            Cartão em 10x — {card10ProviderLabel}
+                            <small>Taxa aplicada: {card10ProviderRate}%.</small>
+                            <b>10x de {brl(card10ProviderTotal / 10)}</b>
+                            <small>Total no cartão: {brl(card10ProviderTotal)}</small>
                           </label>
                         )}
                       </div>
@@ -3743,8 +3756,8 @@ export default function App({ initialState, user, onLogout }: any) {
                     </button>
                   </div>
                   <div className="propactions">
-                    <button onClick={() => go("orcamento")}>
-                      ← Voltar e alterar
+                    <button className="edit-budget-action" onClick={() => go("orcamento")}>
+                      ✎ Alterar orçamento
                     </button>
                     <button onClick={() => printStage("orcamento")}>
                       {activeAppointment?.status === "servico" ? "Imprimir orçamento aprovado" : "Imprimir com valores"}
