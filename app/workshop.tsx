@@ -355,6 +355,7 @@ type BudgetState = {
   manualServices: any[];
   proposalPaymentOptions?: { pix: boolean; card: boolean; card10?: boolean; card10Provider?: "visa_master" | "cielo" };
   patioNotes?: string;
+  exclusions?: Record<string, string>;
   processStatus: "Em andamento" | "Finalizado";
   internalReview?: InternalBudgetReview;
 };
@@ -927,6 +928,9 @@ export default function App({ initialState, user, onLogout }: any) {
       card10Provider?: "visa_master" | "cielo";
     }>({ pix: true, card: true, card10: false, card10Provider: "visa_master", ...(shared.proposalPaymentOptions ?? {}) }),
     [patioNotes, setPatioNotes] = useState(shared.patioNotes ?? ""),
+    [budgetExclusions, setBudgetExclusions] = useState<Record<string, string>>(
+      shared.budgetExclusions ?? {},
+    ),
     [processStatus, setProcessStatus] = useState<"Em andamento" | "Finalizado">(
       shared.processStatus ?? "Em andamento",
     ),
@@ -942,6 +946,7 @@ export default function App({ initialState, user, onLogout }: any) {
     >({}),
     [budgetReviewCopied, setBudgetReviewCopied] = useState(false);
   const [budgetEvaluationPickerOpen, setBudgetEvaluationPickerOpen] = useState(false);
+  const [budgetEditMode, setBudgetEditMode] = useState(false);
   const firstSave = useRef(true),
     skipSave = useRef(false),
     syncBlockedUntil = useRef(0),
@@ -980,6 +985,7 @@ export default function App({ initialState, user, onLogout }: any) {
         manualServices,
         proposalPaymentOptions,
         patioNotes,
+        budgetExclusions,
         processStatus,
         purchaseChecks,
         purchaseOrderStates,
@@ -1027,6 +1033,7 @@ export default function App({ initialState, user, onLogout }: any) {
     manualServices,
     proposalPaymentOptions,
     patioNotes,
+    budgetExclusions,
     processStatus,
     purchaseChecks,
     purchaseOrderStates,
@@ -1186,6 +1193,39 @@ export default function App({ initialState, user, onLogout }: any) {
     DISPLAY_APPT = updated;
     setActiveAppointment(updated);
     setAppointments((list) => list.map((appointment) => appointment.id === updated.id ? updated : appointment));
+  };
+  const askBudgetRemoval = (label: string) => {
+    const observation = prompt(
+      `Informe a observação para retirar ${label} do orçamento:`,
+      "Cliente não irá fazer a troca no momento.",
+    );
+    if (observation === null) return null;
+    if (!observation.trim()) {
+      alert("Informe a observação antes de retirar o item do orçamento.");
+      return null;
+    }
+    return observation.trim();
+  };
+  const removeBudgetPart = (part: any, index: number) => {
+    const observation = askBudgetRemoval(part.item || "esta peça");
+    if (!observation) return;
+    const evaluationIndex = evaluationIndexForPart(part);
+    if (evaluationIndex) {
+      const nextQuoteExclusions = { ...quoteExclusions, [evaluationIndex]: observation };
+      setQuoteExclusions(nextQuoteExclusions);
+      persistEvaluationBudgetSelection(quoteItems, nextQuoteExclusions);
+    }
+    setBudgetExclusions((current) => ({
+      ...current,
+      [`part-${Date.now()}-${index}`]: `${part.item || "Peça"}: ${observation}`,
+    }));
+    setParts((current: any[]) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+  const removeBudgetService = (label: string, key: string, remove: () => void) => {
+    const observation = askBudgetRemoval(label);
+    if (!observation) return;
+    setBudgetExclusions((current) => ({ ...current, [key]: `${label}: ${observation}` }));
+    remove();
   };
   const reviewParts = parts
       .map((part: any, index: number) => ({ part, index }))
@@ -1356,6 +1396,7 @@ export default function App({ initialState, user, onLogout }: any) {
     setManualServices([]);
     setProposalPaymentOptions({ pix: true, card: true, card10: false });
     setPatioNotes("");
+    setBudgetExclusions({});
     setChecks({});
     setGeometry({});
     setStarted("");
@@ -1498,6 +1539,7 @@ export default function App({ initialState, user, onLogout }: any) {
       manualServices,
       proposalPaymentOptions,
       patioNotes,
+      budgetExclusions,
       processStatus,
       purchaseChecks,
       purchaseOrderStates,
@@ -1859,6 +1901,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setManualServices(a.budget.manualServices ?? []);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(a.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(a.budget.patioNotes ?? "");
+                setBudgetExclusions(a.budget.exclusions ?? {});
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else if (
                 a.status === "agendado" ||
@@ -1871,6 +1914,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setManualServices([]);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
+                setBudgetExclusions({});
                 setProcessStatus("Em andamento");
               }
               setView(
@@ -2442,6 +2486,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           manualServices,
                           proposalPaymentOptions,
                           patioNotes,
+                          exclusions: budgetExclusions,
                           processStatus,
                         };
                         const updated: Appt = {
@@ -2476,7 +2521,42 @@ export default function App({ initialState, user, onLogout }: any) {
                   />
                 </>
               )}
-              {view === "orcamento" && (
+              {view === "orcamento" && budgetEditMode && (
+                <section className="budget-edit-page">
+                  <style>{`.budget-edit-page{max-width:1120px;margin:0 auto;padding:8px 0 28px}.budget-edit-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:8px 0 16px}.budget-edit-head h2{margin:0;color:#172033}.budget-edit-head p{margin:5px 0 0;color:#637085}.budget-edit-section{border:1px solid #dce3eb;border-radius:14px;background:#fff;margin:13px 0;overflow:hidden;box-shadow:0 2px 7px #1720330d}.budget-edit-section h3{margin:0;padding:12px 16px;background:#f4f7fa;color:#172033;font-size:16px}.budget-edit-row{display:grid;grid-template-columns:minmax(0,1fr) 88px 120px 42px;gap:12px;align-items:center;padding:11px 16px;border-top:1px solid #edf0f3}.budget-edit-row .budget-edit-name{font-weight:800;color:#27354c}.budget-edit-row small{display:block;color:#738096;margin-top:2px}.budget-edit-row input{width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccd5e0;border-radius:7px}.budget-edit-empty{padding:14px 16px;color:#7a8797;font-size:13px}.budget-edit-trash{border:0;border-radius:8px;background:#fff0f1;color:#bb2535;font-size:18px;line-height:32px;height:34px;cursor:pointer}.budget-edit-add{margin:12px 16px;padding:9px 12px;border-radius:8px;border:1px solid #2f78b7;background:#f2f8fd;color:#14578d;font-weight:800;cursor:pointer}.budget-edit-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.budget-edit-actions button{padding:12px 16px;border-radius:9px;border:1px solid #b8c3d0;background:#fff;font-weight:850;cursor:pointer}.budget-edit-actions .primary{background:#2b9d54;color:#fff;border-color:#237f43}@media(max-width:620px){.budget-edit-head{display:block}.budget-edit-head button{margin-top:12px}.budget-edit-row{grid-template-columns:minmax(0,1fr) 36px}.budget-edit-row input{grid-column:1}.budget-edit-row b{grid-column:1}.budget-edit-trash{grid-column:2;grid-row:1 / span 3}.budget-edit-actions{flex-direction:column}.budget-edit-actions button{width:100%}}`}</style>
+                  <div className="budget-edit-head">
+                    <div><h2>Alterar orçamento</h2><p>Revise os itens por categoria. A lixeira sempre pede uma observação antes de retirar.</p></div>
+                    <button type="button" onClick={() => { setBudgetEditMode(false); setView("proposta"); scrollTo(0, 0); }}>Cancelar</button>
+                  </div>
+                  <section className="budget-edit-section">
+                    <h3>Peças</h3>
+                    {parts.length === 0 && <div className="budget-edit-empty">Nenhuma peça incluída.</div>}
+                    {parts.map((part: any, index: number) => <div className="budget-edit-row" key={`part-${index}`}>
+                      <span className="budget-edit-name">{part.item || "Peça sem descrição"}<small>{[part.brand, part.supplier, part.code].filter(Boolean).join(" · ") || "Sem marca, fornecedor ou código"}</small></span>
+                      <input aria-label={`Quantidade de ${part.item || "peça"}`} type="number" min="1" value={part.qty || ""} onChange={(e) => setParts((current: any[]) => current.map((item, itemIndex) => itemIndex === index ? { ...item, qty: +e.target.value } : item))} />
+                      <b>{brl((part.qty || 0) * saleOf(part, roundStep))}</b>
+                      <button type="button" className="budget-edit-trash" title="Excluir peça" aria-label={`Excluir ${part.item || "peça"}`} onClick={() => removeBudgetPart(part, index)}>🗑</button>
+                    </div>)}
+                    <button type="button" className="budget-edit-add" onClick={() => setBudgetEvaluationPickerOpen((open) => !open)}>{budgetEvaluationPickerOpen ? "Fechar lista da avaliação" : "+ Incluir peça da avaliação inicial"}</button>
+                    {budgetEvaluationPickerOpen && <div className="budget-evaluation-options">{evaluationBudgetItems.map((entry) => {
+                      const alreadyInBudget = parts.some((part: any) => evaluationIndexForPart(part) === entry.index || String(part.item ?? "").trim().toLocaleUpperCase("pt-BR") === entry.name.trim().toLocaleUpperCase("pt-BR"));
+                      return <div className={alreadyInBudget ? "included" : ""} key={`edit-evaluation-${entry.index}`}><span><b>{entry.name}</b><small>{entry.exclusion ? `Retirado antes: ${entry.exclusion}` : entry.note || "Item da avaliação inicial"}</small></span><button type="button" disabled={alreadyInBudget} onClick={() => { const nextQuoteItems = { ...quoteItems, [entry.index]: true }, nextQuoteExclusions = { ...quoteExclusions }; delete nextQuoteExclusions[entry.index]; setParts((current: any[]) => [...current, { item: titleCase(entry.name), brand: "", supplier: "", code: "", qty: 1, cost: 0, margin: 0, saleOverride: null, manual: false, evaluationIndex: entry.index }]); setQuoteItems(nextQuoteItems); setQuoteExclusions(nextQuoteExclusions); persistEvaluationBudgetSelection(nextQuoteItems, nextQuoteExclusions); }}>{alreadyInBudget ? "Já incluído" : "Incluir"}</button></div>;
+                    })}</div>}
+                  </section>
+                  {[
+                    { title: "Alinhamento", services: selectedServices.filter((index) => SERVICE_GROUPS[3].indexes.includes(index)), manual: [] as any[] },
+                    { title: "Mão de obra", services: selectedServices.filter((index) => !SERVICE_GROUPS[3].indexes.includes(index) && !SERVICE_GROUPS[4].indexes.includes(index)), manual: manualServices.map((service: any, index: number) => ({ service, index })).filter(({ service }: any) => !isGabaritagemManualService(service)) },
+                    { title: "Gabaritagem", services: selectedServices.filter((index) => SERVICE_GROUPS[4].indexes.includes(index)), manual: manualServices.map((service: any, index: number) => ({ service, index })).filter(({ service }: any) => isGabaritagemManualService(service)) },
+                  ].map((section) => <section className="budget-edit-section" key={section.title}>
+                    <h3>{section.title}</h3>
+                    {section.services.length === 0 && section.manual.length === 0 && <div className="budget-edit-empty">Nenhum item incluído nesta parte.</div>}
+                    {section.services.map((serviceIndex) => <div className="budget-edit-row" key={`service-${serviceIndex}`}><span className="budget-edit-name">{SERVICES[serviceIndex]?.[0]}</span><input aria-label={`Quantidade de ${SERVICES[serviceIndex]?.[0]}`} type="number" min="1" value={serviceQty[serviceIndex] ?? ""} onChange={(e) => setServiceQty((current) => ({ ...current, [serviceIndex]: +e.target.value }))} /><b>{brl((serviceQty[serviceIndex] || 0) * servicePrice(serviceIndex, servicePrices))}</b><button type="button" className="budget-edit-trash" title="Excluir serviço" aria-label={`Excluir ${SERVICES[serviceIndex]?.[0]}`} onClick={() => removeBudgetService(SERVICES[serviceIndex]?.[0] || "este serviço", `service-${serviceIndex}`, () => setSelectedServices((current) => current.filter((value) => value !== serviceIndex)))}>🗑</button></div>)}
+                    {section.manual.map(({ service, index }: any) => <div className="budget-edit-row" key={`manual-${index}`}><span className="budget-edit-name">{service.name || "Mão de obra sem descrição"}<small>Serviço manual</small></span><input aria-label={`Quantidade de ${service.name || "serviço manual"}`} type="number" min="1" value={service.qty || ""} onChange={(e) => setManualServices((current: any[]) => current.map((item, itemIndex) => itemIndex === index ? { ...item, qty: +e.target.value } : item))} /><b>{brl((service.qty || 0) * (service.value || 0))}</b><button type="button" className="budget-edit-trash" title="Excluir serviço" aria-label={`Excluir ${service.name || "serviço manual"}`} onClick={() => removeBudgetService(service.name || "este serviço", `manual-${Date.now()}-${index}`, () => setManualServices((current: any[]) => current.filter((_, itemIndex) => itemIndex !== index)))}>🗑</button></div>)}
+                  </section>)}
+                  <div className="budget-edit-actions"><button type="button" onClick={() => { setBudgetEditMode(false); setView("proposta"); scrollTo(0, 0); }}>Voltar para proposta</button><button type="button" className="primary" onClick={() => { if (activeAppointment) { const updated = { ...activeAppointment, budget: { ...activeAppointment.budget, parts, selectedServices, serviceQty, servicePrices, manualServices, proposalPaymentOptions, patioNotes, exclusions: budgetExclusions, processStatus }, budgetEditedBy: user.displayName, budgetEditedAt: new Date().toISOString(), lastEditedBy: user.displayName, lastEditedAt: new Date().toISOString(), _updatedAt: Date.now() }; DISPLAY_APPT = updated; setActiveAppointment(updated); setAppointments((current) => current.map((appointment) => appointment.id === updated.id ? updated : appointment)); } setBudgetEditMode(false); setView("proposta"); scrollTo(0, 0); }}>Salvar alterações e voltar à proposta</button></div>
+                </section>
+              )}
+              {view === "orcamento" && !budgetEditMode && (
                 <>
                   <Collapse
                     title="▣ Peças para orçamento"
@@ -3420,6 +3500,7 @@ export default function App({ initialState, user, onLogout }: any) {
                                   manualServices,
                                   proposalPaymentOptions,
                                   patioNotes,
+                                  exclusions: budgetExclusions,
                                   processStatus,
                                   internalReview,
                                 },
@@ -3690,6 +3771,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             proposalPaymentOptions,
                             patioNotes,
+                            exclusions: budgetExclusions,
                             processStatus: "Em andamento",
                             internalReview:
                               activeAppointment.budget?.internalReview,
@@ -3756,7 +3838,7 @@ export default function App({ initialState, user, onLogout }: any) {
                     </button>
                   </div>
                   <div className="propactions">
-                    <button className="edit-budget-action" onClick={() => go("orcamento")}>
+                    <button className="edit-budget-action" onClick={() => { setBudgetEditMode(true); setView("orcamento"); scrollTo(0, 0); }}>
                       ✎ Alterar orçamento
                     </button>
                     <button onClick={() => printStage("orcamento")}>
@@ -3777,6 +3859,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             manualServices,
                             proposalPaymentOptions,
                             patioNotes,
+                            exclusions: budgetExclusions,
                             processStatus: "Em andamento",
                             internalReview:
                               activeAppointment.budget?.internalReview,
@@ -3896,6 +3979,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           manualServices,
                           proposalPaymentOptions,
                           patioNotes,
+                          exclusions: budgetExclusions,
                           processStatus: "Em andamento",
                           internalReview:
                             activeAppointment.budget?.internalReview,
@@ -4268,6 +4352,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           manualServices,
                           proposalPaymentOptions,
                           patioNotes,
+                          exclusions: budgetExclusions,
                           processStatus: "Finalizado",
                           internalReview:
                             activeAppointment.budget?.internalReview,
@@ -4384,6 +4469,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setManualServices(a.budget.manualServices ?? []);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(a.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(a.budget.patioNotes ?? "");
+                setBudgetExclusions(a.budget.exclusions ?? {});
                 setProcessStatus(a.budget.processStatus ?? "Em andamento");
               } else {
                 setParts([]);
@@ -4393,6 +4479,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setManualServices([]);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
+                setBudgetExclusions({});
                 setProcessStatus("Em andamento");
               }
               setView(
@@ -4687,6 +4774,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setManualServices(opened.budget.manualServices ?? []);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(opened.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(opened.budget.patioNotes ?? "");
+                setBudgetExclusions(opened.budget.exclusions ?? {});
                 setProcessStatus(opened.budget.processStatus ?? "Em andamento");
               } else {
                 setParts([]);
@@ -4696,6 +4784,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setManualServices([]);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
+                setBudgetExclusions({});
                 setProcessStatus("Em andamento");
               }
               setCheckOpen(false);
