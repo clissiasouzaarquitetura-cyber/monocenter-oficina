@@ -3846,6 +3846,9 @@ export default function App({ initialState, user, onLogout }: any) {
                             date: serviceScheduleDate,
                             time: serviceScheduleTime,
                             status: "agendado",
+                            // Esta é a cópia que vai para a Agenda. O registro
+                            // original continua sendo o orçamento do WhatsApp.
+                            quoteChannel: undefined,
                             serviceScheduled: true,
                             sourceAppointmentId: activeAppointment.id,
                             serviceAppointmentId: undefined,
@@ -3854,6 +3857,8 @@ export default function App({ initialState, user, onLogout }: any) {
                             conference: undefined,
                             scheduledBy: user.displayName,
                             createdAt: now,
+                            internalNote:
+                              "CLIENTE JÁ POSSUI ORÇAMENTO PRÉVIO, enviado pelo WhatsApp.",
                             lastEditedBy: user.displayName,
                             lastEditedAt: now,
                             _updatedAt: Date.now() + 1,
