@@ -812,6 +812,8 @@ export default function App({ initialState, user, onLogout }: any) {
     [messagePhone, setMessagePhone] = useState(""),
     [quoteMessageFor, setQuoteMessageFor] = useState<number | null>(null),
     [confirmationMessageFor, setConfirmationMessageFor] = useState<number | null>(null),
+    [quoteForecastFor, setQuoteForecastFor] = useState<number | null>(null),
+    [quoteForecastDate, setQuoteForecastDate] = useState(""),
     [serviceScheduleDate, setServiceScheduleDate] = useState(""),
     [serviceScheduleTime, setServiceScheduleTime] = useState(""),
     [status, setStatus] = useState<Record<number, string>>({}),
@@ -4641,6 +4643,7 @@ export default function App({ initialState, user, onLogout }: any) {
                   source.note?.trim(),
                   "Prévia de orçamento enviada pelo WhatsApp. Itens e valores foram trazidos do orçamento original.",
                 ].filter(Boolean).join("\n\n"),
+                internalNote: "CLIENTE JÁ POSSUI ORÇAMENTO PRÉVIO, enviado pelo WhatsApp.",
               };
               syncBlockedUntil.current = Date.now() + 4000;
               setAppointments((list) => [
@@ -4931,6 +4934,9 @@ export default function App({ initialState, user, onLogout }: any) {
                 ? () => {
                     const quoteSentAt = new Date().toISOString();
                     const quoteSentBy = user.displayName;
+                    const sentAppointment = appointments.find(
+                      (appointment) => appointment.id === quoteMessageFor,
+                    );
                     setAppointments((list) =>
                       list.map((a) =>
                         a.id === quoteMessageFor
@@ -4954,6 +4960,13 @@ export default function App({ initialState, user, onLogout }: any) {
                       };
                       DISPLAY_APPT = updated;
                       setActiveAppointment(updated);
+                    }
+                    if (sentAppointment?.quoteChannel === "whatsapp") {
+                      setQuoteForecastFor(quoteMessageFor);
+                      setQuoteForecastDate("");
+                      setMessage("");
+                      setMessagePhone("");
+                      setQuoteMessageFor(null);
                     }
                   }
                 : confirmationMessageFor
@@ -4981,6 +4994,47 @@ export default function App({ initialState, user, onLogout }: any) {
             closeAfterSent={!!confirmationMessageFor}
             sentLabel={confirmationMessageFor ? "Confirmação enviada" : "Orçamento enviado"}
           />
+        )}
+        {quoteForecastFor && (
+          <div className="backdrop" role="dialog" aria-modal="true" aria-label="Previsão para realizar o serviço">
+            <div className="messagebox quote-forecast-box">
+              <style>{`.quote-forecast-box{max-width:520px}.quote-forecast-box h2{margin:0 0 8px}.quote-forecast-box p{line-height:1.5;color:#526274}.quote-forecast-box label{display:grid;gap:6px;margin-top:18px;color:#34445c;font-size:12px;font-weight:900}.quote-forecast-box input{padding:11px;border:1px solid #b9c9d9;border-radius:8px;font-size:15px}`}</style>
+              <h2>Previsão para realizar o serviço</h2>
+              <p>O orçamento foi marcado como enviado. O cliente informou uma previsão para fazer o serviço?</p>
+              <label>
+                Data para lembrar o cliente <small>(preencha somente se houver previsão)</small>
+                <input type="date" value={quoteForecastDate} onChange={(event) => setQuoteForecastDate(event.target.value)} />
+              </label>
+              <footer>
+                <button onClick={() => setQuoteForecastFor(null)}>Não informou previsão</button>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    if (!quoteForecastDate) {
+                      alert("Informe a data prevista ou escolha ‘Não informou previsão’.");
+                      return;
+                    }
+                    const now = new Date().toISOString();
+                    syncBlockedUntil.current = Date.now() + 4000;
+                    setAppointments((list) => list.map((appointment) => appointment.id === quoteForecastFor ? {
+                      ...appointment,
+                      quoteFollowUpDueDate: quoteForecastDate,
+                      quoteFollowUpDecision: "message",
+                      quoteFollowUpUpdatedBy: user.displayName,
+                      quoteFollowUpUpdatedAt: now,
+                      lastEditedBy: user.displayName,
+                      lastEditedAt: now,
+                      _updatedAt: Date.now(),
+                    } : appointment));
+                    setQuoteForecastFor(null);
+                    alert("Lembrete salvo em Orçamentos em aberto.");
+                  }}
+                >
+                  Salvar data para lembrete
+                </button>
+              </footer>
+            </div>
+          </div>
         )}
         <ManualQuotePrintSheet
           appointment={activeAppointment}
@@ -5366,6 +5420,11 @@ function Agenda({
   confirmationTemplate,
   prepareConfirmation,
 }: any) {
+  // Orçamentos iniciados pelo WhatsApp ficam somente no relatório até que
+  // sejam enviados manualmente para a agenda.
+  const calendarAppointments = (data as Appt[]).filter(
+    (appointment) => appointment.quoteChannel !== "whatsapp",
+  );
   const today = new Date(),
     todayIso = iso(today),
     tomorrow = new Date(today);
@@ -5426,7 +5485,7 @@ function Agenda({
       targetDate <= carryLimitIso &&
       isBusinessDay(targetDate),
     appointmentsForDate = (targetDate: string) =>
-      (data as Appt[]).filter(
+      calendarAppointments.filter(
         (appointment) =>
           appointment.date === targetDate ||
           isCarriedInto(appointment, targetDate),
@@ -5485,7 +5544,7 @@ function Agenda({
     compactAppointmentSearch = normalizedAppointmentSearch.replace(/[^a-z0-9]/g, ""),
     appointmentSearchActive = normalizedAppointmentSearch.length >= 2,
     appointmentSearchResults = appointmentSearchActive
-      ? (data as Appt[])
+      ? calendarAppointments
           .filter((appointment) => {
             if (isEmployeeAbsence(appointment)) return false;
             const client = normalizeSearch(appointment.client || "");
@@ -5506,12 +5565,12 @@ function Agenda({
       : [],
     selectedDayAppointments =
       mode === "semana"
-        ? (data as Appt[]).filter((appointment) => appointment.date === date)
+        ? calendarAppointments.filter((appointment) => appointment.date === date)
         : appointmentsForDate(date),
     visibleSelectedDayAppointments = selectedDayAppointments.filter(
       (appointment) => !isEmployeeAbsence(appointment),
     ),
-    ongoingVehicles = (data as Appt[]).filter(isOngoingVehicle),
+    ongoingVehicles = calendarAppointments.filter(isOngoingVehicle),
     dayAppointments = Array.from(
       new Map(
         [
@@ -5536,7 +5595,7 @@ function Agenda({
       );
     }),
     ongoingVehicleCount = ongoingVehicles.length,
-    openQuotesCount = (data as Appt[]).filter(
+    openQuotesCount = calendarAppointments.filter(
       (a) =>
         a.type === "cliente" &&
         a.status === "avaliou" &&
@@ -5544,7 +5603,7 @@ function Agenda({
         !a.serviceAppointmentId &&
         a.budget?.processStatus !== "Finalizado",
     ).length,
-    inProgressCount = (data as Appt[]).filter(
+    inProgressCount = calendarAppointments.filter(
       (a) =>
         (a.inProgress || a.status === "servico") &&
         !isEmployeeAbsence(a) &&
@@ -5560,7 +5619,7 @@ function Agenda({
         : mode === "semana"
           ? `${calendarDays[0].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${calendarDays[6].toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}`
           : fmt(date);
-  const confirmationReminders = (data as Appt[])
+  const confirmationReminders = calendarAppointments
       .filter(
         (appointment) =>
           appointment.date === tomorrowIso &&
@@ -5669,7 +5728,7 @@ function Agenda({
       if (next.getDay() === 5) {
         const saturday = new Date(next);
         saturday.setDate(next.getDate() + 1);
-        const hasSaturdayAppointments = (data as Appt[]).some(
+        const hasSaturdayAppointments = calendarAppointments.some(
           (appointment) =>
             !isEmployeeAbsence(appointment) &&
             appointment.date === iso(saturday),
@@ -5684,7 +5743,7 @@ function Agenda({
       }
       return next;
     })(),
-    teamAgendaRows = (data as Appt[])
+    teamAgendaRows = calendarAppointments
       .filter(
         (appointment) =>
           !isEmployeeAbsence(appointment) &&
@@ -5856,7 +5915,7 @@ function Agenda({
             {printWeekDays.map((day) => {
               const dayIso = iso(day),
                 holiday = holidays.find((item: any) => item.date === dayIso),
-                dayAppointments = (data as Appt[])
+                dayAppointments = calendarAppointments
                   .filter((appointment) => appointment.date === dayIso)
                   .sort((first, second) =>
                     first.time.localeCompare(second.time),
@@ -5901,7 +5960,7 @@ function Agenda({
             {printMonthDays.map((day) => {
               const dayIso = iso(day),
                 holiday = holidays.find((item: any) => item.date === dayIso),
-                dayAppointments = (data as Appt[])
+                dayAppointments = calendarAppointments
                   .filter((appointment) => appointment.date === dayIso)
                   .sort((first, second) =>
                     first.time.localeCompare(second.time),
@@ -6238,7 +6297,7 @@ function Agenda({
                     {visibleWeekDays.map((d) => {
                       const ds = iso(d),
                         holiday = holidays.find((h: any) => h.date === ds),
-                        apps = (data as Appt[]).filter(
+                        apps = calendarAppointments.filter(
                           (appointment) => appointment.date === ds,
                         );
                       return (
@@ -11748,16 +11807,6 @@ function Reports({
                         <button onClick={() => print(a)}>
                           Imprimir
                         </button>
-                        {a.quoteChannel === "whatsapp" && <button
-                          type="button"
-                          onClick={() => {
-                            setScheduleTarget(a);
-                            setScheduleDate(iso(new Date()));
-                            setScheduleTime("");
-                          }}
-                        >
-                          Enviar p/ agenda
-                        </button>}
                         <button
                           className="wa"
                           onClick={() => prepareQuoteFollowUp(a)}
@@ -11871,7 +11920,22 @@ function Reports({
                     <div className="quote-summary-note"><b>Observações técnicas</b>{quoteSummary.budget?.patioNotes || quoteSummary.internalNote || "Nenhuma observação registrada."}</div>
                   </div>
                 </div>
-                <div className="quote-summary-footer"><button onClick={() => setQuoteSummary(null)}>Fechar resumo</button></div>
+                <div className="quote-summary-footer">
+                  <button onClick={() => setQuoteSummary(null)}>Fechar resumo</button>
+                  {quoteSummary.quoteChannel === "whatsapp" && (
+                    <button
+                      className="primary"
+                      onClick={() => {
+                        setScheduleTarget(quoteSummary);
+                        setScheduleDate(iso(new Date()));
+                        setScheduleTime("");
+                        setQuoteSummary(null);
+                      }}
+                    >
+                      Enviar para agendamento
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -11881,7 +11945,7 @@ function Reports({
                 <style>{`.quote-schedule-modal{max-width:560px}.quote-schedule-modal p{color:#526274;line-height:1.5}.quote-schedule-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.quote-schedule-fields label{display:grid;gap:6px;font-size:12px;font-weight:900;color:#34445c}.quote-schedule-fields input{padding:10px;border:1px solid #b9c9d9;border-radius:8px;font-size:14px}@media(max-width:560px){.quote-schedule-fields{grid-template-columns:1fr}}`}</style>
                 <header><span><small>ENVIAR PARA AGENDA</small><h2>{scheduleTarget.client}</h2></span><button className="quote-summary-close" onClick={() => setScheduleTarget(null)} aria-label="Fechar">×</button></header>
                 <div className="quote-summary-body">
-                  <p>O agendamento levará o veículo, contato e a prévia de orçamento que já foi feita pelo WhatsApp.</p>
+                  <p><b>Cliente já possui orçamento prévio.</b> O agendamento levará o veículo, contato e os itens/valores que foram enviados pelo WhatsApp.</p>
                   <div className="quote-schedule-fields">
                     <label>Data do atendimento<input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></label>
                     <label>Horário<input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></label>
