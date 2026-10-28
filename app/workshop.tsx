@@ -379,6 +379,7 @@ type View =
   | "atendimento"
   | "avaliacao"
   | "orcamento"
+  | "orcamento_whats"
   | "proposta"
   | "geometria"
   | "torque"
@@ -394,6 +395,7 @@ const RESTORABLE_VIEWS = new Set<View>([
   "laudos",
   "compras",
   "orcamentos_abertos",
+  "orcamento_whats",
   "relatorios",
   "historico",
   "config",
@@ -469,6 +471,7 @@ type Appt = {
     };
   };
   quoteSentAt?: string;
+  quoteChannel?: "whatsapp";
   quoteSentBy?: string;
   quoteFollowUpDays?: number;
   quoteFollowUpDueDate?: string;
@@ -1442,6 +1445,7 @@ export default function App({ initialState, user, onLogout }: any) {
     ["laudos", "Laudos de geometria", "▤"],
     ["avaliacao", "Avaliação", "✓"],
     ["orcamento", "Orçamento", "$"],
+    ["orcamento_whats", "Orçamento Whats", "◌"],
     ["proposta", "Proposta", "▤"],
     ["torque", "Conferência", "◇"],
     ["compras", "Pedido de compra", "☑"],
@@ -1993,6 +1997,51 @@ export default function App({ initialState, user, onLogout }: any) {
               setConfirmationMessageFor(appointment.id);
               setMessagePhone(appointment.phone || "");
               setMessage(text);
+            }}
+          />
+        )}
+        {view === "orcamento_whats" && (
+          <WhatsAppQuoteStart
+            onStart={({ date, client, vehicle, phone }) => {
+              const now = new Date().toISOString();
+              const created: Appt = {
+                id: Date.now(),
+                date,
+                time: "",
+                client,
+                phone,
+                vehicle,
+                plate: "",
+                km: "",
+                note: "Orçamento solicitado pelo WhatsApp.",
+                type: "cliente",
+                appointmentServiceType: "pecas",
+                status: "avaliou",
+                quoteChannel: "whatsapp",
+                createdAt: now,
+                lastEditedBy: user.displayName,
+                lastEditedAt: now,
+                _updatedAt: Date.now(),
+              };
+              DISPLAY_APPT = created;
+              setActiveAppointment(created);
+              setAppointments((list) => [created, ...list]);
+              setStatus({});
+              setQuoteItems({});
+              setQuoteExclusions({});
+              setCustom([]);
+              setEvaluationNotes({});
+              setParts([]);
+              setSelectedServices([]);
+              setServiceQty({});
+              setServicePrices({});
+              setManualServices([]);
+              setProposalPaymentOptions({ pix: true, card: true, card10: false });
+              setPatioNotes("");
+              setBudgetExclusions({});
+              setStarted("");
+              setView("avaliacao");
+              scrollTo(0, 0);
             }}
           />
         )}
@@ -3846,10 +3895,16 @@ export default function App({ initialState, user, onLogout }: any) {
                       <summary>🖨 Impressão</summary>
                       <div>
                         <button type="button" onClick={() => printStage("orcamento")}>
-                          {activeAppointment?.status === "servico" ? "Imprimir orçamento aprovado" : "Imprimir com valores"}
+                          {activeAppointment?.status === "servico" ? "Orçamento aprovado — imprimir / salvar PDF" : "Orçamento — imprimir / salvar PDF"}
                         </button>
                         <button type="button" onClick={() => printNoValues("proposta")}>
-                          Imprimir sem valores - pátio
+                          Folha pátio — sem valores
+                        </button>
+                        <button type="button" onClick={() => {
+                          printStage("orcamento");
+                          alert("Na tela de impressão, escolha ‘Salvar como PDF’. Depois, envie o arquivo pelo WhatsApp do cliente.");
+                        }}>
+                          Gerar orçamento em PDF para enviar ao cliente
                         </button>
                       </div>
                     </details>
@@ -3896,6 +3951,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           }),
                         );
                         setQuoteMessageFor(activeAppointment?.id ?? null);
+                        setMessagePhone(activeAppointment?.phone ?? "");
                         setMessage(quote);
                       }}
                     >
@@ -5084,6 +5140,41 @@ function StageActions({
       )}
       {savedAt && <small>Último salvamento: {savedAt}</small>}
     </div>
+  );
+}
+function WhatsAppQuoteStart({ onStart }: { onStart: (data: { date: string; client: string; vehicle: string; phone: string }) => void }) {
+  const [draft, setDraft] = useState({
+    date: iso(new Date()),
+    client: "",
+    vehicle: "",
+    phone: "",
+  });
+  const start = () => {
+    if (!draft.date || !draft.client.trim() || !draft.vehicle.trim() || !draft.phone.trim()) {
+      alert("Preencha data, nome do cliente, veículo e WhatsApp para iniciar o orçamento.");
+      return;
+    }
+    onStart({
+      date: draft.date,
+      client: titleCase(draft.client.trim()),
+      vehicle: titleCase(draft.vehicle.trim()),
+      phone: draft.phone.trim(),
+    });
+  };
+  return (
+    <section className="whatsapp-quote-start">
+      <style>{`.whatsapp-quote-start{max-width:820px;margin:25px auto;padding:26px;border:1px solid #d7e2ed;border-radius:16px;background:#fff;box-shadow:0 7px 24px #17203312}.whatsapp-quote-start h2{margin:0;color:#172033}.whatsapp-quote-start p{color:#5e6e80;line-height:1.5}.whatsapp-quote-start .whatsapp-quote-badge{display:inline-block;margin-bottom:10px;padding:6px 10px;border-radius:20px;background:#dff6e7;color:#14713a;font-size:12px;font-weight:900}.whatsapp-quote-start .whatsapp-quote-fields{display:grid;grid-template-columns:150px 1fr 1fr;gap:14px;margin:22px 0}.whatsapp-quote-start label{display:grid;gap:6px;color:#34445c;font-size:12px;font-weight:850}.whatsapp-quote-start label:last-child{grid-column:span 2}.whatsapp-quote-start input{min-width:0;padding:11px 12px;border:1px solid #b9c9d9;border-radius:8px;font-size:15px}.whatsapp-quote-start footer{display:flex;justify-content:flex-end}.whatsapp-quote-start button{padding:12px 17px;border:1px solid #168247;border-radius:9px;background:#20a456;color:#fff;font-weight:900;cursor:pointer}@media(max-width:680px){.whatsapp-quote-start{margin:10px;padding:18px}.whatsapp-quote-start .whatsapp-quote-fields{grid-template-columns:1fr}.whatsapp-quote-start label:last-child{grid-column:auto}.whatsapp-quote-start footer button{width:100%}}`}</style>
+      <span className="whatsapp-quote-badge">ORÇAMENTO SOLICITADO PELO WHATSAPP</span>
+      <h2>Novo orçamento Whats</h2>
+      <p>Cadastre o pedido primeiro. Em seguida, você irá para a avaliação para selecionar os itens e depois incluir os valores.</p>
+      <div className="whatsapp-quote-fields">
+        <label>Data do pedido<input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
+        <label>Nome do cliente<input value={draft.client} onChange={(event) => setDraft({ ...draft, client: event.target.value })} placeholder="Nome do cliente" /></label>
+        <label>Veículo / modelo<input value={draft.vehicle} onChange={(event) => setDraft({ ...draft, vehicle: event.target.value })} placeholder="Ex.: Onix 1.0" /></label>
+        <label>WhatsApp<input inputMode="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} placeholder="(15) 99999-9999" /></label>
+      </div>
+      <footer><button type="button" onClick={start}>Iniciar avaliação do orçamento →</button></footer>
+    </section>
   );
 }
 function Title({ a, b }: { a: string; b: string }) {
@@ -8120,7 +8211,7 @@ function PrintDocuments({
         </table>
       </section>
       <section className="a4 budget-a4">
-        <BudgetHead title="ORÇAMENTO / FOLHA DO PÁTIO" />
+        <BudgetHead title="ORÇAMENTO" />
         <div className="a4-client">
           <span>
             <b>Cliente</b>
@@ -10911,6 +11002,10 @@ function Reports({
   const category = (a: Appt) =>
     a.quoteFollowUpDecision === "declined"
       ? "Cliente desistiu"
+      : a.quoteChannel === "whatsapp" && a.status === "avaliou"
+        ? a.quoteSentAt
+          ? "Orçamento WhatsApp enviado"
+          : "Orçamento WhatsApp"
       : a.budget?.processStatus === "Finalizado"
       ? "Atendimento concluído"
       : a.type === "retorno"
