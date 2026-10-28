@@ -12181,6 +12181,10 @@ const TITLES: Record<View, [string, string]> = {
     "Montar orçamento",
     "Custos, margem, peças e tabela de serviços.",
   ],
+  orcamento_whats: [
+    "Orçamento Whats",
+    "Cadastre o pedido recebido pelo WhatsApp antes de montar o orçamento.",
+  ],
   proposta: ["Orçamento do cliente", "Data, placa, pagamento e mensagem."],
   torque: [
     "Conferência de torque",
