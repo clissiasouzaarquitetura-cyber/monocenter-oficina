@@ -6485,10 +6485,9 @@ function Agenda({
               {list.length} {list.length === 1 ? "registro" : "registros"}
             </b>
           </div>
-          {date === todayIso && (
-            <div className="team-agenda-reminder">
+          <div className="team-agenda-reminder">
               <span>
-                <small>Lembrete para a equipe</small>
+                <small>Mensagem para a equipe — fica disponível para atualizar e reenviar</small>
                 <b>{teamAgendaLabel}</b>
                 <em>
                   {teamAgendaRows.length}{" "}
@@ -6498,10 +6497,9 @@ function Agenda({
                 </em>
               </span>
               <button type="button" onClick={() => message(teamAgendaMessage)}>
-                Preparar WhatsApp
+                Atualizar e preparar WhatsApp
               </button>
-            </div>
-          )}
+          </div>
           {list.length === 0 && (
             <div className="emptyday">
               Nenhum agendamento. Clique em “Novo agendamento” para incluir.
