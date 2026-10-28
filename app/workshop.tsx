@@ -2802,12 +2802,11 @@ export default function App({ initialState, user, onLogout }: any) {
                             </label>
                             <input
                               type="number"
-                              className={!costs ? "masked-budget-input" : ""}
-                              readOnly={!costs}
+                              className=""
                               min="0"
                               step="0.01"
                               inputMode="decimal"
-                              placeholder={costs ? "0,00" : ""}
+                              placeholder="0,00"
                               aria-label={`Custo de ${p.item || "peça"} em reais`}
                               name={`budget-cost-${activeAppointment?.id ?? "novo"}-${i}`}
                               autoComplete="off"
@@ -2823,12 +2822,11 @@ export default function App({ initialState, user, onLogout }: any) {
                             <label>
                               <input
                                 type="number"
-                                className={!costs ? "masked-budget-input" : ""}
-                                readOnly={!costs}
+                                className=""
                                 min="0"
                                 step="1"
                                 inputMode="numeric"
-                                placeholder={costs ? "0" : ""}
+                                placeholder="0"
                                 aria-label={`Margem de ${p.item || "peça"} em porcentagem`}
                                 name={`budget-margin-${activeAppointment?.id ?? "novo"}-${i}`}
                                 autoComplete="off"
