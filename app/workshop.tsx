@@ -2156,6 +2156,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 view={view}
                 status={processStatus}
                 setStatus={setProcessStatus}
+                hideStatus={activeAppointment?.quoteChannel === "whatsapp"}
                 printPalette={printPalette}
                 setPrintPalette={setPrintPalette}
                 printNoValues={printNoValues}
@@ -4613,6 +4614,52 @@ export default function App({ initialState, user, onLogout }: any) {
                 }),
               );
             }}
+            scheduleQuote={(source: Appt, date: string, time: string) => {
+              const now = new Date().toISOString();
+              const scheduled: Appt = {
+                ...source,
+                id: Date.now(),
+                date,
+                time,
+                status: "agendado",
+                // O orçamento original continua identificado como WhatsApp.
+                // A cópia criada na agenda passa a ser um atendimento normal.
+                quoteChannel: undefined,
+                inProgress: false,
+                startedAt: undefined,
+                serviceScheduled: true,
+                serviceScheduledFor: date,
+                serviceScheduledTime: time,
+                sourceAppointmentId: source.id,
+                serviceAppointmentId: undefined,
+                scheduledBy: user.displayName,
+                createdAt: now,
+                lastEditedBy: user.displayName,
+                lastEditedAt: now,
+                _updatedAt: Date.now(),
+                note: [
+                  source.note?.trim(),
+                  "Prévia de orçamento enviada pelo WhatsApp. Itens e valores foram trazidos do orçamento original.",
+                ].filter(Boolean).join("\n\n"),
+              };
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) => [
+                ...list.map((appointment) => appointment.id === source.id
+                  ? {
+                      ...appointment,
+                      serviceScheduled: true,
+                      serviceScheduledFor: date,
+                      serviceScheduledTime: time,
+                      serviceAppointmentId: scheduled.id,
+                      scheduledBy: user.displayName,
+                      lastEditedBy: user.displayName,
+                      lastEditedAt: now,
+                      _updatedAt: Date.now(),
+                    }
+                  : appointment),
+                scheduled,
+              ]);
+            }}
             message={setMessage}
           />
         )}{" "}
@@ -5051,6 +5098,7 @@ function StageActions({
   view,
   status,
   setStatus,
+  hideStatus,
   printPalette,
   setPrintPalette,
   printNoValues,
@@ -5087,13 +5135,13 @@ function StageActions({
     <div className="stageactions">
       <style>{`.stageactions .status-os-field{display:grid;gap:4px;padding:7px 10px;border:2px solid #e3a600;border-radius:9px;background:#fff4c8;color:#6b4d00;font-weight:950;box-shadow:0 1px 0 #d19300}.stageactions .status-os-field select{min-width:138px;padding:7px 9px;border:1px solid #c99100;border-radius:6px;background:#fff;color:#172033;font-weight:850}.stageactions .print-palette-choice{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.stageactions .print-palette-choice select{min-width:150px;padding:7px 9px;border:1px solid #b9c5d2;border-radius:7px;background:#fff;color:#172033;font-weight:800}.stageactions .stage-print-menu{position:relative;z-index:3}.stageactions .stage-print-menu summary{list-style:none;background:#1877c9;border:1px solid #0d5eaa;border-radius:8px;color:#fff;padding:10px 14px;font-weight:900;cursor:pointer}.stageactions .stage-print-menu summary::-webkit-details-marker{display:none}.stageactions .stage-print-menu[open] summary{border-radius:8px 8px 0 0}.stageactions .stage-print-menu>div{position:absolute;right:0;top:100%;min-width:225px;padding:6px;background:#fff;border:1px solid #0d5eaa;border-radius:8px 0 8px 8px;box-shadow:0 8px 18px #17203333}.stageactions .stage-print-menu button{display:block;width:100%;padding:9px;border:0;border-radius:5px;background:#fff;color:#172033;text-align:left;font-weight:800}.stageactions .stage-print-menu button:hover{background:#e9f4ff}.page:has(.proposal){padding-bottom:155px!important}`}</style>
       <b>{label}</b>
-      <label className="status-os-field">
+      {!hideStatus && <label className="status-os-field">
         Status da OS
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option>Em andamento</option>
           <option>Finalizado</option>
         </select>
-      </label>
+      </label>}
       <button
         className={saveState === "saved" ? "save-confirmed" : ""}
         onClick={handleSave}
@@ -10969,6 +11017,7 @@ function Reports({
   remove,
   updateQuoteFollowUp,
   onSetWorkshopPosition,
+  scheduleQuote,
   message,
 }: any) {
   const [query, setQuery] = useState(""),
@@ -10993,7 +11042,10 @@ function Reports({
     ),
     [quotePrintFrom, setQuotePrintFrom] = useState(""),
     [quotePrintTo, setQuotePrintTo] = useState(iso(new Date())),
-    [quoteSummary, setQuoteSummary] = useState<Appt | null>(null);
+    [quoteSummary, setQuoteSummary] = useState<Appt | null>(null),
+    [scheduleTarget, setScheduleTarget] = useState<Appt | null>(null),
+    [scheduleDate, setScheduleDate] = useState(iso(new Date())),
+    [scheduleTime, setScheduleTime] = useState("");
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -11507,7 +11559,7 @@ function Reports({
               .compact-quote-decision{display:grid;gap:5px}
               .compact-quote-decision label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;cursor:pointer}
               .compact-quote-decision input{width:15px;height:15px;margin:0}
-              .compact-quote-actions{display:flex;justify-content:flex-end;gap:6px}
+              .compact-quote-actions{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
               .compact-quote-actions button{padding:7px 9px;font-size:10px;white-space:nowrap}
               .compact-quote-actions .wa{background:#16864b;color:#fff}
               .declined-quotes{margin-top:12px;border:1px solid #f1c0c3;border-radius:9px;background:#fff7f7}
@@ -11684,9 +11736,25 @@ function Reports({
                         </label>
                       </span>
                       <div className="compact-quote-actions">
-                        <button onClick={() => setQuoteSummary(a)}>
+                        <button onClick={() => open(a)}>
                           Abrir orçamento
                         </button>
+                        <button onClick={() => setQuoteSummary(a)}>
+                          Resumo
+                        </button>
+                        <button onClick={() => print(a)}>
+                          Imprimir
+                        </button>
+                        {a.quoteChannel === "whatsapp" && <button
+                          type="button"
+                          onClick={() => {
+                            setScheduleTarget(a);
+                            setScheduleDate(iso(new Date()));
+                            setScheduleTime("");
+                          }}
+                        >
+                          Enviar p/ agenda
+                        </button>}
                         <button
                           className="wa"
                           onClick={() => prepareQuoteFollowUp(a)}
@@ -11801,6 +11869,22 @@ function Reports({
                   </div>
                 </div>
                 <div className="quote-summary-footer"><button onClick={() => setQuoteSummary(null)}>Fechar resumo</button></div>
+              </div>
+            </div>
+          )}
+          {scheduleTarget && (
+            <div className="quote-summary-backdrop" role="dialog" aria-modal="true" aria-label={`Agendar ${scheduleTarget.client}`}>
+              <div className="quote-summary-modal quote-schedule-modal">
+                <style>{`.quote-schedule-modal{max-width:560px}.quote-schedule-modal p{color:#526274;line-height:1.5}.quote-schedule-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.quote-schedule-fields label{display:grid;gap:6px;font-size:12px;font-weight:900;color:#34445c}.quote-schedule-fields input{padding:10px;border:1px solid #b9c9d9;border-radius:8px;font-size:14px}@media(max-width:560px){.quote-schedule-fields{grid-template-columns:1fr}}`}</style>
+                <header><span><small>ENVIAR PARA AGENDA</small><h2>{scheduleTarget.client}</h2></span><button className="quote-summary-close" onClick={() => setScheduleTarget(null)} aria-label="Fechar">×</button></header>
+                <div className="quote-summary-body">
+                  <p>O agendamento levará o veículo, contato e a prévia de orçamento que já foi feita pelo WhatsApp.</p>
+                  <div className="quote-schedule-fields">
+                    <label>Data do atendimento<input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /></label>
+                    <label>Horário<input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} /></label>
+                  </div>
+                </div>
+                <div className="quote-summary-footer"><button onClick={() => setScheduleTarget(null)}>Cancelar</button><button className="primary" onClick={() => { if (!scheduleDate || !scheduleTime) { alert("Informe a data e o horário do atendimento."); return; } scheduleQuote(scheduleTarget, scheduleDate, scheduleTime); setScheduleTarget(null); alert("Atendimento enviado para a agenda com a prévia do orçamento."); }}>Enviar para agenda</button></div>
               </div>
             </div>
           )}
