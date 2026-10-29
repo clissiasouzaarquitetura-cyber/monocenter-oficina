@@ -1817,7 +1817,15 @@ export default function App({ initialState, user, onLogout }: any) {
           {nav.map((n) => (
             <button
               className={view === n[0] ? "on" : ""}
-              onClick={() => go(n[0])}
+              onClick={() => {
+                if (["avaliacao", "orcamento", "proposta", "torque"].includes(n[0])) {
+                  setActiveAppointment(null);
+                  setView("agenda");
+                  scrollTo(0, 0);
+                  return;
+                }
+                go(n[0]);
+              }}
               key={n[0]}
             >
               <i>{n[2]}</i>
@@ -4712,7 +4720,9 @@ export default function App({ initialState, user, onLogout }: any) {
             remove={(a: Appt) => {
               if (
                 confirm(
-                  `ATENÇÃO: deseja realmente excluir o registro de ${a.client}? Esta ação não poderá ser desfeita.`,
+                  a.serviceAppointmentId
+                    ? `Excluir somente o orçamento Whats de ${a.client} deste relatório?\n\nO atendimento que já foi enviado para a agenda será mantido.`
+                    : `ATENÇÃO: deseja realmente excluir o registro de ${a.client}? Esta ação não poderá ser desfeita.`,
                 )
               ) {
                 syncBlockedUntil.current = Date.now() + 4000;
@@ -4885,7 +4895,15 @@ export default function App({ initialState, user, onLogout }: any) {
             .map((n) => (
               <button
                 className={view === n[0] ? "on" : ""}
-                onClick={() => go(n[0])}
+                onClick={() => {
+                  if (["avaliacao", "orcamento", "proposta", "torque"].includes(n[0])) {
+                    setActiveAppointment(null);
+                    setView("agenda");
+                    scrollTo(0, 0);
+                    return;
+                  }
+                  go(n[0]);
+                }}
                 key={n[0]}
               >
                 <i>{n[2]}</i>
@@ -5458,10 +5476,10 @@ function ManualEvaluationSheet({ close }: { close: () => void }) {
   return <section className="page manual-evaluation-page">
     <style>{`
       .manual-evaluation-page{max-width:1040px}.manual-evaluation-actions{display:flex;justify-content:space-between;gap:12px;margin-bottom:16px}.manual-evaluation-actions button{padding:11px 15px;border:1px solid #9eb2c7;border-radius:8px;background:#fff;color:#172033;font-weight:900;cursor:pointer}.manual-evaluation-actions .primary{border-color:#1876bd;background:#1877c9;color:#fff}.manual-evaluation-sheet{max-width:210mm;margin:0 auto;padding:8mm;background:#fff;color:#172033;box-shadow:0 2px 14px #17203322}.manual-evaluation-head{display:grid;grid-template-columns:32mm 1fr 34mm;gap:3mm;align-items:stretch}.manual-evaluation-logo{display:grid;place-items:center;border:1px solid #b9c9d9;border-radius:2mm;color:#d71920;font-weight:950;font-size:12pt}.manual-evaluation-title{display:grid;place-items:center;border:1px solid #b9c9d9;border-radius:2mm;background:#edf3f8;text-align:center}.manual-evaluation-title strong{font-size:12pt}.manual-evaluation-title small{font-size:7pt}.manual-evaluation-badge{display:grid;place-items:center;border:1px solid #d1a300;border-radius:2mm;background:#fff1ab;color:#5f4700;font-size:10pt;font-weight:950}.manual-evaluation-data{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2mm;margin:3mm 0}.manual-evaluation-data span{min-height:12mm;padding:2mm;border:1px solid #b9c9d9;border-radius:1mm}.manual-evaluation-data b{display:block;color:#64748b;font-size:6.5pt;text-transform:uppercase}.manual-evaluation-data i{display:block;margin-top:3mm;border-bottom:1px solid #64748b}.manual-evaluation-sheet h3{margin:0 0 2mm;padding:2mm 3mm;border-left:4px solid #d1a300;background:#fff8d7;color:#5f4700;font-size:9pt}.manual-evaluation-sheet table{width:100%;border-collapse:collapse;font-size:7pt}.manual-evaluation-sheet th{padding:1.3mm;border:1px solid #aebdca;background:#eef3f7;text-align:left}.manual-evaluation-sheet td{height:4mm;padding:1mm 1.3mm;border:1px solid #c9d4dd;vertical-align:middle}.manual-evaluation-sheet td.center{text-align:center;font-weight:900}.manual-evaluation-sheet .check{display:inline-block;width:3mm;height:3mm;border:1px solid #415364;border-radius:.5mm}.manual-evaluation-sheet .observation-line{display:block;border-bottom:1px solid #9baaba}.manual-evaluation-footer{margin-top:3mm;padding-top:2mm;border-top:1px solid #b9c9d9;font-size:6.5pt}.manual-evaluation-footer span{display:inline-block;min-width:48mm;margin-right:8mm;border-bottom:1px solid #64748b}@media(max-width:700px){.manual-evaluation-sheet{padding:12px;overflow-x:auto}.manual-evaluation-sheet table{min-width:720px}.manual-evaluation-actions{flex-direction:column}.manual-evaluation-actions button{width:100%}}@media print{body.print-manual-evaluation *{visibility:hidden!important}body.print-manual-evaluation .manual-evaluation-sheet,body.print-manual-evaluation .manual-evaluation-sheet *{visibility:visible!important}body.print-manual-evaluation .manual-evaluation-sheet{position:fixed!important;inset:0!important;width:210mm!important;height:297mm!important;max-width:none!important;box-sizing:border-box!important;margin:0!important;padding:7mm!important;box-shadow:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{size:A4 portrait;margin:0}}`}</style>
-    <style>{`.manual-evaluation-sheet table{font-size:6.2pt}.manual-evaluation-sheet th{padding:1mm}.manual-evaluation-sheet td{height:2.9mm;padding:.55mm 1mm;line-height:1}.manual-evaluation-sheet .check{width:2.5mm;height:2.5mm}.manual-evaluation-footer{margin-top:2mm;padding-top:1.5mm}`}</style>
+    <style>{`.manual-evaluation-sheet table{font-size:6.2pt}.manual-evaluation-sheet th{padding:1mm}.manual-evaluation-sheet td{height:2.9mm;padding:.55mm 1mm;line-height:1}.manual-evaluation-sheet .check{width:2.5mm;height:2.5mm}.manual-evaluation-footer{margin-top:2mm;padding-top:1.5mm}.manual-evaluation-logo{border:0!important;background:transparent!important;overflow:visible!important}.manual-evaluation-logo img{display:block;max-width:31mm;max-height:17mm;width:auto;height:auto;object-fit:contain}`}</style>
     <div className="manual-evaluation-actions"><button type="button" onClick={close}>← Voltar para agenda</button><button className="primary" type="button" onClick={() => printWithTemporaryPage("print-manual-evaluation", "size:A4 portrait;margin:0")}>🖨 Imprimir avaliação manual A4</button></div>
     <section className="manual-evaluation-sheet">
-      <header className="manual-evaluation-head"><div className="manual-evaluation-logo">MONOCENTER</div><div className="manual-evaluation-title"><strong>MONOCENTER ALINHAMENTO TÉCNICO</strong><small>Av. Itavuvu, 5341 · Sorocaba/SP · WhatsApp (15) 99657-4741</small></div><div className="manual-evaluation-badge">AVALIAÇÃO</div></header>
+      <header className="manual-evaluation-head"><div className="manual-evaluation-logo"><img src="/logo-monocenter.jpg" alt="Monocenter Alinhamento Técnico" /></div><div className="manual-evaluation-title"><strong>MONOCENTER ALINHAMENTO TÉCNICO</strong><small>Av. Itavuvu, 5341 · Sorocaba/SP · WhatsApp (15) 99657-4741</small></div><div className="manual-evaluation-badge">AVALIAÇÃO</div></header>
       <div className="manual-evaluation-data"><span><b>Cliente</b><i /></span><span><b>Veículo / modelo</b><i /></span><span><b>Placa</b><i /></span><span><b>KM</b><i /></span><span><b>Data</b><i /></span><span><b>Avaliador</b><i /></span></div>
       <h3>Checklist de avaliação técnica — marque o estado encontrado e assinale “Orçar” quando o item precisar entrar no orçamento.</h3>
       <table><thead><tr><th>Nº</th><th>Item avaliado</th><th>Bom</th><th>Atenção</th><th>Urgente</th><th>Orçar</th><th>Observação técnica</th></tr></thead><tbody>{ITEMS.map((item, index) => <tr key={item}><td className="center">{index + 1}</td><td><b>{item}</b></td><td className="center"><i className="check" /></td><td className="center"><i className="check" /></td><td className="center"><i className="check" /></td><td className="center"><i className="check" /></td><td><i className="observation-line" /></td></tr>)}</tbody></table>
@@ -11867,6 +11885,7 @@ function Reports({
               .compact-quote-client{display:grid;gap:2px;min-width:0}
               .compact-quote-client b{overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
               .compact-quote-client small,.compact-quote-age small,.compact-reminder small{color:#64748b;font-size:10px;line-height:1.25}
+              .compact-quote-client .quote-scheduled{color:#08783b;font-weight:900}.compact-quote-client .quote-not-scheduled{color:#8a6200;font-weight:800}
               .compact-quote-age,.compact-reminder{display:grid;gap:3px}
               .compact-reminder-control{display:flex;align-items:center;gap:5px}
               .compact-reminder-control input{width:56px!important;min-width:56px;padding:5px 6px;text-align:center}
@@ -11880,6 +11899,7 @@ function Reports({
               .compact-quote-actions{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap}
               .compact-quote-actions button{padding:7px 9px;font-size:10px;white-space:nowrap}
               .compact-quote-actions .wa{background:#16864b;color:#fff}
+              .compact-quote-actions .danger{border-color:#d71920;background:#fff1f2;color:#a3131c}
               .declined-quotes{margin-top:12px;border:1px solid #f1c0c3;border-radius:9px;background:#fff7f7}
               .declined-quotes summary{padding:10px 12px;color:#a3131c;font-size:12px;font-weight:900;cursor:pointer}
               .declined-quote-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:8px 12px;border-top:1px solid #f1d4d6;font-size:11px}
@@ -11964,6 +11984,13 @@ function Reports({
                           {a.vehicle || "Veículo não informado"} ·{" "}
                           {a.plate || "Sem placa"}
                         </small>
+                        {a.serviceAppointmentId ? (
+                          <small className="quote-scheduled">
+                            ✓ Enviado para agenda{a.serviceScheduledFor ? ` · ${new Date(`${a.serviceScheduledFor}T12:00:00`).toLocaleDateString("pt-BR")}${a.serviceScheduledTime ? ` às ${a.serviceScheduledTime}` : ""}` : ""}
+                          </small>
+                        ) : (
+                          <small className="quote-not-scheduled">Ainda não enviado para a agenda</small>
+                        )}
                       </span>
                       <span className="compact-quote-age">
                         <b>{daysOpen} {daysOpen === 1 ? "dia" : "dias"}</b>
@@ -12079,6 +12106,12 @@ function Reports({
                           onClick={() => prepareQuoteFollowUp(a)}
                         >
                           Preparar mensagem
+                        </button>
+                        <button
+                          className="danger"
+                          onClick={() => remove(a)}
+                        >
+                          Excluir
                         </button>
                       </div>
                     </article>
