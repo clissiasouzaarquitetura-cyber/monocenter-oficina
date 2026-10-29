@@ -396,6 +396,7 @@ type View =
   | "orcamento"
   | "orcamento_whats"
   | "orcamento_rapido_whats"
+  | "orcamentos_whats"
   | "proposta"
   | "geometria"
   | "torque"
@@ -2039,6 +2040,10 @@ export default function App({ initialState, user, onLogout }: any) {
         {view === "orcamento_whats" && (
           <WhatsAppQuoteStart
             quickServiceIndexes={quickQuoteServiceIndexes}
+            onOpenReports={() => {
+              setView("orcamentos_whats");
+              scrollTo(0, 0);
+            }}
             onStart={({ date, client, vehicle, plate, phone, mode }) => {
               const now = new Date().toISOString();
               const created: Appt = {
@@ -2088,6 +2093,7 @@ export default function App({ initialState, user, onLogout }: any) {
         {view === "orcamento_rapido_whats" && activeAppointment && (
           <QuickWhatsQuote
             appointment={activeAppointment}
+            quickServiceIndexes={quickQuoteServiceIndexes}
             selectedServices={selectedServices}
             setSelectedServices={setSelectedServices}
             serviceQty={serviceQty}
@@ -4616,17 +4622,24 @@ export default function App({ initialState, user, onLogout }: any) {
         )}
         {(view === "relatorios" ||
           view === "veiculos" ||
-          view === "orcamentos_abertos") && (
+          view === "orcamentos_abertos" ||
+          view === "orcamentos_whats") && (
           <Reports
             data={appointments}
             user={user}
             initialMode={
               view === "veiculos"
                 ? "andamento"
-                : view === "orcamentos_abertos"
+                : view === "orcamentos_abertos" || view === "orcamentos_whats"
                   ? "abertos"
                   : "registros"
             }
+            initialQuoteScope={view === "orcamentos_whats" ? "whatsapp" : "todos"}
+            whatsOnly={view === "orcamentos_whats"}
+            backToWhats={() => {
+              setView("orcamento_whats");
+              scrollTo(0, 0);
+            }}
             open={(a: Appt) => {
               DISPLAY_APPT = a;
               setActiveAppointment(a);
@@ -5374,7 +5387,7 @@ function StageActions({
     </div>
   );
 }
-function WhatsAppQuoteStart({ quickServiceIndexes, onStart }: { quickServiceIndexes: number[]; onStart: (data: { date: string; client: string; vehicle: string; plate: string; phone: string; mode: "rapido" | "completo" }) => void }) {
+function WhatsAppQuoteStart({ quickServiceIndexes, onOpenReports, onStart }: { quickServiceIndexes: number[]; onOpenReports: () => void; onStart: (data: { date: string; client: string; vehicle: string; plate: string; phone: string; mode: "rapido" | "completo" }) => void }) {
   const [draft, setDraft] = useState({
     date: iso(new Date()),
     client: "",
@@ -5401,6 +5414,7 @@ function WhatsAppQuoteStart({ quickServiceIndexes, onStart }: { quickServiceInde
     <section className="whatsapp-quote-start">
       <style>{`.whatsapp-quote-start{max-width:820px;margin:25px auto;padding:26px;border:1px solid #d7e2ed;border-radius:16px;background:#fff;box-shadow:0 7px 24px #17203312}.whatsapp-quote-start h2{margin:0;color:#172033}.whatsapp-quote-start p{color:#5e6e80;line-height:1.5}.whatsapp-quote-start .whatsapp-quote-badge{display:inline-block;margin-bottom:10px;padding:6px 10px;border-radius:20px;background:#dff6e7;color:#14713a;font-size:12px;font-weight:900}.whatsapp-quote-start .whatsapp-quote-fields{display:grid;grid-template-columns:150px 1fr 1fr;gap:14px;margin:22px 0}.whatsapp-quote-start label{display:grid;gap:6px;color:#34445c;font-size:12px;font-weight:850}.whatsapp-quote-start label:last-child{grid-column:span 2}.whatsapp-quote-start input{min-width:0;padding:11px 12px;border:1px solid #b9c9d9;border-radius:8px;font-size:15px}.whatsapp-quote-start .whatsapp-quote-mode{display:grid;gap:10px;margin:8px 0 22px}.whatsapp-quote-start .whatsapp-quote-mode>b{font-size:15px;color:#172033}.whatsapp-quote-start .whatsapp-quote-mode label{grid-template-columns:21px 1fr;align-items:start;padding:12px;border:1px solid #c5d4e1;border-radius:10px;background:#f8fbfd;cursor:pointer}.whatsapp-quote-start .whatsapp-quote-mode label.selected{border-color:#198b4c;background:#e9f8ef}.whatsapp-quote-start .whatsapp-quote-mode input{width:18px;height:18px;padding:0}.whatsapp-quote-start .whatsapp-quote-mode small{display:block;margin-top:4px;color:#66778b;font-weight:600}.whatsapp-quote-start footer{display:flex;justify-content:flex-end}.whatsapp-quote-start button{padding:12px 17px;border:1px solid #168247;border-radius:9px;background:#20a456;color:#fff;font-weight:900;cursor:pointer}@media(max-width:680px){.whatsapp-quote-start{margin:10px;padding:18px}.whatsapp-quote-start .whatsapp-quote-fields{grid-template-columns:1fr}.whatsapp-quote-start label:last-child{grid-column:auto}.whatsapp-quote-start footer button{width:100%}}`}</style>
       <span className="whatsapp-quote-badge">ORÇAMENTO SOLICITADO PELO WHATSAPP</span>
+      <style>{`.whatsapp-quote-start footer{justify-content:space-between!important;gap:10px}.whatsapp-quote-start button.whatsapp-report-entry{border-color:#2f6fa8;background:#edf5fd;color:#174a78}`}</style>
       <h2>Novo orçamento Whats</h2>
       <p>Escolha primeiro se o cliente quer somente alinhamento e balanceamento, ou um orçamento completo. A placa é opcional e pode ser incluída agora ou posteriormente.</p>
       <div className="whatsapp-quote-fields">
@@ -5415,17 +5429,17 @@ function WhatsAppQuoteStart({ quickServiceIndexes, onStart }: { quickServiceInde
         <label className={draft.mode === "rapido" ? "selected" : ""}><input type="radio" checked={draft.mode === "rapido"} onChange={() => setDraft({ ...draft, mode: "rapido" })} /> <span><strong>Somente alinhamento e balanceamento</strong><small>Orçamento rápido com {quickServiceIndexes.length} serviço{quickServiceIndexes.length === 1 ? "" : "s"} configurado{quickServiceIndexes.length === 1 ? "" : "s"}.</small></span></label>
         <label className={draft.mode === "completo" ? "selected" : ""}><input type="radio" checked={draft.mode === "completo"} onChange={() => setDraft({ ...draft, mode: "completo" })} /> <span><strong>Orçamento completo</strong><small>Abre a avaliação completa para selecionar peças e todos os serviços.</small></span></label>
       </div>
-      <footer><button type="button" onClick={start}>{draft.mode === "rapido" ? "Abrir orçamento rápido →" : "Iniciar avaliação completa →"}</button></footer>
+      <footer><button type="button" className="whatsapp-report-entry" onClick={onOpenReports}>▦ Relatório de orçamentos Whats</button><button type="button" onClick={start}>{draft.mode === "rapido" ? "Abrir orçamento rápido →" : "Iniciar avaliação completa →"}</button></footer>
     </section>
   );
 }
-function QuickWhatsQuote({ appointment, selectedServices, setSelectedServices, serviceQty, setServiceQty, servicePrices, setServicePrices, onBack, onContinue }: any) {
+function QuickWhatsQuote({ appointment, quickServiceIndexes, selectedServices, setSelectedServices, serviceQty, setServiceQty, servicePrices, setServicePrices, onBack, onContinue }: any) {
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const total = selectedServices.reduce((sum: number, index: number) => sum + servicePrice(index, servicePrices) * Number(serviceQty[index] || 0), 0);
   return <section className="page quick-whats-quote">
-    <style>{`.quick-whats-quote{max-width:980px}.quick-whats-quote .quick-head{padding:21px 24px;border-radius:15px;background:#102033;color:#fff}.quick-whats-quote .quick-head h2{margin:0 0 6px}.quick-whats-quote .quick-head p{margin:0;color:#d9e6f3}.quick-whats-quote .quick-list{margin-top:18px;display:grid;gap:10px}.quick-whats-quote .quick-row{display:grid;grid-template-columns:28px minmax(200px,1fr) 110px 170px;align-items:center;gap:12px;padding:15px;border:1px solid #d4dfeb;border-radius:12px;background:#fff}.quick-whats-quote .quick-row.off{opacity:.58}.quick-whats-quote label{display:grid;gap:5px;font-weight:800}.quick-whats-quote input{box-sizing:border-box;min-width:0;width:100%;padding:10px;border:1px solid #9eb9d2;border-radius:8px;font-size:16px}.quick-whats-quote .quick-total{display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding:17px 20px;border-radius:10px;background:#102033;color:#fff;font-size:18px}.quick-whats-quote footer{display:flex;justify-content:space-between;gap:12px;margin-top:18px}.quick-whats-quote button{padding:12px 16px;border:1px solid #9cb2c8;border-radius:9px;background:#fff;font-weight:900;cursor:pointer}.quick-whats-quote button.primary{border-color:#188a4b;background:#20a456;color:#fff}@media(max-width:680px){.quick-whats-quote .quick-row{grid-template-columns:26px 1fr 1fr}.quick-whats-quote .quick-row label:last-child{grid-column:2 / -1}.quick-whats-quote footer{flex-direction:column}.quick-whats-quote footer button{width:100%}}`}</style>
+    <style>{`.quick-whats-quote{max-width:980px}.quick-whats-quote .quick-head{padding:17px 20px;border-radius:12px;background:#102033;color:#fff}.quick-whats-quote .quick-head h2{margin:0 0 4px;font-size:20px}.quick-whats-quote .quick-head p{margin:0;color:#d9e6f3;font-size:13px}.quick-whats-quote .quick-list{margin-top:14px;display:grid;gap:7px}.quick-whats-quote .quick-row{display:grid;grid-template-columns:22px minmax(180px,1fr) 86px 142px;align-items:center;gap:9px;padding:9px 12px;border:1px solid #d4dfeb;border-radius:9px;background:#fff}.quick-whats-quote .quick-row.off{background:#f5f7f9;opacity:.64}.quick-whats-quote .quick-row>b{font-size:13px}.quick-whats-quote label{display:grid;gap:3px;font-size:10px;font-weight:800}.quick-whats-quote input{box-sizing:border-box;min-width:0;width:100%;padding:7px 8px;border:1px solid #9eb9d2;border-radius:6px;font-size:14px}.quick-whats-quote input[type=checkbox]{width:18px;height:18px;padding:0}.quick-whats-quote .quick-total{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:13px 16px;border-radius:9px;background:#102033;color:#fff;font-size:16px}.quick-whats-quote footer{display:flex;justify-content:space-between;gap:12px;margin-top:14px}.quick-whats-quote button{padding:10px 14px;border:1px solid #9cb2c8;border-radius:8px;background:#fff;font-weight:900;cursor:pointer}.quick-whats-quote button.primary{border-color:#188a4b;background:#20a456;color:#fff}@media(max-width:680px){.quick-whats-quote .quick-row{grid-template-columns:24px 1fr 1fr}.quick-whats-quote .quick-row label:last-child{grid-column:2 / -1}.quick-whats-quote footer{flex-direction:column}.quick-whats-quote footer button{width:100%}}`}</style>
     <div className="quick-head"><h2>Orçamento rápido — alinhamento e balanceamento</h2><p>{appointment.client} · {appointment.vehicle}{appointment.plate ? ` · ${appointment.plate}` : ""}. Marque somente o que será enviado ao cliente, informe os valores e avance para a proposta.</p></div>
-    <div className="quick-list">{selectedServices.length ? selectedServices.map((index: number) => <div className="quick-row" key={index}><input aria-label={`Incluir ${SERVICES[index][0]}`} type="checkbox" checked={true} onChange={() => setSelectedServices(selectedServices.filter((item: number) => item !== index))} /><b>{SERVICES[index][0]}</b><label>Qtd.<input type="number" min="1" value={serviceQty[index] ?? 1} onChange={(event) => setServiceQty({ ...serviceQty, [index]: Math.max(1, Number(event.target.value) || 1) })} /></label><label>Valor unitário R$<input inputMode="decimal" value={drafts[index] ?? decimalValue(servicePrice(index, servicePrices))} onFocus={(event) => { setDrafts({ ...drafts, [index]: decimalValue(servicePrice(index, servicePrices)) }); event.currentTarget.select(); }} onChange={(event) => { const value = event.target.value; setDrafts({ ...drafts, [index]: value }); setServicePrices({ ...servicePrices, [index]: parseDecimalValue(value) }); }} onBlur={() => { const next = { ...drafts }; delete next[index]; setDrafts(next); }} /></label></div>) : <div className="card"><p>Nenhum serviço está selecionado. Volte e configure os itens de orçamento rápido em Configurações.</p></div>}</div>
+    <div className="quick-list">{quickServiceIndexes.length ? quickServiceIndexes.map((index: number) => { const selected = selectedServices.includes(index); return <div className={`quick-row ${selected ? "" : "off"}`} key={index}><input aria-label={`Incluir ${SERVICES[index][0]}`} type="checkbox" checked={selected} onChange={() => setSelectedServices(selected ? selectedServices.filter((item: number) => item !== index) : [...selectedServices, index])} /><b>{SERVICES[index][0]}</b><label>Qtd.<input disabled={!selected} type="number" min="1" value={serviceQty[index] ?? 1} onChange={(event) => setServiceQty({ ...serviceQty, [index]: Math.max(1, Number(event.target.value) || 1) })} /></label><label>Valor unitário R$<input disabled={!selected} inputMode="decimal" value={drafts[index] ?? decimalValue(servicePrice(index, servicePrices))} onFocus={(event) => { setDrafts({ ...drafts, [index]: decimalValue(servicePrice(index, servicePrices)) }); event.currentTarget.select(); }} onChange={(event) => { const value = event.target.value; setDrafts({ ...drafts, [index]: value }); setServicePrices({ ...servicePrices, [index]: parseDecimalValue(value) }); }} onBlur={() => { const next = { ...drafts }; delete next[index]; setDrafts(next); }} /></label></div>; }) : <div className="card"><p>Nenhum serviço está configurado. Vá em Configurações e escolha os serviços de orçamento rápido.</p></div>}</div>
     <div className="quick-total"><span>Total do orçamento</span><b>{brl(total)}</b></div>
     <footer><button type="button" onClick={onBack}>← Voltar</button><button className="primary" type="button" disabled={!selectedServices.length} onClick={onContinue}>Avançar para proposta →</button></footer>
   </section>;
@@ -11261,6 +11275,9 @@ function Reports({
   data,
   user,
   initialMode,
+  initialQuoteScope = "todos",
+  whatsOnly = false,
+  backToWhats,
   open,
   edit,
   remove,
@@ -11292,11 +11309,14 @@ function Reports({
     [quotePrintFrom, setQuotePrintFrom] = useState(""),
     [quotePrintTo, setQuotePrintTo] = useState(iso(new Date())),
     [quoteSummary, setQuoteSummary] = useState<Appt | null>(null),
-    [quoteScope, setQuoteScope] = useState<"todos" | "whatsapp">("todos"),
+    [quoteScope, setQuoteScope] = useState<"todos" | "whatsapp">(initialQuoteScope),
     [quoteSearch, setQuoteSearch] = useState(""),
     [scheduleTarget, setScheduleTarget] = useState<Appt | null>(null),
     [scheduleDate, setScheduleDate] = useState(iso(new Date())),
     [scheduleTime, setScheduleTime] = useState("");
+  useEffect(() => {
+    if (initialQuoteScope === "whatsapp") setQuoteScope("whatsapp");
+  }, [initialQuoteScope]);
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -11644,7 +11664,7 @@ function Reports({
       className={`page reports-page${initialMode === "andamento" ? " workshop-page" : ""}`}
     >
       <div className="report-screen">
-        {initialMode !== "andamento" && initialMode !== "abertos" && (
+        {initialMode !== "andamento" && initialMode !== "abertos" && !whatsOnly && (
           <div className="management-report-tabs">
           <button
             className={reportMode === "registros" ? "active" : ""}
@@ -11857,10 +11877,11 @@ function Reports({
                     : ""}
                 </p>
               </span>
+              {whatsOnly && <button type="button" onClick={backToWhats}>← Novo orçamento Whats</button>}
             </div>
             <div className="quote-scope-tabs" role="tablist" aria-label="Lista de orçamentos">
-              <button className={quoteScope === "todos" ? "active" : ""} onClick={() => setQuoteScope("todos")}>Todos em aberto</button>
-              <button className={quoteScope === "whatsapp" ? "active" : ""} onClick={() => setQuoteScope("whatsapp")}>Somente Orçamentos Whats</button>
+              {!whatsOnly && <><button className={quoteScope === "todos" ? "active" : ""} onClick={() => setQuoteScope("todos")}>Todos em aberto</button>
+              <button className={quoteScope === "whatsapp" ? "active" : ""} onClick={() => setQuoteScope("whatsapp")}>Somente Orçamentos Whats</button></>}
               <label>Pesquisar orçamento Whats ou cliente
                 <input value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Nome, placa, veículo ou WhatsApp" />
               </label>
@@ -12557,6 +12578,10 @@ const TITLES: Record<View, [string, string]> = {
   orcamento_rapido_whats: [
     "Orçamento rápido Whats",
     "Informe os serviços e valores para seguir direto à proposta.",
+  ],
+  orcamentos_whats: [
+    "Relatório de orçamentos Whats",
+    "Consulte, pesquise, imprima e envie um orçamento Whats para a agenda.",
   ],
   proposta: ["Orçamento do cliente", "Data, placa, pagamento e mensagem."],
   torque: [
