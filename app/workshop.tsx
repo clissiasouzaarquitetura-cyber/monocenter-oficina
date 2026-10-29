@@ -5992,6 +5992,7 @@ function Agenda({
         .app.dark .week-appointment>.week-internal-note-indicator{background:#493713;color:#ffe29a}
         .week-appointment.block,.days span.block,.day article.absence{border-color:#d18a00!important;border-left:5px solid #d18a00!important;background:rgb(255,232,124)!important;color:#4a3300!important;box-shadow:inset 0 0 0 1px #e1a900,0 2px 7px rgba(122,75,0,.22)!important}
         .week-appointment.block>small,.day article.absence p,.day article.absence span>small,.day article.absence time>small{color:#704600!important}.day article.absence time>small{font-weight:900}
+        .day article time .agenda-finalized-time{display:block;margin-top:5px;color:#14713a!important;font-size:10px;font-weight:900;line-height:1.1;white-space:nowrap}
         .week-appointment.block,.days span.block{cursor:pointer!important}.week-appointment.block>.absence-label{grid-column:1/-1;color:#704600!important;font-size:8px;font-weight:900;text-transform:uppercase}.week-appointment.block>.absence-person{grid-column:1/-1;padding-right:16px;color:#3f2c00;font-size:11px}.week-appointment.block>.absence-details{grid-column:1/-1;color:#704600!important;font-size:8px}.week-appointment.block>.absence-edit-icon{position:absolute;top:4px;right:5px;color:#704600;font-size:12px;font-style:normal}
         .app.dark .week-appointment.block,.app.dark .days span.block,.app.dark .day article.absence{background:rgb(255,232,124)!important;color:#3f2c00!important}
         .day article .appointment-service-type{display:block;margin-top:3px;color:#7c2d12;font-size:10px;font-weight:900;text-transform:uppercase}
@@ -6696,6 +6697,12 @@ function Agenda({
                         ? "FINALIZADO"
                         : agendaStatusLabel(a)}
                   </small>
+                  {a.budget?.processStatus === "Finalizado" &&
+                    a.conference?.finalizedAt && (
+                      <small className="agenda-finalized-time">
+                        ⬆️ {new Date(a.conference.finalizedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      </small>
+                    )}
                   {expanded && !isEmployeeAbsence(a) && a.tech && (
                     <small className="card-tech">
                       {a.status === "avaliou" ? "Avaliado por" : "Téc."}{" "}
@@ -6766,11 +6773,6 @@ function Agenda({
                       >
                         ✓ {completedAttendanceLabel(a)}
                       </b>
-                      {a.conference?.finalizedAt && (
-                        <small className="agenda-finalized-time" style={{ display: "block", marginTop: 4, fontWeight: 900 }}>
-                          ⬆️ Finalizado às {new Date(a.conference.finalizedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                        </small>
-                      )}
                     </div>
                   ) : null}
                   {a.type === "cliente" &&
