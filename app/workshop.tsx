@@ -393,6 +393,7 @@ type View =
   | "laudos"
   | "atendimento"
   | "avaliacao"
+  | "avaliacao_manual"
   | "orcamento"
   | "orcamento_whats"
   | "orcamento_rapido_whats"
@@ -1477,6 +1478,7 @@ export default function App({ initialState, user, onLogout }: any) {
     ["veiculos", "Veículos na oficina", "▣"],
     ["laudos", "Laudos de geometria", "▤"],
     ["avaliacao", "Avaliação", "✓"],
+    ["avaliacao_manual", "Fazer avaliação manual", "✎"],
     ["orcamento", "Orçamento", "$"],
     ["orcamento_whats", "Orçamento Whats", "◌"],
     ["proposta", "Proposta", "▤"],
@@ -2123,6 +2125,14 @@ export default function App({ initialState, user, onLogout }: any) {
               setActiveAppointment(updated);
               setAppointments((list) => list.map((item) => item.id === updated.id ? updated : item));
               setView("proposta");
+              scrollTo(0, 0);
+            }}
+          />
+        )}
+        {view === "avaliacao_manual" && (
+          <ManualEvaluationSheet
+            close={() => {
+              setView("agenda");
               scrollTo(0, 0);
             }}
           />
@@ -5444,6 +5454,21 @@ function QuickWhatsQuote({ appointment, quickServiceIndexes, selectedServices, s
     <footer><button type="button" onClick={onBack}>← Voltar</button><button className="primary" type="button" disabled={!selectedServices.length} onClick={onContinue}>Avançar para proposta →</button></footer>
   </section>;
 }
+function ManualEvaluationSheet({ close }: { close: () => void }) {
+  return <section className="page manual-evaluation-page">
+    <style>{`
+      .manual-evaluation-page{max-width:1040px}.manual-evaluation-actions{display:flex;justify-content:space-between;gap:12px;margin-bottom:16px}.manual-evaluation-actions button{padding:11px 15px;border:1px solid #9eb2c7;border-radius:8px;background:#fff;color:#172033;font-weight:900;cursor:pointer}.manual-evaluation-actions .primary{border-color:#1876bd;background:#1877c9;color:#fff}.manual-evaluation-sheet{max-width:210mm;margin:0 auto;padding:8mm;background:#fff;color:#172033;box-shadow:0 2px 14px #17203322}.manual-evaluation-head{display:grid;grid-template-columns:32mm 1fr 34mm;gap:3mm;align-items:stretch}.manual-evaluation-logo{display:grid;place-items:center;border:1px solid #b9c9d9;border-radius:2mm;color:#d71920;font-weight:950;font-size:12pt}.manual-evaluation-title{display:grid;place-items:center;border:1px solid #b9c9d9;border-radius:2mm;background:#edf3f8;text-align:center}.manual-evaluation-title strong{font-size:12pt}.manual-evaluation-title small{font-size:7pt}.manual-evaluation-badge{display:grid;place-items:center;border:1px solid #d1a300;border-radius:2mm;background:#fff1ab;color:#5f4700;font-size:10pt;font-weight:950}.manual-evaluation-data{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2mm;margin:3mm 0}.manual-evaluation-data span{min-height:12mm;padding:2mm;border:1px solid #b9c9d9;border-radius:1mm}.manual-evaluation-data b{display:block;color:#64748b;font-size:6.5pt;text-transform:uppercase}.manual-evaluation-data i{display:block;margin-top:3mm;border-bottom:1px solid #64748b}.manual-evaluation-sheet h3{margin:0 0 2mm;padding:2mm 3mm;border-left:4px solid #d1a300;background:#fff8d7;color:#5f4700;font-size:9pt}.manual-evaluation-sheet table{width:100%;border-collapse:collapse;font-size:7pt}.manual-evaluation-sheet th{padding:1.3mm;border:1px solid #aebdca;background:#eef3f7;text-align:left}.manual-evaluation-sheet td{height:4mm;padding:1mm 1.3mm;border:1px solid #c9d4dd;vertical-align:middle}.manual-evaluation-sheet td.center{text-align:center;font-weight:900}.manual-evaluation-sheet .check{display:inline-block;width:3mm;height:3mm;border:1px solid #415364;border-radius:.5mm}.manual-evaluation-sheet .observation-line{display:block;border-bottom:1px solid #9baaba}.manual-evaluation-footer{margin-top:3mm;padding-top:2mm;border-top:1px solid #b9c9d9;font-size:6.5pt}.manual-evaluation-footer span{display:inline-block;min-width:48mm;margin-right:8mm;border-bottom:1px solid #64748b}@media(max-width:700px){.manual-evaluation-sheet{padding:12px;overflow-x:auto}.manual-evaluation-sheet table{min-width:720px}.manual-evaluation-actions{flex-direction:column}.manual-evaluation-actions button{width:100%}}@media print{body.print-manual-evaluation *{visibility:hidden!important}body.print-manual-evaluation .manual-evaluation-sheet,body.print-manual-evaluation .manual-evaluation-sheet *{visibility:visible!important}body.print-manual-evaluation .manual-evaluation-sheet{position:fixed!important;inset:0!important;width:210mm!important;height:297mm!important;max-width:none!important;box-sizing:border-box!important;margin:0!important;padding:7mm!important;box-shadow:none!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{size:A4 portrait;margin:0}}`}</style>
+    <style>{`.manual-evaluation-sheet table{font-size:6.2pt}.manual-evaluation-sheet th{padding:1mm}.manual-evaluation-sheet td{height:2.9mm;padding:.55mm 1mm;line-height:1}.manual-evaluation-sheet .check{width:2.5mm;height:2.5mm}.manual-evaluation-footer{margin-top:2mm;padding-top:1.5mm}`}</style>
+    <div className="manual-evaluation-actions"><button type="button" onClick={close}>← Voltar para agenda</button><button className="primary" type="button" onClick={() => printWithTemporaryPage("print-manual-evaluation", "size:A4 portrait;margin:0")}>🖨 Imprimir avaliação manual A4</button></div>
+    <section className="manual-evaluation-sheet">
+      <header className="manual-evaluation-head"><div className="manual-evaluation-logo">MONOCENTER</div><div className="manual-evaluation-title"><strong>MONOCENTER ALINHAMENTO TÉCNICO</strong><small>Av. Itavuvu, 5341 · Sorocaba/SP · WhatsApp (15) 99657-4741</small></div><div className="manual-evaluation-badge">AVALIAÇÃO</div></header>
+      <div className="manual-evaluation-data"><span><b>Cliente</b><i /></span><span><b>Veículo / modelo</b><i /></span><span><b>Placa</b><i /></span><span><b>KM</b><i /></span><span><b>Data</b><i /></span><span><b>Avaliador</b><i /></span></div>
+      <h3>Checklist de avaliação técnica — marque o estado encontrado e assinale “Orçar” quando o item precisar entrar no orçamento.</h3>
+      <table><thead><tr><th>Nº</th><th>Item avaliado</th><th>Bom</th><th>Atenção</th><th>Urgente</th><th>Orçar</th><th>Observação técnica</th></tr></thead><tbody>{ITEMS.map((item, index) => <tr key={item}><td className="center">{index + 1}</td><td><b>{item}</b></td><td className="center"><i className="check" /></td><td className="center"><i className="check" /></td><td className="center"><i className="check" /></td><td className="center"><i className="check" /></td><td><i className="observation-line" /></td></tr>)}</tbody></table>
+      <footer className="manual-evaluation-footer">Relato do cliente: <span /> Assinatura / responsável pela avaliação: <span /></footer>
+    </section>
+  </section>;
+}
 function Title({ a, b }: { a: string; b: string }) {
   return (
     <div className="title">
@@ -8411,6 +8436,7 @@ function PrintDocuments({
           body.print-palette-mono .print-documents .proposal-a4 h3{border-left:3px solid #111!important}
         }
       `}</style>
+      <style>{`@media print{body.print-orcamento .print-documents .budget-head>strong.approval-head-badge,body.print-proposta .print-documents .budget-head>strong.approval-head-badge,body.no-values .print-documents .budget-head>strong.approval-head-badge,body.print-palette-pastel .print-documents .budget-head>strong.approval-head-badge{background:#e2f4e8!important;color:#176b3a!important;border-color:#82c99a!important}}`}</style>
       <section className="a4 evaluation-a4">
         <PrintHead title="RELATÓRIO DE AVALIAÇÃO VEICULAR" />
         <div className="a4-client">
@@ -12566,6 +12592,10 @@ const TITLES: Record<View, [string, string]> = {
   avaliacao: [
     "Avaliação veicular",
     "Checklist técnico de suspensão, freios e peças do veículo.",
+  ],
+  avaliacao_manual: [
+    "Avaliação manual",
+    "Imprima a ficha em branco para a equipe preencher antes de lançar a avaliação no sistema.",
   ],
   orcamento: [
     "Montar orçamento",
