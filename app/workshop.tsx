@@ -711,6 +711,21 @@ function VehicleTopView({
 }
 const isEmployeeAbsence = (a: Appt) =>
   a.type === "bloqueio" || normalizeSearch(a.client).includes("ausente");
+// Um orçamento Whats só está realmente "enviado para a agenda" quando a
+// cópia correspondente ainda existe e aponta de volta para ele.  Versões
+// anteriores guardavam somente o número do atendimento; se o mesmo número
+// fosse reaproveitado, mais de um orçamento podia parecer enviado.
+const linkedAgendaAppointment = (quote: Appt, list: Appt[]) =>
+  quote.serviceAppointmentId
+    ? list.find(
+        (appointment) =>
+          appointment.id === quote.serviceAppointmentId &&
+          appointment.sourceAppointmentId === quote.id &&
+          appointment.quoteChannel !== "whatsapp",
+      )
+    : undefined;
+const hasLinkedAgendaAppointment = (quote: Appt, list: Appt[]) =>
+  !!linkedAgendaAppointment(quote, list);
 const employeeAbsenceName = (a: Appt) => {
   const name = a.client.split(/\s+ausente\b/i)[0]?.trim();
   return name || a.client;
@@ -3951,9 +3966,14 @@ export default function App({ initialState, user, onLogout }: any) {
                           return;
                         }
                         const now = new Date().toISOString(),
+                          // Só reaproveita uma agenda que seja realmente a
+                          // cópia deste orçamento. Um vínculo antigo ou de
+                          // outro orçamento deve criar uma nova agenda.
                           scheduledId =
-                            activeAppointment.serviceAppointmentId ??
-                            Date.now(),
+                            linkedAgendaAppointment(
+                              activeAppointment,
+                              appointments,
+                            )?.id ?? Date.now(),
                           budget: BudgetState = {
                             parts,
                             selectedServices,
@@ -4720,7 +4740,7 @@ export default function App({ initialState, user, onLogout }: any) {
             remove={(a: Appt) => {
               if (
                 confirm(
-                  a.serviceAppointmentId
+                  hasLinkedAgendaAppointment(a, appointments)
                     ? `Excluir somente o orçamento Whats de ${a.client} deste relatório?\n\nO atendimento que já foi enviado para a agenda será mantido.`
                     : `ATENÇÃO: deseja realmente excluir o registro de ${a.client}? Esta ação não poderá ser desfeita.`,
                 )
@@ -11361,6 +11381,10 @@ function Reports({
   useEffect(() => {
     if (initialQuoteScope === "whatsapp") setQuoteScope("whatsapp");
   }, [initialQuoteScope]);
+  const hasAgendaLink = (quote: Appt) =>
+    hasLinkedAgendaAppointment(quote, data as Appt[]);
+  const agendaLink = (quote: Appt) =>
+    linkedAgendaAppointment(quote, data as Appt[]);
   const isClissia =
     user?.username?.toLocaleLowerCase("pt-BR") === "clissia" ||
     user?.displayName?.toLocaleLowerCase("pt-BR") === "clissia";
@@ -11885,7 +11909,7 @@ function Reports({
               .compact-quote-client{display:grid;gap:2px;min-width:0}
               .compact-quote-client b{overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
               .compact-quote-client small,.compact-quote-age small,.compact-reminder small{color:#64748b;font-size:10px;line-height:1.25}
-              .compact-quote-client .quote-scheduled{color:#08783b;font-weight:900}.compact-quote-client .quote-not-scheduled{color:#8a6200;font-weight:800}
+              .compact-quote-client .quote-scheduled{color:#08783b;font-weight:900}.compact-quote-client .quote-not-scheduled{color:#8a6200;font-weight:800}.compact-quote-client .quote-invalid-link{color:#b54708;font-weight:900}
               .compact-quote-age,.compact-reminder{display:grid;gap:3px}
               .compact-reminder-control{display:flex;align-items:center;gap:5px}
               .compact-reminder-control input{width:56px!important;min-width:56px;padding:5px 6px;text-align:center}
@@ -11984,9 +12008,13 @@ function Reports({
                           {a.vehicle || "Veículo não informado"} ·{" "}
                           {a.plate || "Sem placa"}
                         </small>
-                        {a.serviceAppointmentId ? (
+                        {hasAgendaLink(a) ? (
                           <small className="quote-scheduled">
-                            ✓ Enviado para agenda{a.serviceScheduledFor ? ` · ${new Date(`${a.serviceScheduledFor}T12:00:00`).toLocaleDateString("pt-BR")}${a.serviceScheduledTime ? ` às ${a.serviceScheduledTime}` : ""}` : ""}
+                            ✓ Enviado para agenda · {new Date(`${agendaLink(a)?.date || a.serviceScheduledFor}T12:00:00`).toLocaleDateString("pt-BR")}{agendaLink(a)?.time || a.serviceScheduledTime ? ` às ${agendaLink(a)?.time || a.serviceScheduledTime}` : ""}
+                          </small>
+                        ) : a.serviceAppointmentId ? (
+                          <small className="quote-invalid-link">
+                            ⚠ Não enviado — vínculo antigo sem atendimento na agenda
                           </small>
                         ) : (
                           <small className="quote-not-scheduled">Ainda não enviado para a agenda</small>
@@ -12222,7 +12250,7 @@ function Reports({
                 </div>
                 <div className="quote-summary-footer">
                   <button onClick={() => setQuoteSummary(null)}>Fechar resumo</button>
-                  {quoteSummary.quoteChannel === "whatsapp" && !quoteSummary.serviceAppointmentId && (
+                  {quoteSummary.quoteChannel === "whatsapp" && !hasAgendaLink(quoteSummary) && (
                     <button
                       className="primary"
                       onClick={() => {
