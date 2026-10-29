@@ -263,13 +263,27 @@ const SERVICE_GROUPS = [
   { title: "4. Alinhamento de direção 3D", indexes: [0, 1, 2] },
   {
     title: "5. Gabaritagem",
-    indexes: [10, 11, 12, 13, 14, 15],
+    indexes: [14, 15],
+  },
+  {
+    title: "6. Mão de obra geral",
+    indexes: [10, 11, 12, 13],
   },
 ];
 const serviceIsCourtesy = (index: number) =>
   /cortesia/i.test(SERVICES[index]?.[0] ?? "");
-const servicePrice = (index: number, prices?: Record<number, number>) =>
-  prices?.[index] ?? SERVICES[index]?.[1] ?? 0;
+const serviceIsComplimentary = (
+  index: number,
+  courtesy?: Record<number, boolean>,
+) => serviceIsCourtesy(index) || !!courtesy?.[index];
+const servicePrice = (
+  index: number,
+  prices?: Record<number, number>,
+  courtesy?: Record<number, boolean>,
+) =>
+  serviceIsComplimentary(index, courtesy)
+    ? 0
+    : prices?.[index] ?? SERVICES[index]?.[1] ?? 0;
 const isGabaritagemManualService = (service: any) =>
   service?.category === "gabaritagem" ||
   /gabarit|alinhamento técnico|longarina|eixo traseiro|solda/i.test(
@@ -352,6 +366,7 @@ type BudgetState = {
   selectedServices: number[];
   serviceQty: Record<number, number>;
   servicePrices?: Record<number, number>;
+  serviceCourtesy?: Record<number, boolean>;
   manualServices: any[];
   proposalPaymentOptions?: { pix: boolean; card: boolean; card10?: boolean; card10Provider?: "visa_master" | "cielo" };
   patioNotes?: string;
@@ -925,6 +940,9 @@ export default function App({ initialState, user, onLogout }: any) {
     [servicePrices, setServicePrices] = useState<Record<number, number>>(
       shared.servicePrices ?? {},
     ),
+    [serviceCourtesy, setServiceCourtesy] = useState<Record<number, boolean>>(
+      shared.serviceCourtesy ?? {},
+    ),
     [manualServices, setManualServices] = useState(shared.manualServices ?? []),
     [proposalPaymentOptions, setProposalPaymentOptions] = useState<{
       pix: boolean;
@@ -987,6 +1005,7 @@ export default function App({ initialState, user, onLogout }: any) {
         selectedServices,
         serviceQty,
         servicePrices,
+        serviceCourtesy,
         manualServices,
         proposalPaymentOptions,
         patioNotes,
@@ -1035,6 +1054,7 @@ export default function App({ initialState, user, onLogout }: any) {
     selectedServices,
     serviceQty,
     servicePrices,
+    serviceCourtesy,
     manualServices,
     proposalPaymentOptions,
     patioNotes,
@@ -1143,7 +1163,7 @@ export default function App({ initialState, user, onLogout }: any) {
     serviceTotal =
       selectedServices.reduce(
         (s: number, i: number) =>
-          s + servicePrice(i, servicePrices) * (serviceQty[i] ?? 0),
+          s + servicePrice(i, servicePrices, serviceCourtesy) * (serviceQty[i] ?? 0),
         0,
       ) + manualServices.reduce((s: number, x: any) => s + x.qty * x.value, 0),
     total = pieces + serviceTotal,
@@ -1398,6 +1418,7 @@ export default function App({ initialState, user, onLogout }: any) {
     setSelectedServices([]);
     setServiceQty({});
     setServicePrices({});
+    setServiceCourtesy({});
     setManualServices([]);
     setProposalPaymentOptions({ pix: true, card: true, card10: false });
     setPatioNotes("");
@@ -1542,6 +1563,7 @@ export default function App({ initialState, user, onLogout }: any) {
       selectedServices,
       serviceQty,
       servicePrices,
+      serviceCourtesy,
       manualServices,
       proposalPaymentOptions,
       patioNotes,
@@ -1703,8 +1725,8 @@ export default function App({ initialState, user, onLogout }: any) {
       ...selectedServices.map((i: number) => ({
         name: SERVICES[i][0],
         qty: serviceQty[i] ?? 0,
-        total: servicePrice(i, servicePrices) * (serviceQty[i] ?? 0),
-        courtesy: serviceIsCourtesy(i),
+        total: servicePrice(i, servicePrices, serviceCourtesy) * (serviceQty[i] ?? 0),
+        courtesy: serviceIsComplimentary(i, serviceCourtesy),
       })),
       ...manualServices
         .filter((x: any) => x.name)
@@ -1904,6 +1926,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
+                setServiceCourtesy(a.budget.serviceCourtesy ?? {});
                 setManualServices(a.budget.manualServices ?? []);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(a.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(a.budget.patioNotes ?? "");
@@ -1917,6 +1940,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setSelectedServices([]);
                 setServiceQty({});
                 setServicePrices({});
+                setServiceCourtesy({});
                 setManualServices([]);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
@@ -2037,6 +2061,7 @@ export default function App({ initialState, user, onLogout }: any) {
               setSelectedServices([]);
               setServiceQty({});
               setServicePrices({});
+              setServiceCourtesy({});
               setManualServices([]);
               setProposalPaymentOptions({ pix: true, card: true, card10: false });
               setPatioNotes("");
@@ -2084,6 +2109,8 @@ export default function App({ initialState, user, onLogout }: any) {
                     serviceQty: activeAppointment.budget?.serviceQty ?? {},
                     servicePrices:
                       activeAppointment.budget?.servicePrices ?? {},
+                    serviceCourtesy:
+                      activeAppointment.budget?.serviceCourtesy ?? {},
                     manualServices:
                       activeAppointment.budget?.manualServices ?? [],
                     proposalPaymentOptions: { pix: true, card: true, card10: false, ...(activeAppointment.budget?.proposalPaymentOptions ?? {}) },
@@ -2198,6 +2225,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             selectedServices,
                             serviceQty,
                             servicePrices,
+                            serviceCourtesy,
                             manualServices,
                             proposalPaymentOptions,
                             patioNotes,
@@ -2535,6 +2563,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           selectedServices,
                           serviceQty,
                           servicePrices,
+                          serviceCourtesy,
                           manualServices,
                           proposalPaymentOptions,
                           patioNotes,
@@ -2606,7 +2635,7 @@ export default function App({ initialState, user, onLogout }: any) {
                     {section.services.map((serviceIndex) => <div className="budget-edit-row" key={`service-${serviceIndex}`}><span className="budget-edit-name">{SERVICES[serviceIndex]?.[0]}</span><input aria-label={`Quantidade de ${SERVICES[serviceIndex]?.[0]}`} type="number" min="1" value={serviceQty[serviceIndex] ?? ""} onChange={(e) => setServiceQty((current) => ({ ...current, [serviceIndex]: +e.target.value }))} /><label>Valor unitário R$<input className="budget-edit-price" aria-label={`Valor de ${SERVICES[serviceIndex]?.[0]}`} type="number" min="0" step="0.01" inputMode="decimal" value={servicePrice(serviceIndex, servicePrices) || ""} onChange={(e) => setServicePrices((current) => ({ ...current, [serviceIndex]: +e.target.value }))} /></label><b>{brl((serviceQty[serviceIndex] || 0) * servicePrice(serviceIndex, servicePrices))}</b><button type="button" className="budget-edit-trash" title="Excluir serviço" aria-label={`Excluir ${SERVICES[serviceIndex]?.[0]}`} onClick={() => removeBudgetService(SERVICES[serviceIndex]?.[0] || "este serviço", `service-${serviceIndex}`, () => setSelectedServices((current) => current.filter((value) => value !== serviceIndex)))}>🗑</button></div>)}
                     {section.manual.map(({ service, index }: any) => <div className="budget-edit-row" key={`manual-${index}`}><span className="budget-edit-name">{service.name || "Mão de obra sem descrição"}<small>Serviço manual</small></span><input aria-label={`Quantidade de ${service.name || "serviço manual"}`} type="number" min="1" value={service.qty || ""} onChange={(e) => setManualServices((current: any[]) => current.map((item, itemIndex) => itemIndex === index ? { ...item, qty: +e.target.value } : item))} /><label>Valor unitário R$<input className="budget-edit-price" aria-label={`Valor de ${service.name || "serviço manual"}`} type="number" min="0" step="0.01" inputMode="decimal" value={service.value || ""} onChange={(e) => setManualServices((current: any[]) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: +e.target.value } : item))} /></label><b>{brl((service.qty || 0) * (service.value || 0))}</b><button type="button" className="budget-edit-trash" title="Excluir serviço" aria-label={`Excluir ${service.name || "serviço manual"}`} onClick={() => removeBudgetService(service.name || "este serviço", `manual-${Date.now()}-${index}`, () => setManualServices((current: any[]) => current.filter((_, itemIndex) => itemIndex !== index)))}>🗑</button></div>)}
                   </section>)}
-                  <div className="budget-edit-actions"><button type="button" onClick={() => { setBudgetEditMode(false); setView("orcamento"); scrollTo(0, 0); }}>Voltar à tela de orçamento</button><button type="button" onClick={() => { setBudgetEditMode(false); setView("proposta"); scrollTo(0, 0); }}>Voltar para proposta</button><button type="button" className="primary" onClick={() => { if (activeAppointment) { const updated = { ...activeAppointment, budget: { ...activeAppointment.budget, parts, selectedServices, serviceQty, servicePrices, manualServices, proposalPaymentOptions, patioNotes, exclusions: budgetExclusions, processStatus }, budgetEditedBy: user.displayName, budgetEditedAt: new Date().toISOString(), lastEditedBy: user.displayName, lastEditedAt: new Date().toISOString(), _updatedAt: Date.now() }; DISPLAY_APPT = updated; setActiveAppointment(updated); setAppointments((current) => current.map((appointment) => appointment.id === updated.id ? updated : appointment)); } setBudgetEditMode(false); setView("proposta"); scrollTo(0, 0); }}>Salvar alterações e voltar à proposta</button></div>
+                  <div className="budget-edit-actions"><button type="button" onClick={() => { setBudgetEditMode(false); setView("orcamento"); scrollTo(0, 0); }}>Voltar à tela de orçamento</button><button type="button" onClick={() => { setBudgetEditMode(false); setView("proposta"); scrollTo(0, 0); }}>Voltar para proposta</button><button type="button" className="primary" onClick={() => { if (activeAppointment) { const updated = { ...activeAppointment, budget: { ...activeAppointment.budget, parts, selectedServices, serviceQty, servicePrices, serviceCourtesy, manualServices, proposalPaymentOptions, patioNotes, exclusions: budgetExclusions, processStatus }, budgetEditedBy: user.displayName, budgetEditedAt: new Date().toISOString(), lastEditedBy: user.displayName, lastEditedAt: new Date().toISOString(), _updatedAt: Date.now() }; DISPLAY_APPT = updated; setActiveAppointment(updated); setAppointments((current) => current.map((appointment) => appointment.id === updated.id ? updated : appointment)); } setBudgetEditMode(false); setView("proposta"); scrollTo(0, 0); }}>Salvar alterações e voltar à proposta</button></div>
                 </section>
               )}
               {view === "orcamento" && !budgetEditMode && (
@@ -2938,16 +2967,6 @@ export default function App({ initialState, user, onLogout }: any) {
                           a="Serviços e mão de obra"
                           b="Selecione e informe a quantidade e o valor unitário."
                         />
-                        <button
-                          onClick={() =>
-                            setManualServices([
-                              ...manualServices,
-                              { name: "", qty: 0, value: 0, category: "labor" },
-                            ])
-                          }
-                        >
-                          + Inserir serviço manual
-                        </button>
                       </div>
                       <div className="budget-field-legend">
                         <span className="description-swatch">
@@ -2965,7 +2984,8 @@ export default function App({ initialState, user, onLogout }: any) {
                               style={{ gridColumn: "1 / -1" }}
                             >
                               <h3>{group.title}</h3>
-                              {group.title === "5. Gabaritagem" && (
+                              {(group.title === "5. Gabaritagem" ||
+                                group.title === "6. Mão de obra geral") && (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -2975,7 +2995,10 @@ export default function App({ initialState, user, onLogout }: any) {
                                         name: "",
                                         qty: 1,
                                         value: 0,
-                                        category: "gabaritagem",
+                                        category:
+                                          group.title === "5. Gabaritagem"
+                                            ? "gabaritagem"
+                                            : "labor",
                                       },
                                     ])
                                   }
@@ -2985,7 +3008,11 @@ export default function App({ initialState, user, onLogout }: any) {
                               )}
                             </div>
                             {group.indexes.map((i) => {
-                              const x = SERVICES[i];
+                              const x = SERVICES[i],
+                                complimentary = serviceIsComplimentary(
+                                  i,
+                                  serviceCourtesy,
+                                );
                               return (
                                 <div
                                   className={
@@ -3035,6 +3062,31 @@ export default function App({ initialState, user, onLogout }: any) {
                                         </small>
                                       )}
                                   </span>
+                                  <label className="service-courtesy-toggle">
+                                    <input
+                                      type="checkbox"
+                                      checked={complimentary}
+                                      disabled={serviceIsCourtesy(i)}
+                                      onChange={(event) => {
+                                        const nextCourtesy = { ...serviceCourtesy };
+                                        if (event.target.checked) nextCourtesy[i] = true;
+                                        else delete nextCourtesy[i];
+                                        setServiceCourtesy(nextCourtesy);
+                                        if (event.target.checked)
+                                          setServicePrices((current) => ({
+                                            ...current,
+                                            [i]: 0,
+                                          }));
+                                        else
+                                          setServicePrices((current) => {
+                                            const next = { ...current };
+                                            delete next[i];
+                                            return next;
+                                          });
+                                      }}
+                                    />
+                                    Cortesia
+                                  </label>
                                   <div className="service-entry-fields">
                                     <label>
                                       <small>Qtd.</small>
@@ -3053,7 +3105,7 @@ export default function App({ initialState, user, onLogout }: any) {
                                         }}
                                       />
                                     </label>
-                                    {!serviceIsCourtesy(i) && (
+                                    {!complimentary && (
                                       <label>
                                         <small>Valor unitário R$</small>
                                         <input
@@ -3107,9 +3159,9 @@ export default function App({ initialState, user, onLogout }: any) {
                                     )}
                                   </div>
                                   <b>
-                                    {serviceIsCourtesy(i)
+                                    {complimentary
                                       ? "Cortesia"
-                                      : `${brl(servicePrice(i, servicePrices))}/ un.`}
+                                      : `${brl(servicePrice(i, servicePrices, serviceCourtesy))}/ un.`}
                                   </b>
                                 </div>
                               );
@@ -3229,6 +3281,20 @@ export default function App({ initialState, user, onLogout }: any) {
                         ))}
                       </div>
                       <div className="manualservices">
+                        <div className="service-group-heading" style={{ gridColumn: "1 / -1" }}>
+                          <h3>6. Mão de obra geral — serviços manuais</h3>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setManualServices([
+                                ...manualServices,
+                                { name: "", qty: 1, value: 0, category: "labor" },
+                              ])
+                            }
+                          >
+                            + Inserir serviço
+                          </button>
+                        </div>
                         {manualServices
                           .map((x, i) => ({ x, i }))
                           .filter(({ x }) => !isGabaritagemManualService(x))
@@ -3548,6 +3614,7 @@ export default function App({ initialState, user, onLogout }: any) {
                                   selectedServices,
                                   serviceQty,
                                   servicePrices,
+                                  serviceCourtesy,
                                   manualServices,
                                   proposalPaymentOptions,
                                   patioNotes,
@@ -3651,16 +3718,16 @@ export default function App({ initialState, user, onLogout }: any) {
                           <b>{SERVICES[i][0]}</b>
                           <small>
                             Unitário:{" "}
-                            {serviceIsCourtesy(i)
+                            {serviceIsComplimentary(i, serviceCourtesy)
                               ? "Cortesia"
-                              : brl(servicePrice(i, servicePrices))}
+                              : brl(servicePrice(i, servicePrices, serviceCourtesy))}
                           </small>
                         </span>
                         <strong>
-                          {serviceIsCourtesy(i)
+                          {serviceIsComplimentary(i, serviceCourtesy)
                             ? "Cortesia"
                             : brl(
-                                servicePrice(i, servicePrices) *
+                                servicePrice(i, servicePrices, serviceCourtesy) *
                                   (serviceQty[i] ?? 0),
                               )}
                         </strong>
@@ -3819,6 +3886,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             selectedServices,
                             serviceQty,
                             servicePrices,
+                            serviceCourtesy,
                             manualServices,
                             proposalPaymentOptions,
                             patioNotes,
@@ -3923,6 +3991,7 @@ export default function App({ initialState, user, onLogout }: any) {
                             selectedServices,
                             serviceQty,
                             servicePrices,
+                            serviceCourtesy,
                             manualServices,
                             proposalPaymentOptions,
                             patioNotes,
@@ -4044,6 +4113,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           selectedServices,
                           serviceQty,
                           servicePrices,
+                          serviceCourtesy,
                           manualServices,
                           proposalPaymentOptions,
                           patioNotes,
@@ -4417,6 +4487,7 @@ export default function App({ initialState, user, onLogout }: any) {
                           selectedServices,
                           serviceQty,
                           servicePrices,
+                          serviceCourtesy,
                           manualServices,
                           proposalPaymentOptions,
                           patioNotes,
@@ -4534,6 +4605,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setSelectedServices(a.budget.selectedServices ?? []);
                 setServiceQty(a.budget.serviceQty ?? {});
                 setServicePrices(a.budget.servicePrices ?? {});
+                setServiceCourtesy(a.budget.serviceCourtesy ?? {});
                 setManualServices(a.budget.manualServices ?? []);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(a.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(a.budget.patioNotes ?? "");
@@ -4544,6 +4616,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setSelectedServices([]);
                 setServiceQty({});
                 setServicePrices({});
+                setServiceCourtesy({});
                 setManualServices([]);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
@@ -4886,6 +4959,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setSelectedServices(opened.budget.selectedServices ?? []);
                 setServiceQty(opened.budget.serviceQty ?? {});
                 setServicePrices(opened.budget.servicePrices ?? {});
+                setServiceCourtesy(opened.budget.serviceCourtesy ?? {});
                 setManualServices(opened.budget.manualServices ?? []);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false, ...(opened.budget.proposalPaymentOptions ?? {}) });
                 setPatioNotes(opened.budget.patioNotes ?? "");
@@ -4896,6 +4970,7 @@ export default function App({ initialState, user, onLogout }: any) {
                 setSelectedServices([]);
                 setServiceQty({});
                 setServicePrices({});
+                setServiceCourtesy({});
                 setManualServices([]);
                 setProposalPaymentOptions({ pix: true, card: true, card10: false });
                 setPatioNotes("");
@@ -5053,6 +5128,7 @@ export default function App({ initialState, user, onLogout }: any) {
           selectedServices={selectedServices}
           serviceQty={serviceQty}
           servicePrices={servicePrices}
+          serviceCourtesy={serviceCourtesy}
           manualServices={manualServices}
           patioNotes={patioNotes}
           checks={checks}
@@ -6621,6 +6697,11 @@ function Agenda({
                       >
                         ✓ {completedAttendanceLabel(a)}
                       </b>
+                      {a.conference?.finalizedAt && (
+                        <small className="agenda-finalized-time" style={{ display: "block", marginTop: 4, fontWeight: 900 }}>
+                          ⬆️ Finalizado às {new Date(a.conference.finalizedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        </small>
+                      )}
                     </div>
                   ) : null}
                   {a.type === "cliente" &&
@@ -7117,8 +7198,8 @@ function AttendancePreviewModal({ appointment, roundStep, close, openEntryCheckl
       .map((index: number) => ({
         name: SERVICES[index]?.[0] ?? "Serviço",
         quantity: Number(budget?.serviceQty?.[index] ?? 1),
-        value: servicePrice(index, budget?.servicePrices),
-        courtesy: serviceIsCourtesy(index),
+        value: servicePrice(index, budget?.servicePrices, budget?.serviceCourtesy),
+        courtesy: serviceIsComplimentary(index, budget?.serviceCourtesy),
       }))
       .filter((service: any) => service.quantity > 0),
     manualServiceRows = (budget?.manualServices ?? [])
@@ -8159,6 +8240,7 @@ function PrintDocuments({
   selectedServices,
   serviceQty,
   servicePrices,
+  serviceCourtesy,
   manualServices,
   patioNotes,
   checks,
@@ -8368,7 +8450,9 @@ function PrintDocuments({
               )}
             </span>
             <em>
-              {brl(servicePrice(i, servicePrices) * (serviceQty[i] ?? 0))}
+              {serviceIsComplimentary(i, serviceCourtesy)
+                ? <>Cortesia · {brl(0)}</>
+                : brl(servicePrice(i, servicePrices, serviceCourtesy) * (serviceQty[i] ?? 0))}
             </em>
           </div>
         ))}
@@ -8449,6 +8533,9 @@ function PrintDocuments({
             <b>{serviceQty[i] ?? 0}x</b>
             <span>
               {SERVICES[i][0]}
+              {serviceIsComplimentary(i, serviceCourtesy) && (
+                <small className="print-approved">CORTESIA · R$ 0,00</small>
+              )}
               {budgetApproved && (
                 <small className="print-approved">✓ APROVADO</small>
               )}
@@ -9566,7 +9653,7 @@ function AttendanceSummary({
       budget.selectedServices.reduce(
         (sum: number, index: number) =>
           sum +
-          servicePrice(index, budget.servicePrices) *
+          servicePrice(index, budget.servicePrices, budget.serviceCourtesy) *
             (budget.serviceQty[index] ?? 0),
         0,
       ) +
@@ -9703,10 +9790,10 @@ function AttendanceSummary({
             <b>{budget.serviceQty[index] ?? 0}x</b>
             <span>{SERVICES[index][0]}</span>
             <strong>
-              {serviceIsCourtesy(index)
+              {serviceIsComplimentary(index, budget.serviceCourtesy)
                 ? "Cortesia"
                 : brl(
-                    servicePrice(index, budget.servicePrices) *
+                    servicePrice(index, budget.servicePrices, budget.serviceCourtesy) *
                       (budget.serviceQty[index] ?? 0),
                   )}
             </strong>
@@ -11108,6 +11195,8 @@ function Reports({
     [quotePrintFrom, setQuotePrintFrom] = useState(""),
     [quotePrintTo, setQuotePrintTo] = useState(iso(new Date())),
     [quoteSummary, setQuoteSummary] = useState<Appt | null>(null),
+    [quoteScope, setQuoteScope] = useState<"todos" | "whatsapp">("todos"),
+    [quoteSearch, setQuoteSearch] = useState(""),
     [scheduleTarget, setScheduleTarget] = useState<Appt | null>(null),
     [scheduleDate, setScheduleDate] = useState(iso(new Date())),
     [scheduleTime, setScheduleTime] = useState("");
@@ -11292,8 +11381,25 @@ function Reports({
       !!appointment.quoteFollowUpDueDate &&
       appointment.quoteFollowUpDueDate <= iso(new Date()),
   ).length;
+  const whatsQuoteRecords = (data as Appt[])
+      .filter((appointment) => appointment.quoteChannel === "whatsapp")
+      .sort((first, second) =>
+        `${second.date} ${second.time}`.localeCompare(`${first.date} ${first.time}`),
+      ),
+    scopedOpenQuotes =
+      quoteScope === "whatsapp" ? whatsQuoteRecords : openQuotes,
+    visibleOpenQuotes = scopedOpenQuotes.filter((appointment) =>
+      `${appointment.client} ${appointment.vehicle} ${appointment.plate} ${appointment.phone}`
+        .toLocaleLowerCase("pt-BR")
+        .includes(quoteSearch.toLocaleLowerCase("pt-BR")),
+    ),
+    scopedDueQuoteReminders = visibleOpenQuotes.filter(
+      (appointment) =>
+        !!appointment.quoteFollowUpDueDate &&
+        appointment.quoteFollowUpDueDate <= iso(new Date()),
+    ).length;
   const currentQuoteMonth = iso(new Date()).slice(0, 7),
-    printableOpenQuotes = openQuotes.filter((appointment) => {
+    printableOpenQuotes = visibleOpenQuotes.filter((appointment) => {
       if (quotePrintRange === "current")
         return appointment.date.startsWith(currentQuoteMonth);
       if (quotePrintRange === "month")
@@ -11325,7 +11431,11 @@ function Reports({
               name: SERVICES[index]?.[0] ?? "Serviço",
               qty: quoteSummary.budget?.serviceQty?.[index] ?? 1,
               value:
-                servicePrice(index, quoteSummary.budget?.servicePrices) *
+                servicePrice(
+                  index,
+                  quoteSummary.budget?.servicePrices,
+                  quoteSummary.budget?.serviceCourtesy,
+                ) *
                 (quoteSummary.budget?.serviceQty?.[index] ?? 1),
             }),
           ),
@@ -11582,7 +11692,7 @@ function Reports({
             <div className="open-quotes-print-header">
               <span><b>MONOCENTER</b><small>Alinhamento Técnico</small></span>
               <div>
-                <h1>Orçamentos em aberto</h1>
+                <h1>{quoteScope === "whatsapp" ? "Orçamentos Whats" : "Orçamentos em aberto"}</h1>
                 <p>{quotePrintPeriodLabel} · Emitido em {new Date().toLocaleDateString("pt-BR")}</p>
                 <strong className="open-quotes-print-total">
                   Quantidade: {printableOpenQuotes.length} {printableOpenQuotes.length === 1 ? "orçamento" : "orçamentos"}
@@ -11634,19 +11744,29 @@ function Reports({
               .declined-quote-row button{padding:6px 9px;font-size:10px}
               .app.dark .compact-quotes-wrap,.app.dark .compact-quote-row{background:#111c29}.app.dark .compact-quotes-head{background:#1c2938}.app.dark .declined-quotes{background:#36191c}
               .open-quotes-print-sheet{display:none}.open-quotes-reminder-alert{margin:0 0 12px;padding:10px 12px;border:1px solid #efb2b6;border-radius:9px;background:#fff0f1;color:#a3131c;font-size:12px;font-weight:900}.quote-print-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:10px;border:1px solid #d8e0e8;border-radius:9px;background:#f8fafc}.quote-print-controls label{display:grid;gap:4px;color:#526274;font-size:10px;font-weight:900}.quote-print-controls select,.quote-print-controls input{min-width:145px;padding:8px;border:1px solid #aeb9c7;border-radius:7px;background:#fff}.quote-print-controls button{padding:9px 12px;background:#111d2b;color:#fff}.quote-print-count{align-self:center;color:#526274;font-size:11px;font-weight:800}
+              .quote-scope-tabs{display:flex;align-items:end;flex-wrap:wrap;gap:8px;margin:0 0 12px;padding:10px;border:1px solid #d8e0e8;border-radius:9px;background:#f8fafc}.quote-scope-tabs button{padding:9px 12px;border:1px solid #9eb0c4;border-radius:7px;background:#fff;color:#223249;font-size:11px;font-weight:900}.quote-scope-tabs button.active{border-color:#16864b;background:#e7f7ee;color:#08783b}.quote-scope-tabs label{display:grid;gap:4px;min-width:min(100%,270px);margin-left:auto;color:#526274;font-size:10px;font-weight:900}.quote-scope-tabs input{min-width:250px;padding:8px;border:1px solid #aeb9c7;border-radius:7px;background:#fff}@media(max-width:650px){.quote-scope-tabs label{width:100%;margin-left:0}.quote-scope-tabs input{width:100%;min-width:0}}
               .quote-summary-backdrop{position:fixed;z-index:1200;inset:0;display:grid;place-items:center;padding:20px;background:#07111dcc}.quote-summary-modal{width:min(940px,96vw);max-height:92vh;overflow:auto;border-radius:15px;background:#fff;color:#111d2b;box-shadow:0 24px 80px #0008}.quote-summary-modal>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:5px solid #e31b23;background:#111d2b;color:#fff}.quote-summary-modal h2{margin:2px 0 3px;font-size:21px}.quote-summary-modal header small{color:#cbd5e1}.quote-summary-close{border:0;background:transparent!important;color:#fff!important;font-size:28px;line-height:1}.quote-summary-body{display:grid;gap:14px;padding:18px}.quote-summary-customer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.quote-summary-customer span{display:grid;gap:3px;min-width:0;padding:10px;border:1px solid #d8e0e8;border-radius:8px;background:#f8fafc}.quote-summary-customer small{color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase}.quote-summary-customer b{overflow-wrap:anywhere}.quote-summary-section{border:1px solid #d8e0e8;border-radius:10px;overflow:hidden}.quote-summary-section h3{display:flex;justify-content:space-between;gap:12px;margin:0;padding:10px 12px;background:#eef2f6;font-size:13px}.quote-summary-list{display:grid}.quote-summary-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:9px 12px;border-top:1px solid #e4e9ef;font-size:12px}.quote-summary-row:first-child{border-top:0}.quote-summary-row span{display:grid;gap:2px}.quote-summary-row small{color:#64748b}.quote-summary-value{display:grid;justify-items:end;align-content:center;gap:2px;white-space:nowrap}.quote-summary-value small{font-size:9px}.quote-summary-state{align-self:center;border-radius:999px;padding:4px 8px;background:#eef2f6;font-size:9px;font-weight:900}.quote-summary-state.g{background:#e6f7ec;color:#08783b}.quote-summary-state.y{background:#fff8cf;color:#8a6200}.quote-summary-state.r{background:#ffe5e7;color:#b3131b}.quote-summary-total{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:13px 15px;border-radius:10px;background:#111d2b;color:#fff}.quote-summary-total span{display:grid;gap:2px}.quote-summary-total small{color:#cbd5e1}.quote-summary-total strong{color:#5ee18c;font-size:23px}.quote-summary-notes{display:grid;grid-template-columns:1fr 1fr;gap:10px}.quote-summary-note{padding:11px;border:1px solid #d8e0e8;border-radius:9px;background:#fff}.quote-summary-note b{display:block;margin-bottom:5px;font-size:11px}.quote-summary-empty{margin:0;padding:12px;color:#64748b;font-size:12px}.quote-summary-footer{display:flex;justify-content:flex-end;padding:0 18px 18px}.quote-summary-footer button{padding:9px 14px;background:#111d2b;color:#fff}.app.dark .quote-summary-modal{background:#111c29;color:#fff}.app.dark .quote-summary-customer span,.app.dark .quote-summary-note{background:#172231}.app.dark .quote-summary-section h3{background:#1c2938}@media(max-width:700px){.quote-summary-customer{grid-template-columns:1fr 1fr}.quote-summary-notes{grid-template-columns:1fr}}
               @media print{html:has(body.print-open-quotes),body.print-open-quotes{width:297mm!important;height:210mm!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}body.print-open-quotes .app,body.print-open-quotes main,body.print-open-quotes .reports-page,body.print-open-quotes .report-screen{display:block!important;position:fixed!important;inset:0!important;width:297mm!important;height:210mm!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important}body.print-open-quotes .app>aside,body.print-open-quotes main>header{display:none!important}body.print-open-quotes .report-screen>*:not(.open-quotes-print-sheet):not(style){display:none!important}body.print-open-quotes *{visibility:hidden!important}body.print-open-quotes .open-quotes-print-sheet,body.print-open-quotes .open-quotes-print-sheet *{visibility:visible!important}body.print-open-quotes .open-quotes-print-sheet{display:block!important;position:absolute!important;z-index:999999!important;inset:0!important;width:297mm!important;height:210mm!important;box-sizing:border-box;padding:7mm 8mm!important;background:#fff!important;color:#111!important;overflow:hidden!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.open-quotes-print-header{display:grid;grid-template-columns:68mm 1fr;align-items:center;margin-bottom:4mm;border:1px solid #ced6df;border-bottom:2mm solid #e31b23}.open-quotes-print-header>span{display:grid;box-sizing:border-box;min-width:0;padding:3.5mm 5mm;color:#e31b23;font-size:17pt;line-height:1.05;white-space:nowrap}.open-quotes-print-header>span b{display:block;letter-spacing:-.25mm}.open-quotes-print-header>span small{margin-top:1mm;color:#111;font-size:7pt}.open-quotes-print-header>div{padding:3mm 4mm;border-left:1px solid #ced6df}.open-quotes-print-header h1{margin:0;font-size:17pt}.open-quotes-print-header p{margin:1mm 0 0;color:#526274;font-size:7.5pt;text-transform:capitalize}.open-quotes-print-total{display:inline-block;margin-top:1.5mm;padding:1mm 2mm;border-radius:1mm;background:#e31b23!important;color:#fff!important;font-size:8pt}.open-quotes-print-sheet table{width:100%;border-collapse:collapse;font-size:7.5pt;table-layout:fixed}.open-quotes-print-sheet thead{display:table-header-group}.open-quotes-print-sheet tr{break-inside:avoid}.open-quotes-print-sheet th{padding:2mm;background:#111d2b!important;color:#fff!important;text-align:left}.open-quotes-print-sheet td{padding:1.7mm 2mm;border:1px solid #d8e0e8;vertical-align:top;line-height:1.15}.open-quotes-print-sheet td b,.open-quotes-print-sheet td small{display:block}.open-quotes-print-sheet td small{margin-top:.5mm;color:#526274;font-size:6.5pt}.open-quotes-print-sheet td.due{background:#ffe5e7!important;color:#a3131c;font-weight:900}@page{size:A4 landscape;margin:0}}
             `}</style>
             <div className="management-report-head">
               <span>
-                <h2>Orçamentos em aberto</h2>
+                <h2>{quoteScope === "whatsapp" ? "Orçamentos Whats" : "Orçamentos em aberto"}</h2>
                 <p>
-                  {openQuotes.length} aguardando retorno do cliente
-                  {dueQuoteReminders > 0
-                    ? ` · ${dueQuoteReminders} ${dueQuoteReminders === 1 ? "lembrete vencido" : "lembretes vencidos"}`
+                  {quoteScope === "whatsapp"
+                    ? `${visibleOpenQuotes.length} orçamento${visibleOpenQuotes.length === 1 ? "" : "s"} cadastrado${visibleOpenQuotes.length === 1 ? "" : "s"} pela guia Whats`
+                    : `${visibleOpenQuotes.length} aguardando retorno do cliente`}
+                  {scopedDueQuoteReminders > 0
+                    ? ` · ${scopedDueQuoteReminders} ${scopedDueQuoteReminders === 1 ? "lembrete vencido" : "lembretes vencidos"}`
                     : ""}
                 </p>
               </span>
+            </div>
+            <div className="quote-scope-tabs" role="tablist" aria-label="Lista de orçamentos">
+              <button className={quoteScope === "todos" ? "active" : ""} onClick={() => setQuoteScope("todos")}>Todos em aberto</button>
+              <button className={quoteScope === "whatsapp" ? "active" : ""} onClick={() => setQuoteScope("whatsapp")}>Somente Orçamentos Whats</button>
+              <label>Pesquisar orçamento Whats ou cliente
+                <input value={quoteSearch} onChange={(event) => setQuoteSearch(event.target.value)} placeholder="Nome, placa, veículo ou WhatsApp" />
+              </label>
             </div>
             <div className="quote-print-controls">
               <label>O que imprimir
@@ -11669,7 +11789,7 @@ function Reports({
               }}>Imprimir listagem</button>
               <span className="quote-print-count">{printableOpenQuotes.length} {printableOpenQuotes.length === 1 ? "orçamento" : "orçamentos"} no período</span>
             </div>
-            {dueQuoteReminders > 0 && <div className="open-quotes-reminder-alert">⚠ {dueQuoteReminders} {dueQuoteReminders === 1 ? "cliente precisa" : "clientes precisam"} de contato hoje.</div>}
+            {scopedDueQuoteReminders > 0 && <div className="open-quotes-reminder-alert">⚠ {scopedDueQuoteReminders} {scopedDueQuoteReminders === 1 ? "cliente precisa" : "clientes precisam"} de contato hoje.</div>}
             <div className="compact-quotes-wrap">
               <div className="compact-quotes-table">
                 <div className="compact-quotes-head">
@@ -11679,8 +11799,8 @@ function Reports({
                   <span>Decisão</span>
                   <span>Ações</span>
                 </div>
-              {openQuotes.length ? (
-                openQuotes.map((a) => {
+              {visibleOpenQuotes.length ? (
+                visibleOpenQuotes.map((a) => {
                   const daysOpen = Math.max(
                     0,
                     Math.floor(
@@ -11821,7 +11941,7 @@ function Reports({
                   );
                 })
               ) : (
-                <p style={{ padding: 16 }}>Nenhum orçamento em aberto.</p>
+                <p style={{ padding: 16 }}>Nenhum orçamento encontrado nesta aba.</p>
               )}
               </div>
             </div>
@@ -11925,7 +12045,7 @@ function Reports({
                 </div>
                 <div className="quote-summary-footer">
                   <button onClick={() => setQuoteSummary(null)}>Fechar resumo</button>
-                  {quoteSummary.quoteChannel === "whatsapp" && (
+                  {quoteSummary.quoteChannel === "whatsapp" && !quoteSummary.serviceAppointmentId && (
                     <button
                       className="primary"
                       onClick={() => {
