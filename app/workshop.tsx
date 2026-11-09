@@ -3081,15 +3081,16 @@ export default function App({ initialState, user, onLogout }: any) {
                         .service-group-heading{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;margin:0 0 9px!important}
                         .service-group-heading h3{min-width:0!important;margin:0!important}
                         .service-row{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:10px!important;width:100%!important;min-width:0!important;box-sizing:border-box!important;margin:7px 0!important;padding:10px!important;border:1px solid #d6e0ea!important;border-radius:8px!important;background:#fff!important;overflow:hidden!important}
-                        .service-row>span{position:static!important;flex:1 1 300px!important;min-width:0!important;overflow-wrap:anywhere!important;font-weight:800!important}
+                        .service-row>span{position:static!important;flex:0 1 480px!important;min-width:300px!important;overflow-wrap:anywhere!important;font-weight:800!important}
                         .service-row>input{width:21px!important;height:21px!important;margin:0!important}
                         .service-courtesy-toggle{position:static!important;flex:0 0 150px!important;display:flex!important;align-items:center!important;gap:5px!important;min-width:0!important;margin:0!important;padding:8px!important;border:1px solid #dbe4ed!important;border-radius:7px!important;white-space:nowrap!important;background:#fff!important}
                         .service-courtesy-toggle input{width:18px!important;height:18px!important;margin:0!important}
-                        .service-entry-fields{position:static!important;flex:0 0 205px!important;display:grid!important;grid-template-columns:64px minmax(0,1fr)!important;gap:7px!important;min-width:0!important}
+                        .service-entry-fields{position:static!important;flex:0 0 240px!important;display:grid!important;grid-template-columns:70px minmax(0,1fr)!important;gap:18px!important;min-width:0!important}
                         .service-entry-fields label{display:grid!important;gap:3px!important;min-width:0!important;margin:0!important}
                         .service-entry-fields small{font-size:10px!important;white-space:nowrap!important}
                         .service-entry-fields input{width:100%!important;min-width:0!important;box-sizing:border-box!important}
                         .service-row>b{position:static!important;flex:0 0 105px!important;min-width:0!important;color:#d71920!important;font-size:12px!important;white-space:nowrap!important}
+                        @media(max-width:1100px){.service-row>span{flex-basis:330px!important;min-width:240px!important}.service-entry-fields{flex-basis:210px!important;grid-template-columns:60px minmax(0,1fr)!important;gap:8px!important}}
                         @media(max-width:900px){.service-row>span{flex-basis:calc(100% - 40px)!important}.service-courtesy-toggle{margin-left:31px!important}.service-entry-fields{margin-left:31px!important}.service-row>b{margin-left:31px!important}}
                       `}</style>
                       <div className="servicegrid">
