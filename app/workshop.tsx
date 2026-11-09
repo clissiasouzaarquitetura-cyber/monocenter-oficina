@@ -825,6 +825,7 @@ export default function App({ initialState, user, onLogout }: any) {
     [modal, setModal] = useState<Appt | boolean>(false),
     [evaluationEntry, setEvaluationEntry] = useState<Appt | null>(null),
     [attendancePreview, setAttendancePreview] = useState<Appt | null>(null),
+    [preAttendancePrint, setPreAttendancePrint] = useState<Appt | null>(null),
     [vehicleEntryChecklist, setVehicleEntryChecklist] = useState<Appt | null>(null),
     [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
@@ -1998,6 +1999,14 @@ export default function App({ initialState, user, onLogout }: any) {
             }}
             edit={(a: Appt) => setModal(a)}
             preview={(a: Appt) => setAttendancePreview(a)}
+            printPreAttendance={(a: Appt) => {
+              setPreAttendancePrint(a);
+              // Aguarda a ficha receber os dados do cliente antes de abrir a impressão.
+              window.setTimeout(
+                () => printWithTemporaryPage("print-pre-attendance", "size:A4 portrait;margin:0"),
+                80,
+              );
+            }}
             markNoShow={(a: Appt) => {
               const markAsNoShow = a.status !== "faltou";
               if (
@@ -5235,6 +5244,7 @@ export default function App({ initialState, user, onLogout }: any) {
           serviceQty={serviceQty}
           manualServices={manualServices}
         />
+        <PreAttendancePrintSheet appointment={preAttendancePrint} />
         <PrintDocuments
           parts={parts}
           selectedServices={selectedServices}
@@ -5641,6 +5651,7 @@ function Agenda({
   start,
   edit,
   preview,
+  printPreAttendance,
   markNoShow,
   remove,
   message,
@@ -7002,6 +7013,14 @@ function Agenda({
                         onClick={() => preview(a)}
                       >
                         Visualizar resumo
+                      </button>
+                    )}
+                    {!isEmployeeAbsence(a) && a.status === "agendado" && (
+                      <button
+                        className="pre-attendance-button"
+                        onClick={() => printPreAttendance(a)}
+                      >
+                        Imprimir pré-atendimento
                       </button>
                     )}
                     {!isEmployeeAbsence(a) &&
@@ -8383,6 +8402,81 @@ function ManualQuotePrintSheet({
     </section>
   );
 }
+function PreAttendancePrintSheet({ appointment }: { appointment: Appt | null }) {
+  if (!appointment) return null;
+  const scheduledDate = appointment.date
+    ? new Date(`${appointment.date}T12:00:00`).toLocaleDateString("pt-BR")
+    : "Não informada";
+  const serviceLabels: Record<string, string> = {
+    gabaritagem: "Gabaritagem",
+    pecas: "Avaliação de peças",
+    alinhamento_3d: "Alinhamento de direção 3D",
+    alinhamento_balanceamento: "Alinhamento e balanceamento",
+    servicos: "Serviços gerais",
+  };
+  const plannedService =
+    serviceLabels[appointment.appointmentServiceType || ""] ||
+    (appointment.type === "revisao"
+      ? "Revisão de 30 dias"
+      : appointment.type === "retorno"
+        ? "Retorno"
+        : appointment.type === "garantia"
+          ? "Garantia"
+          : "Avaliação / orçamento");
+  return (
+    <section className="pre-attendance-print-sheet" aria-hidden="true">
+      <style>{`
+        .pre-attendance-print-sheet{display:none}
+        @media print{
+          body.print-pre-attendance *{visibility:hidden!important}
+          body.print-pre-attendance .pre-attendance-print-sheet,
+          body.print-pre-attendance .pre-attendance-print-sheet *{visibility:visible!important}
+          body.print-pre-attendance .pre-attendance-print-sheet{display:block!important;position:fixed!important;inset:0!important;width:210mm!important;height:297mm!important;box-sizing:border-box!important;padding:10mm!important;background:#fff!important;color:#162335!important;font-family:Arial,sans-serif!important}
+          .pre-attendance-head{display:grid!important;grid-template-columns:40mm 1fr 34mm!important;align-items:stretch!important;gap:3mm!important;padding-bottom:4mm!important;border-bottom:1.2mm solid #e31b23!important}
+          .pre-attendance-head img{width:36mm!important;height:22mm!important;object-fit:contain!important;align-self:center!important}
+          .pre-attendance-title{display:grid!important;align-content:center!important;padding:3mm 5mm!important;border:1px solid #b9c9d9!important;background:#edf3f8!important;text-align:center!important}.pre-attendance-title h1{margin:0!important;font-size:15pt!important}.pre-attendance-title p{margin:1.4mm 0 0!important;font-size:7.5pt!important}.pre-attendance-badge{display:grid!important;place-items:center!important;border:1px solid #d6a800!important;border-radius:2mm!important;background:#fff1b8!important;color:#5c4700!important;font-size:10pt!important;font-weight:900!important;text-align:center!important}
+          .pre-attendance-print-sheet h2{margin:6mm 0 3mm!important;padding:2.2mm 3mm!important;border-left:2mm solid #e31b23!important;background:#f4f7fa!important;font-size:11pt!important}.pre-attendance-data{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:2mm!important}.pre-attendance-data>div{min-height:13mm!important;padding:2.2mm 3mm!important;border:1px solid #b9c9d9!important;border-radius:1.5mm!important;background:#fff!important}.pre-attendance-data small{display:block!important;margin-bottom:1.3mm!important;color:#526274!important;font-size:6.5pt!important;font-weight:900!important;text-transform:uppercase!important}.pre-attendance-data b{display:block!important;font-size:10pt!important;overflow-wrap:anywhere!important}.pre-attendance-data .pre-plate{background:#172536!important;color:#fff!important}.pre-attendance-data .pre-plate small{color:#dce7f1!important}
+          .pre-attendance-note{min-height:25mm!important;padding:3mm!important;border:1px solid #b9c9d9!important;border-radius:1.5mm!important;background:repeating-linear-gradient(to bottom,#fff 0,#fff 7mm,#d8e1ea 7.15mm,#fff 7.35mm)!important;font-size:9pt!important;line-height:7mm!important;white-space:pre-wrap!important}.pre-attendance-note strong{display:block!important;line-height:normal!important;background:#fff!important;width:max-content!important;padding-right:2mm!important}.pre-attendance-checks{display:grid!important;grid-template-columns:repeat(2,1fr)!important;gap:2mm!important}.pre-attendance-checks div{min-height:11mm!important;padding:2.5mm 3mm!important;border:1px solid #b9c9d9!important;border-radius:1.5mm!important;font-size:9pt!important}.pre-attendance-sign{display:grid!important;grid-template-columns:1fr 1fr!important;gap:12mm!important;margin-top:14mm!important}.pre-attendance-sign span{padding-top:7mm!important;border-top:1px solid #526274!important;text-align:center!important;font-size:8pt!important}.pre-attendance-footer{position:absolute!important;right:10mm!important;bottom:8mm!important;left:10mm!important;border-top:1px solid #d5dde6!important;padding-top:2mm!important;color:#607085!important;font-size:6.5pt!important;text-align:center!important}@page{size:A4 portrait;margin:0}
+        }
+      `}</style>
+      <header className="pre-attendance-head">
+        <img src="/logo-monocenter.jpg" alt="Monocenter" />
+        <div className="pre-attendance-title">
+          <h1>MONOCENTER ALINHAMENTO TÉCNICO</h1>
+          <p>Av. Itavuvu, 5341 · Jd. Santa Cecília · Sorocaba/SP · WhatsApp (15) 99657-4741</p>
+        </div>
+        <strong className="pre-attendance-badge">FICHA DE<br />PRÉ-ATENDIMENTO</strong>
+      </header>
+      <h2>Dados do agendamento</h2>
+      <div className="pre-attendance-data">
+        <div><small>Cliente</small><b>{appointment.client || "Não informado"}</b></div>
+        <div><small>Veículo / modelo</small><b>{appointment.vehicle || "Não informado"}</b></div>
+        <div className="pre-plate"><small>Placa</small><b>{appointment.plate || "Não informada"}</b></div>
+        <div><small>Data e horário</small><b>{scheduledDate} · {appointment.time || "Horário não informado"}</b></div>
+        <div><small>WhatsApp</small><b>{appointment.phone || "Não informado"}</b></div>
+        <div><small>Quilometragem</small><b>{appointment.km ? `${appointment.km} km` : "Preencher na chegada"}</b></div>
+        <div><small>Tipo de atendimento</small><b>{plannedService}</b></div>
+        <div><small>Agendado por</small><b>{appointment.scheduledBy || "Não informado"}</b></div>
+        <div><small>Responsável no recebimento</small><b>________________________________</b></div>
+      </div>
+      <h2>Relato informado pelo cliente</h2>
+      <div className="pre-attendance-note">{appointment.note?.trim() || ""}</div>
+      <h2>Anotações na chegada do veículo</h2>
+      <div className="pre-attendance-note"><strong>Observações, sintomas relatados, quilometragem e orientações:</strong></div>
+      <h2>Conferência inicial</h2>
+      <div className="pre-attendance-checks">
+        <div>□ Confirmar placa, modelo e telefone</div>
+        <div>□ Registrar quilometragem</div>
+        <div>□ Confirmar serviço solicitado</div>
+        <div>□ Verificar se há observação de entrada</div>
+        <div>□ Orientar sobre checklist / fotos do veículo</div>
+        <div>□ Encaminhar para avaliação técnica</div>
+      </div>
+      <div className="pre-attendance-sign"><span>Recebido por</span><span>Cliente / responsável pelo veículo</span></div>
+      <footer className="pre-attendance-footer">Ficha de apoio para recepção e pré-atendimento · Não substitui orçamento ou ordem de serviço.</footer>
+    </section>
+  );
+}
 function PrintDocuments({
   parts,
   selectedServices,
@@ -8403,6 +8497,9 @@ function PrintDocuments({
   const a = DISPLAY_APPT,
     budgetApproved =
       a.status === "servico" || a.budget?.processStatus === "Finalizado",
+    appointmentDate = a.date
+      ? new Date(`${a.date}T12:00:00`).toLocaleDateString("pt-BR")
+      : "Não informada",
     state = (i: number) =>
       status[i + 1] === "g"
         ? "Bom estado"
@@ -8495,6 +8592,10 @@ function PrintDocuments({
             {a.km || "Não informado"}
           </span>
           <span>
+            <b>Data do atendimento</b>
+            {appointmentDate}
+          </span>
+          <span>
             <b>Avaliador</b>
             {a.tech || "Saulo"}
           </span>
@@ -8566,6 +8667,10 @@ function PrintDocuments({
           <span className="plate-card">
             <b>Placa</b>
             {a.plate || "Não informada"}
+          </span>
+          <span>
+            <b>Data do atendimento</b>
+            {appointmentDate}
           </span>
           <span>
             <b>Km</b>
@@ -8659,6 +8764,10 @@ function PrintDocuments({
           <span className="plate-card">
             <b>Placa</b>
             {a.plate || "Não informada"}
+          </span>
+          <span>
+            <b>Data do atendimento</b>
+            {appointmentDate}
           </span>
         </div>
         {budgetApproved && (
