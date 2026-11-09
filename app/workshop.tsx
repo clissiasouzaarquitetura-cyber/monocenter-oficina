@@ -419,6 +419,7 @@ const RESTORABLE_VIEWS = new Set<View>([
   "config",
 ]);
 const LAST_VIEW_STORAGE_KEY = "monocenter:last-main-view:v1";
+const LAST_ACTIVE_APPOINTMENT_STORAGE_KEY = "monocenter:last-active-appointment:v1";
 type GeometryReportData = {
   schemaVersion?: number;
   values: Record<string, any>;
@@ -827,7 +828,18 @@ export default function App({ initialState, user, onLogout }: any) {
     [attendancePreview, setAttendancePreview] = useState<Appt | null>(null),
     [preAttendancePrint, setPreAttendancePrint] = useState<Appt | null>(null),
     [vehicleEntryChecklist, setVehicleEntryChecklist] = useState<Appt | null>(null),
-    [activeAppointment, setActiveAppointment] = useState<Appt | null>(null),
+    [activeAppointment, setActiveAppointment] = useState<Appt | null>(() => {
+      if (typeof window === "undefined") return null;
+      const savedId = Number(
+        localStorage.getItem(LAST_ACTIVE_APPOINTMENT_STORAGE_KEY),
+      );
+      if (!Number.isFinite(savedId) || !savedId) return null;
+      return (
+        (shared.appointments ?? INITIAL).find(
+          (appointment: Appt) => appointment.id === savedId,
+        ) ?? null
+      );
+    }),
     [footerSize, setFooterSize] = useState(shared.footerSize ?? 11),
     [roundStep, setRoundStep] = useState(shared.roundStep ?? 5),
     [printPalette, setPrintPalette] = useState<"pastel" | "gray" | "mono">(
@@ -934,6 +946,17 @@ export default function App({ initialState, user, onLogout }: any) {
     if (viewRestored && RESTORABLE_VIEWS.has(view))
       localStorage.setItem(LAST_VIEW_STORAGE_KEY, view);
   }, [view, viewRestored]);
+  useEffect(() => {
+    if (!activeAppointment) {
+      localStorage.removeItem(LAST_ACTIVE_APPOINTMENT_STORAGE_KEY);
+      return;
+    }
+    DISPLAY_APPT = activeAppointment;
+    localStorage.setItem(
+      LAST_ACTIVE_APPOINTMENT_STORAGE_KEY,
+      String(activeAppointment.id),
+    );
+  }, [activeAppointment]);
   const defaultTemplates = {
     lembrete:
       "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!",
@@ -3085,12 +3108,14 @@ export default function App({ initialState, user, onLogout }: any) {
                         .service-row>input{width:21px!important;height:21px!important;margin:0!important}
                         .service-courtesy-toggle{position:static!important;flex:0 0 150px!important;display:flex!important;align-items:center!important;gap:5px!important;min-width:0!important;margin:0!important;padding:8px!important;border:1px solid #dbe4ed!important;border-radius:7px!important;white-space:nowrap!important;background:#fff!important}
                         .service-courtesy-toggle input{width:18px!important;height:18px!important;margin:0!important}
-                        .service-entry-fields{position:static!important;flex:0 0 240px!important;display:grid!important;grid-template-columns:70px minmax(0,1fr)!important;gap:18px!important;min-width:0!important}
+                        .service-entry-fields{position:static!important;flex:0 0 290px!important;display:grid!important;grid-template-columns:78px minmax(0,1fr)!important;gap:30px!important;min-width:0!important}
                         .service-entry-fields label{display:grid!important;gap:3px!important;min-width:0!important;margin:0!important}
-                        .service-entry-fields small{font-size:10px!important;white-space:nowrap!important}
-                        .service-entry-fields input{width:100%!important;min-width:0!important;box-sizing:border-box!important}
+                        .service-entry-fields small{font-size:11px!important;white-space:nowrap!important}
+                        .service-entry-fields input{width:100%!important;min-width:0!important;height:34px!important;box-sizing:border-box!important;font-size:14px!important}
+                        .service-entry-fields .qty{min-width:64px!important;padding:6px 8px!important}
+                        .service-entry-fields .service-value{min-width:145px!important;padding:6px 10px!important}
                         .service-row>b{position:static!important;flex:0 0 105px!important;min-width:0!important;color:#d71920!important;font-size:12px!important;white-space:nowrap!important}
-                        @media(max-width:1100px){.service-row>span{flex-basis:330px!important;min-width:240px!important}.service-entry-fields{flex-basis:210px!important;grid-template-columns:60px minmax(0,1fr)!important;gap:8px!important}}
+                        @media(max-width:1100px){.service-row>span{flex-basis:330px!important;min-width:240px!important}.service-entry-fields{flex-basis:235px!important;grid-template-columns:65px minmax(0,1fr)!important;gap:12px!important}.service-entry-fields .service-value{min-width:125px!important}}
                         @media(max-width:900px){.service-row>span{flex-basis:calc(100% - 40px)!important}.service-courtesy-toggle{margin-left:31px!important}.service-entry-fields{margin-left:31px!important}.service-row>b{margin-left:31px!important}}
                       `}</style>
                       <div className="servicegrid">
