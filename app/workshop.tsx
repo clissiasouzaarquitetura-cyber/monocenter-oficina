@@ -3073,6 +3073,25 @@ export default function App({ initialState, user, onLogout }: any) {
                           Campos para preencher
                         </span>
                       </div>
+                      <style>{`
+                        /* Cada serviço ocupa uma linha inteira: evita que os
+                           campos de quantidade e valor invadam o cartão ao lado. */
+                        .servicegrid{display:grid!important;grid-template-columns:1fr!important;gap:12px!important}
+                        .service-group{display:block!important;width:100%!important;min-width:0!important;margin:0!important;padding:10px!important;box-sizing:border-box!important;border:1px solid #d8e1eb!important;border-radius:10px!important;background:#f9fbfd!important}
+                        .service-group-heading{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;margin:0 0 9px!important}
+                        .service-group-heading h3{min-width:0!important;margin:0!important}
+                        .service-row{display:grid!important;grid-template-columns:26px minmax(250px,1fr) 150px 205px 110px!important;align-items:center!important;gap:10px!important;width:100%!important;min-width:0!important;box-sizing:border-box!important;margin:7px 0!important;padding:10px!important;border:1px solid #d6e0ea!important;border-radius:8px!important;background:#fff!important}
+                        .service-row>span{min-width:0!important;overflow-wrap:anywhere!important;font-weight:800!important}
+                        .service-row>input{width:21px!important;height:21px!important;margin:0!important}
+                        .service-courtesy-toggle{display:flex!important;align-items:center!important;gap:5px!important;min-width:0!important;margin:0!important;padding:8px!important;border:1px solid #dbe4ed!important;border-radius:7px!important;white-space:nowrap!important;background:#fff!important}
+                        .service-courtesy-toggle input{width:18px!important;height:18px!important;margin:0!important}
+                        .service-entry-fields{display:grid!important;grid-template-columns:64px minmax(118px,1fr)!important;gap:7px!important;min-width:0!important}
+                        .service-entry-fields label{display:grid!important;gap:3px!important;min-width:0!important;margin:0!important}
+                        .service-entry-fields small{font-size:10px!important;white-space:nowrap!important}
+                        .service-entry-fields input{width:100%!important;min-width:0!important;box-sizing:border-box!important}
+                        .service-row>b{min-width:0!important;color:#d71920!important;font-size:12px!important;white-space:nowrap!important}
+                        @media(max-width:900px){.service-row{grid-template-columns:26px minmax(180px,1fr) 130px!important}.service-entry-fields{grid-column:2 / -1!important}.service-row>b{grid-column:2 / -1!important}.service-courtesy-toggle{justify-self:start!important}}
+                      `}</style>
                       <div className="servicegrid">
                         {SERVICE_GROUPS.map((group) => (
                           <section className="service-group" key={group.title}>
