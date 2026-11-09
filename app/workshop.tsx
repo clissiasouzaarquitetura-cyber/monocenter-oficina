@@ -906,6 +906,10 @@ export default function App({ initialState, user, onLogout }: any) {
   const availableTechs = techs.filter(
     (name) => name.trim().toLocaleLowerCase("pt-BR") !== "anna",
   );
+  // A lista pode chegar depois do primeiro carregamento da página. Este sinal
+  // garante que o atendimento salvo seja restaurado uma única vez, sem reabrir
+  // um cliente antigo quando a pessoa navega manualmente pela Agenda.
+  const activeRestoreAttempted = useRef(false);
   const evaluationRows = useMemo(() => {
     const search = normalizeSearch(evaluationSearch);
     return [...ITEMS, ...custom]
@@ -947,16 +951,30 @@ export default function App({ initialState, user, onLogout }: any) {
       localStorage.setItem(LAST_VIEW_STORAGE_KEY, view);
   }, [view, viewRestored]);
   useEffect(() => {
-    if (!activeAppointment) {
-      localStorage.removeItem(LAST_ACTIVE_APPOINTMENT_STORAGE_KEY);
+    if (activeAppointment) {
+      activeRestoreAttempted.current = true;
+      DISPLAY_APPT = activeAppointment;
+      localStorage.setItem(
+        LAST_ACTIVE_APPOINTMENT_STORAGE_KEY,
+        String(activeAppointment.id),
+      );
       return;
     }
-    DISPLAY_APPT = activeAppointment;
-    localStorage.setItem(
-      LAST_ACTIVE_APPOINTMENT_STORAGE_KEY,
-      String(activeAppointment.id),
+    if (activeRestoreAttempted.current || !appointments.length) return;
+    activeRestoreAttempted.current = true;
+    const savedId = Number(
+      localStorage.getItem(LAST_ACTIVE_APPOINTMENT_STORAGE_KEY),
     );
-  }, [activeAppointment]);
+    const restored = Number.isFinite(savedId)
+      ? appointments.find((appointment) => appointment.id === savedId)
+      : undefined;
+    if (restored) {
+      DISPLAY_APPT = restored;
+      setActiveAppointment(restored);
+    } else {
+      localStorage.removeItem(LAST_ACTIVE_APPOINTMENT_STORAGE_KEY);
+    }
+  }, [activeAppointment, appointments]);
   const defaultTemplates = {
     lembrete:
       "Olá, {cliente}! Lembramos do seu agendamento na Monocenter em {data}, às {hora}. Aguardamos você!",
@@ -3109,9 +3127,9 @@ export default function App({ initialState, user, onLogout }: any) {
                         .service-courtesy-toggle{position:static!important;flex:0 0 150px!important;display:flex!important;align-items:center!important;gap:5px!important;min-width:0!important;margin:0!important;padding:8px!important;border:1px solid #dbe4ed!important;border-radius:7px!important;white-space:nowrap!important;background:#fff!important}
                         .service-courtesy-toggle input{width:18px!important;height:18px!important;margin:0!important}
                         .service-entry-fields{position:static!important;flex:0 0 290px!important;display:grid!important;grid-template-columns:78px minmax(0,1fr)!important;gap:30px!important;min-width:0!important}
-                        .service-entry-fields label{display:grid!important;gap:3px!important;min-width:0!important;margin:0!important}
-                        .service-entry-fields small{font-size:11px!important;white-space:nowrap!important}
-                        .service-entry-fields input{width:100%!important;min-width:0!important;height:34px!important;box-sizing:border-box!important;font-size:14px!important}
+                        .service-entry-fields label{display:grid!important;grid-template-columns:auto minmax(0,1fr)!important;align-items:center!important;column-gap:12px!important;min-width:0!important;margin:0!important}
+                        .service-entry-fields small{margin:0!important;font-size:11px!important;white-space:nowrap!important}
+                        .service-entry-fields input{width:100%!important;min-width:0!important;height:34px!important;box-sizing:border-box!important;font-size:14px!important;text-align:center!important}
                         .service-entry-fields .qty{min-width:64px!important;padding:6px 8px!important}
                         .service-entry-fields .service-value{min-width:145px!important;padding:6px 10px!important}
                         .service-row>b{position:static!important;flex:0 0 105px!important;min-width:0!important;color:#d71920!important;font-size:12px!important;white-space:nowrap!important}
