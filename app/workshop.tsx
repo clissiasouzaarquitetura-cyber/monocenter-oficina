@@ -1931,20 +1931,24 @@ export default function App({ initialState, user, onLogout }: any) {
               setView("relatorios");
               scrollTo(0, 0);
             }}
-            start={(a: Appt) => {
+            start={(a: Appt, destination: "default" | "proposta" = "default") => {
+              const openProposalDirectly = destination === "proposta";
               if (
                 a.type !== "bloqueio" &&
                 a.type !== "revisao" &&
                 a.status === "agendado" &&
                 !a.serviceScheduled &&
-                a.budget?.processStatus !== "Finalizado"
+                a.budget?.processStatus !== "Finalizado" &&
+                !openProposalDirectly
               ) {
                 setEvaluationEntry(a);
                 return;
               }
               const shouldStartScheduled =
+                  !openProposalDirectly &&
                   !!a.serviceScheduled && a.status === "agendado",
                 shouldStart =
+                  !openProposalDirectly &&
                   !a.startedAt &&
                   a.status === "agendado" &&
                   a.type !== "revisao" &&
@@ -2026,15 +2030,17 @@ export default function App({ initialState, user, onLogout }: any) {
                 setProcessStatus("Em andamento");
               }
               setView(
-                a.type === "revisao" && !a.review
-                  ? "revisao"
-                  : a.budget?.processStatus === "Finalizado"
-                    ? "atendimento"
-                    : opened.status === "servico"
-                      ? "torque"
-                      : opened.status === "avaliou"
-                        ? "orcamento"
-                        : "avaliacao",
+                openProposalDirectly
+                  ? "proposta"
+                  : a.type === "revisao" && !a.review
+                    ? "revisao"
+                    : a.budget?.processStatus === "Finalizado"
+                      ? "atendimento"
+                      : opened.status === "servico"
+                        ? "torque"
+                        : opened.status === "avaliou"
+                          ? "orcamento"
+                          : "avaliacao",
               );
               scrollTo(0, 0);
             }}
@@ -7078,6 +7084,17 @@ function Agenda({
                         Visualizar resumo
                       </button>
                     )}
+                    {!isEmployeeAbsence(a) &&
+                      a.budget &&
+                      (a.budget.processStatus === "Em andamento" ||
+                        a.budget.processStatus === "Finalizado") && (
+                        <button
+                          className="proposal-card-action"
+                          onClick={() => start(a, "proposta")}
+                        >
+                          Abrir proposta →
+                        </button>
+                      )}
                     {!isEmployeeAbsence(a) && a.status === "agendado" && (
                       <button
                         className="pre-attendance-button"
