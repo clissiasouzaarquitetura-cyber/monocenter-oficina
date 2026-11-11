@@ -2054,6 +2054,30 @@ export default function App({ initialState, user, onLogout }: any) {
                 80,
               );
             }}
+            vehicleLeft={(a: Appt) => {
+              if (
+                !confirm(
+                  `Confirmar que o veículo de ${a.client} saiu da oficina? A avaliação e o orçamento em aberto continuarão registrados.`,
+                )
+              )
+                return;
+              const now = new Date().toISOString(),
+                updated: Appt = {
+                  ...a,
+                  inProgress: false,
+                  lastEditedBy: user.displayName,
+                  lastEditedAt: now,
+                  _updatedAt: Date.now(),
+                };
+              syncBlockedUntil.current = Date.now() + 4000;
+              setAppointments((list) =>
+                list.map((item) => (item.id === updated.id ? updated : item)),
+              );
+              setActiveAppointment((current) =>
+                current?.id === updated.id ? updated : current,
+              );
+              DISPLAY_APPT = updated;
+            }}
             markNoShow={(a: Appt) => {
               const markAsNoShow = a.status !== "faltou";
               if (
@@ -5721,6 +5745,7 @@ function Agenda({
   edit,
   preview,
   printPreAttendance,
+  vehicleLeft,
   markNoShow,
   remove,
   message,
@@ -7103,6 +7128,16 @@ function Agenda({
                         Imprimir pré-atendimento
                       </button>
                     )}
+                    {!isEmployeeAbsence(a) &&
+                      a.inProgress &&
+                      a.budget?.processStatus !== "Finalizado" && (
+                        <button
+                          className="vehicle-left-action"
+                          onClick={() => vehicleLeft(a)}
+                        >
+                          Veículo saiu da oficina
+                        </button>
+                      )}
                     {!isEmployeeAbsence(a) &&
                       a.budget?.processStatus !== "Finalizado" &&
                       (a.status === "agendado" || a.status === "faltou") && (
