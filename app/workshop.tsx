@@ -4349,8 +4349,13 @@ export default function App({ initialState, user, onLogout }: any) {
                             minute: "2-digit",
                           }),
                         );
-                        setView("proposta");
+                        setView("agenda");
                         scrollTo(0, 0);
+                        window.setTimeout(() => {
+                          alert(
+                            "Serviço aprovado e salvo. O atendimento foi atualizado na Agenda.",
+                          );
+                        }, 0);
                       }}
                     >
                       Aprovar e salvar serviço
