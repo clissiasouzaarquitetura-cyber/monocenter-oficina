@@ -1610,6 +1610,14 @@ export default function App({ initialState, user, onLogout }: any) {
     printManualQuoteWorksheet = () => {
       printWithTemporaryPage("print-manual-quote", "size:A4 portrait;margin:10mm");
     },
+    printInvoicePreparation = () => {
+      if (!activeAppointment) return;
+      printWithTemporaryPage(
+        "print-invoice-preparation",
+        "size:A4 portrait;margin:0",
+        60,
+      );
+    },
     geometrySharedState = (
       nextAppointments: Appt[],
       nextGeometryDrafts: StandaloneGeometryReport[],
@@ -4169,6 +4177,9 @@ export default function App({ initialState, user, onLogout }: any) {
                         <button type="button" onClick={() => printNoValues("proposta")}>
                           Folha pátio — sem valores
                         </button>
+                        <button type="button" onClick={printInvoicePreparation}>
+                          Folha para emissão da nota
+                        </button>
                         <button type="button" onClick={() => {
                           printStage("orcamento");
                           alert("Na tela de impressão, escolha ‘Salvar como PDF’. Depois, envie o arquivo pelo WhatsApp do cliente.");
@@ -5331,6 +5342,13 @@ export default function App({ initialState, user, onLogout }: any) {
           </div>
         )}
         <ManualQuotePrintSheet
+          appointment={activeAppointment}
+          parts={parts}
+          selectedServices={selectedServices}
+          serviceQty={serviceQty}
+          manualServices={manualServices}
+        />
+        <InvoicePreparationPrintSheet
           appointment={activeAppointment}
           parts={parts}
           selectedServices={selectedServices}
@@ -8514,6 +8532,105 @@ function ManualQuotePrintSheet({
       </table>
       <div className="manual-quote-note"><b>Observações / anotações da cotação:</b><div className="manual-quote-writing-lines"><span></span><span></span><span></span><span></span><span></span></div></div>
       <footer className="manual-quote-sign"><span>Responsável pela cotação</span><span>Conferência</span></footer>
+    </section>
+  );
+}
+function InvoicePreparationPrintSheet({
+  appointment,
+  parts,
+  selectedServices,
+  serviceQty,
+  manualServices,
+}: any) {
+  if (!appointment) return null;
+  const productRows = (parts ?? []).filter(
+      (part: any) => String(part.item ?? "").trim() && Number(part.qty) > 0,
+    ),
+    serviceRows = [
+      ...(selectedServices ?? []).map((index: number) => ({
+        name: SERVICES[index]?.[0] ?? "Serviço",
+        qty: serviceQty?.[index] ?? 0,
+      })),
+      ...(manualServices ?? [])
+        .filter((service: any) => service.name?.trim())
+        .map((service: any) => ({
+          name: service.name,
+          qty: Number(service.qty) || 0,
+        })),
+    ],
+    appointmentDate = appointment.date
+      ? new Date(`${appointment.date}T12:00:00`).toLocaleDateString("pt-BR")
+      : new Date().toLocaleDateString("pt-BR");
+  return (
+    <section className="invoice-preparation-print-sheet" aria-hidden="true">
+      <style>{`
+        .invoice-preparation-print-sheet{display:none}
+        @media print{
+          body.print-invoice-preparation,body.print-invoice-preparation .app,body.print-invoice-preparation main{margin:0!important;min-height:0!important;padding:0!important;background:#fff!important}
+          body.print-invoice-preparation .app>aside,body.print-invoice-preparation main>header,body.print-invoice-preparation main>*:not(.invoice-preparation-print-sheet):not(style){display:none!important}
+          body.print-invoice-preparation main>.invoice-preparation-print-sheet{display:block!important;width:210mm!important;min-height:297mm!important;box-sizing:border-box!important;margin:0!important;padding:8mm 9mm!important;background:#fff!important;color:#172033!important;font-family:Arial,sans-serif!important}
+          body.print-invoice-preparation .invoice-note-head{display:grid!important;grid-template-columns:43mm 1fr 38mm!important;align-items:stretch!important;gap:3mm!important;padding:0 0 3mm!important;border-bottom:.8mm solid #d71920!important}
+          body.print-invoice-preparation .invoice-note-head img{width:40mm!important;height:20mm!important;object-fit:contain!important;align-self:center!important}
+          body.print-invoice-preparation .invoice-note-head>div{display:grid!important;align-content:center!important;padding:2.5mm 4mm!important;border:1px solid #b8c6d4!important;background:#edf3f8!important;text-align:center!important}
+          body.print-invoice-preparation .invoice-note-head h1{margin:0!important;font-size:13pt!important;line-height:1.15!important}
+          body.print-invoice-preparation .invoice-note-head p{margin:1mm 0 0!important;font-size:6.8pt!important}
+          body.print-invoice-preparation .invoice-note-badge{display:grid!important;place-items:center!important;border:1px solid #d6a800!important;border-radius:2mm!important;background:#fff1b8!important;color:#5c4700!important;font-size:9pt!important;font-weight:900!important;line-height:1.25!important;text-align:center!important}
+          body.print-invoice-preparation .invoice-note-data{display:grid!important;grid-template-columns:1.2fr 1fr .7fr!important;gap:2mm!important;margin:3mm 0!important}
+          body.print-invoice-preparation .invoice-note-data>div{min-height:12mm!important;padding:2mm 2.5mm!important;border:.25mm solid #b9c9d9!important;border-radius:1mm!important;background:#fff!important}
+          body.print-invoice-preparation .invoice-note-data small{display:block!important;margin-bottom:1mm!important;color:#526274!important;font-size:6pt!important;font-weight:900!important;text-transform:uppercase!important}
+          body.print-invoice-preparation .invoice-note-data b{display:block!important;font-size:9pt!important;overflow-wrap:anywhere!important}
+          body.print-invoice-preparation .invoice-note-fill{display:block!important;min-height:4mm!important;border-bottom:.25mm solid #526274!important}
+          body.print-invoice-preparation .invoice-preparation-print-sheet h2{margin:4mm 0 1.7mm!important;padding:2mm 2.5mm!important;border-left:2mm solid #d71920!important;background:#f1f4f7!important;color:#172033!important;font-size:9.5pt!important;text-transform:uppercase!important}
+          body.print-invoice-preparation .invoice-preparation-print-sheet table{width:100%!important;border-collapse:collapse!important;font-size:7.6pt!important;table-layout:fixed!important}
+          body.print-invoice-preparation .invoice-preparation-print-sheet thead{display:table-header-group!important}
+          body.print-invoice-preparation .invoice-preparation-print-sheet th{padding:1.8mm!important;background:#172b44!important;color:#fff!important;text-align:left!important;font-size:6.8pt!important}
+          body.print-invoice-preparation .invoice-preparation-print-sheet td{height:9mm!important;padding:1.5mm!important;border:.25mm solid #b9c9d9!important;vertical-align:middle!important;line-height:1.18!important}
+          body.print-invoice-preparation .invoice-preparation-print-sheet tr{break-inside:avoid!important;page-break-inside:avoid!important}
+          body.print-invoice-preparation .invoice-preparation-print-sheet td b,body.print-invoice-preparation .invoice-preparation-print-sheet td small{display:block!important}
+          body.print-invoice-preparation .invoice-preparation-print-sheet td small{margin-top:.5mm!important;color:#617084!important;font-size:6.1pt!important}
+          body.print-invoice-preparation .invoice-note-blank{background:repeating-linear-gradient(to bottom,#fff 0,#fff 6mm,#edf1f5 6.15mm,#fff 6.35mm)!important}
+          body.print-invoice-preparation .invoice-note-empty{text-align:center!important;color:#64748b!important;font-style:italic!important}
+          body.print-invoice-preparation .invoice-note-footer{display:grid!important;grid-template-columns:1fr 1fr!important;gap:4mm!important;margin-top:4mm!important;padding-top:2.5mm!important;border-top:.25mm solid #b9c9d9!important;font-size:7pt!important}
+          body.print-invoice-preparation .invoice-note-footer span{display:block!important;min-height:8mm!important;border-bottom:.25mm solid #526274!important}
+          body.print-invoice-preparation .invoice-note-warning{margin-top:4mm!important;padding:2mm 2.5mm!important;border:.25mm solid #e6cf7c!important;border-radius:1mm!important;background:#fff9df!important;color:#624d00!important;font-size:6.8pt!important;line-height:1.3!important}
+        }
+      `}</style>
+      <header className="invoice-note-head">
+        <img src="/logo-monocenter.jpg" alt="Monocenter" />
+        <div>
+          <h1>MONOCENTER ALINHAMENTO TÉCNICO</h1>
+          <p>Av. Itavuvu, 5341 · Jd. Santa Cecília · Sorocaba/SP · WhatsApp (15) 99657-4741</p>
+        </div>
+        <strong className="invoice-note-badge">FOLHA PARA<br />EMISSÃO DA NOTA</strong>
+      </header>
+      <div className="invoice-note-data">
+        <div><small>Cliente</small><b>{appointment.client || "Não informado"}</b></div>
+        <div><small>Veículo / modelo</small><b>{appointment.vehicle || "Não informado"}</b></div>
+        <div><small>Placa</small><b>{appointment.plate || "Não informada"}</b></div>
+        <div><small>Data do atendimento</small><b>{appointmentDate}</b></div>
+        <div><small>Nota fiscal nº</small><b className="invoice-note-fill"></b></div>
+        <div><small>Emitida por</small><b className="invoice-note-fill"></b></div>
+      </div>
+      <h2>Produtos / peças do orçamento</h2>
+      <table>
+        <thead><tr><th style={{ width: "8%" }}>Qtd.</th><th style={{ width: "34%" }}>Produto / marca</th><th style={{ width: "18%" }}>Código do produto</th><th style={{ width: "20%" }}>Fornecedor</th><th style={{ width: "20%" }}>Valor unitário</th></tr></thead>
+        <tbody>
+          {productRows.length ? productRows.map((part: any, index: number) => (
+            <tr key={`${part.item}-${index}`}><td>{quantityValue(Number(part.qty) || 0)}</td><td><b>{part.item}</b>{part.brand && <small>{part.brand}</small>}</td><td className="invoice-note-blank"></td><td className="invoice-note-blank"></td><td className="invoice-note-blank"></td></tr>
+          )) : <tr><td colSpan={5} className="invoice-note-empty">Nenhum produto ou peça selecionado no orçamento.</td></tr>}
+        </tbody>
+      </table>
+      <h2>Serviços / mão de obra</h2>
+      <table>
+        <thead><tr><th style={{ width: "10%" }}>Qtd.</th><th style={{ width: "45%" }}>Serviço</th><th style={{ width: "22%" }}>Código de serviço</th><th style={{ width: "23%" }}>Valor unitário</th></tr></thead>
+        <tbody>
+          {serviceRows.length ? serviceRows.map((service: any, index: number) => (
+            <tr key={`${service.name}-${index}`}><td>{quantityValue(Number(service.qty) || 0)}</td><td><b>{service.name}</b></td><td className="invoice-note-blank"></td><td className="invoice-note-blank"></td></tr>
+          )) : <tr><td colSpan={4} className="invoice-note-empty">Nenhum serviço ou mão de obra selecionado.</td></tr>}
+        </tbody>
+      </table>
+      <div className="invoice-note-warning"><b>Preenchimento manual:</b> informe nesta folha os códigos, fornecedores e valores que serão utilizados na nota. Os campos ficam em branco propositalmente e não alteram o orçamento do cliente.</div>
+      <footer className="invoice-note-footer"><span>Conferido por</span><span>Observação / referência da nota</span></footer>
     </section>
   );
 }
