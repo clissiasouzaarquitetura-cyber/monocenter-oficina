@@ -5353,7 +5353,10 @@ export default function App({ initialState, user, onLogout }: any) {
           parts={parts}
           selectedServices={selectedServices}
           serviceQty={serviceQty}
+          servicePrices={servicePrices}
+          serviceCourtesy={serviceCourtesy}
           manualServices={manualServices}
+          roundStep={roundStep}
         />
         <PreAttendancePrintSheet appointment={preAttendancePrint} />
         <PrintDocuments
@@ -8540,7 +8543,10 @@ function InvoicePreparationPrintSheet({
   parts,
   selectedServices,
   serviceQty,
+  servicePrices,
+  serviceCourtesy,
   manualServices,
+  roundStep,
 }: any) {
   if (!appointment) return null;
   const productRows = (parts ?? []).filter(
@@ -8550,12 +8556,16 @@ function InvoicePreparationPrintSheet({
       ...(selectedServices ?? []).map((index: number) => ({
         name: SERVICES[index]?.[0] ?? "Serviço",
         qty: serviceQty?.[index] ?? 0,
+        unitValue: servicePrice(index, servicePrices, serviceCourtesy),
+        complimentary: serviceIsComplimentary(index, serviceCourtesy),
       })),
       ...(manualServices ?? [])
         .filter((service: any) => service.name?.trim())
         .map((service: any) => ({
           name: service.name,
           qty: Number(service.qty) || 0,
+          unitValue: Number(service.value) || 0,
+          complimentary: false,
         })),
     ],
     appointmentDate = appointment.date
@@ -8613,23 +8623,23 @@ function InvoicePreparationPrintSheet({
       </div>
       <h2>Produtos / peças do orçamento</h2>
       <table>
-        <thead><tr><th style={{ width: "8%" }}>Qtd.</th><th style={{ width: "34%" }}>Produto / marca</th><th style={{ width: "18%" }}>Código do produto</th><th style={{ width: "20%" }}>Fornecedor</th><th style={{ width: "20%" }}>Valor unitário</th></tr></thead>
+        <thead><tr><th style={{ width: "8%" }}>Qtd.</th><th style={{ width: "34%" }}>Produto / marca</th><th style={{ width: "18%" }}>Código do produto</th><th style={{ width: "20%" }}>Fornecedor</th><th style={{ width: "20%" }}>Valor unitário de venda</th></tr></thead>
         <tbody>
           {productRows.length ? productRows.map((part: any, index: number) => (
-            <tr key={`${part.item}-${index}`}><td>{quantityValue(Number(part.qty) || 0)}</td><td><b>{part.item}</b>{part.brand && <small>{part.brand}</small>}</td><td className="invoice-note-blank"></td><td className="invoice-note-blank"></td><td className="invoice-note-blank"></td></tr>
+            <tr key={`${part.item}-${index}`}><td>{quantityValue(Number(part.qty) || 0)}</td><td><b>{part.item}</b>{part.brand && <small>{part.brand}</small>}</td><td className="invoice-note-blank"></td><td className="invoice-note-blank"></td><td>{brl(saleOf(part, roundStep))}</td></tr>
           )) : <tr><td colSpan={5} className="invoice-note-empty">Nenhum produto ou peça selecionado no orçamento.</td></tr>}
         </tbody>
       </table>
       <h2>Serviços / mão de obra</h2>
       <table>
-        <thead><tr><th style={{ width: "10%" }}>Qtd.</th><th style={{ width: "45%" }}>Serviço</th><th style={{ width: "22%" }}>Código de serviço</th><th style={{ width: "23%" }}>Valor unitário</th></tr></thead>
+        <thead><tr><th style={{ width: "10%" }}>Qtd.</th><th style={{ width: "50%" }}>Serviço</th><th style={{ width: "20%" }}>Valor unitário</th><th style={{ width: "20%" }}>Valor total</th></tr></thead>
         <tbody>
           {serviceRows.length ? serviceRows.map((service: any, index: number) => (
-            <tr key={`${service.name}-${index}`}><td>{quantityValue(Number(service.qty) || 0)}</td><td><b>{service.name}</b></td><td className="invoice-note-blank"></td><td className="invoice-note-blank"></td></tr>
+            <tr key={`${service.name}-${index}`}><td>{quantityValue(Number(service.qty) || 0)}</td><td><b>{service.name}</b></td><td>{service.complimentary ? "Cortesia · R$ 0,00" : brl(service.unitValue)}</td><td>{service.complimentary ? "Cortesia · R$ 0,00" : brl((Number(service.qty) || 0) * service.unitValue)}</td></tr>
           )) : <tr><td colSpan={4} className="invoice-note-empty">Nenhum serviço ou mão de obra selecionado.</td></tr>}
         </tbody>
       </table>
-      <div className="invoice-note-warning"><b>Preenchimento manual:</b> informe nesta folha os códigos, fornecedores e valores que serão utilizados na nota. Os campos ficam em branco propositalmente e não alteram o orçamento do cliente.</div>
+      <div className="invoice-note-warning"><b>Preenchimento manual:</b> informe nesta folha os códigos dos produtos e os fornecedores que serão utilizados na nota. Esses campos ficam em branco propositalmente e não alteram o orçamento do cliente.</div>
       <footer className="invoice-note-footer"><span>Conferido por</span><span>Observação / referência da nota</span></footer>
     </section>
   );
