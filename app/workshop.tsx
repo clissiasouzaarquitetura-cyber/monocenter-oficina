@@ -9780,25 +9780,24 @@ function PurchaseOrders({
         .purchase-order-actions .print-order{border-color:#2563eb;background:#eef5ff;color:#174ea6}
         @media print{
           @page{size:A4 portrait;margin:0}
-          html:has(body.print-purchase-order),body.print-purchase-order{width:210mm!important;min-height:297mm!important;height:auto!important;margin:0!important;padding:0!important;overflow:visible!important;background:#fff!important;color:#111!important}
+          html:has(body.print-purchase-order),body.print-purchase-order{width:210mm!important;height:148.5mm!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important;background:#fff!important;color:#111!important}
           body.print-purchase-order *{visibility:hidden!important}
           body.print-purchase-order .purchase-print-sheet,
           body.print-purchase-order .purchase-print-sheet *{visibility:visible!important}
-          body.print-purchase-order .app,body.print-purchase-order main{display:block!important;width:210mm!important;min-height:297mm!important;margin:0!important;padding:0!important;background:#fff!important}
-          body.print-purchase-order .app>aside,body.print-purchase-order main>header{display:none!important}
-          body.print-purchase-order .purchase-page{position:static!important;width:210mm!important;height:auto!important;min-height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important}
+          body.print-purchase-order .purchase-page{position:static!important;width:0!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:visible!important}
           body.print-purchase-order .purchase-page>*:not(.purchase-print-sheet):not(style){display:none!important}
-          body.print-purchase-order .purchase-print-sheet{display:block!important;position:relative!important;z-index:999999;top:auto!important;left:auto!important;width:210mm!important;min-height:297mm!important;height:auto!important;box-sizing:border-box;margin:0!important;padding:7mm 9mm 8mm!important;overflow:visible!important;background:#fff!important;color:#111!important;font-family:Arial,sans-serif}
+          body.print-purchase-order .purchase-print-sheet{display:block!important;position:fixed!important;z-index:999999;top:0!important;left:0!important;width:210mm!important;height:148.5mm!important;min-height:0!important;box-sizing:border-box;margin:0!important;padding:7mm 9mm 6mm!important;overflow:hidden!important;background:#fff!important;color:#111!important;font-family:Arial,sans-serif}
           .purchase-print-head{display:grid!important;grid-template-columns:1fr auto;gap:4mm;align-items:start;padding-bottom:2mm;border-bottom:1.5px solid #111}
           .purchase-print-brand{display:grid;gap:1mm}.purchase-print-brand b{font-size:15px;letter-spacing:.04em}.purchase-print-brand small{font-size:8px;text-transform:uppercase}
           .purchase-print-title{text-align:right}.purchase-print-title b{display:block;font-size:14px}.purchase-print-title span{font-size:9px}
           .purchase-print-meta{display:grid;grid-template-columns:1.2fr .8fr 1.2fr .8fr;gap:5mm;padding:2.5mm 0;font-size:9px}.purchase-print-meta span{display:grid;gap:.5mm}.purchase-print-meta small{font-size:7px;font-weight:700;text-transform:uppercase}.purchase-print-meta b{font-size:9px}
           .mercosul-plate{display:inline-grid!important;grid-template-rows:3.2mm 1fr;box-sizing:border-box;width:30mm;min-width:30mm;height:12mm;border:.45mm solid #162f82!important;border-radius:1.2mm;overflow:hidden;background:#f8f8f7!important;color:#080808!important;font-family:Arial,Helvetica,sans-serif!important;font-style:normal!important;line-height:1}.mercosul-plate-top{display:grid!important;grid-template-columns:1fr 1fr auto;align-items:center;padding:0 1mm;background:#153891!important;color:#fff!important;font-size:4.2pt!important;letter-spacing:.28mm}.mercosul-plate-top b{font-size:4.2pt!important;font-weight:900!important}.mercosul-plate-top i{position:relative;width:4.2mm;height:2.5mm;border-radius:.3mm;background:#159447}.mercosul-plate-top i:after{position:absolute;content:"";inset:.45mm 1.2mm;background:#f6d64a;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%)}.mercosul-plate>strong{display:flex!important;align-items:center;justify-content:center;padding-top:.2mm;color:#090909!important;font-size:12.5pt!important;font-weight:900!important;letter-spacing:1.15mm!important;white-space:nowrap}.purchase-print-meta .mercosul-plate{margin-top:.3mm}
-          .purchase-print-table{width:100%;border-collapse:collapse;font-size:8px;break-inside:auto;page-break-inside:auto}.purchase-print-table thead{display:table-header-group}.purchase-print-table tr{break-inside:avoid;page-break-inside:avoid}.purchase-print-table th,.purchase-print-table td{padding:1.4mm 1.5mm;border:1px solid #888;vertical-align:top}.purchase-print-table th{background:#eceff3!important;font-size:7px;text-align:left;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}.purchase-print-table .number{text-align:right;white-space:nowrap}.purchase-print-table small{display:block;margin-top:.3mm;color:#444;font-size:7px}
-          .purchase-print-total{display:flex;align-items:center;justify-content:space-between;gap:5mm;padding:2.5mm 1mm;border-bottom:1px solid #999;font-size:10px;break-inside:avoid;page-break-inside:avoid}.purchase-print-total>span{display:flex;gap:5mm;align-items:center}.purchase-print-total>span:first-child{font-size:8px}.purchase-print-total strong{min-width:28mm;text-align:right}
-          .purchase-print-note{min-height:10mm;padding:2mm 0;border-bottom:1px solid #999;font-size:8px;break-inside:avoid;page-break-inside:avoid}.purchase-print-note b{display:block;margin-bottom:1mm;text-transform:uppercase}.purchase-print-note p{margin:0;white-space:pre-wrap}
-          .purchase-print-signatures{display:grid;grid-template-columns:1fr 1fr;gap:14mm;margin-top:8mm;font-size:8px;text-align:center;break-inside:avoid;page-break-inside:avoid}.purchase-print-signatures span{padding-top:1.5mm;border-top:1px solid #333}
-          .purchase-print-footer{display:flex;justify-content:space-between;margin-top:6mm;border-top:1px solid #bbb;padding-top:2mm;color:#555;font-size:7px;break-inside:avoid;page-break-inside:avoid}
+          .purchase-print-table{width:100%;border-collapse:collapse;font-size:8px}.purchase-print-table th,.purchase-print-table td{padding:1.4mm 1.5mm;border:1px solid #888;vertical-align:top}.purchase-print-table th{background:#eceff3!important;font-size:7px;text-align:left;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}.purchase-print-table .number{text-align:right;white-space:nowrap}.purchase-print-table small{display:block;margin-top:.3mm;color:#444;font-size:7px}
+          .purchase-print-total{display:flex;justify-content:flex-end;gap:5mm;padding:2mm 1mm;border-bottom:1px solid #999;font-size:10px}.purchase-print-total strong{min-width:28mm;text-align:right}
+          .purchase-print-note{min-height:10mm;padding:2mm 0;border-bottom:1px solid #999;font-size:8px}.purchase-print-note b{display:block;margin-bottom:1mm;text-transform:uppercase}.purchase-print-note p{margin:0;white-space:pre-wrap}
+          .purchase-print-signatures{display:grid;grid-template-columns:1fr 1fr;gap:14mm;margin-top:8mm;font-size:8px;text-align:center}.purchase-print-signatures span{padding-top:1.5mm;border-top:1px solid #333}
+          .purchase-print-footer{position:absolute;right:0;bottom:0;left:0;display:flex;justify-content:space-between;border-top:1px solid #bbb;padding-top:2mm;color:#555;font-size:7px}
+          .purchase-print-cut-line{position:fixed!important;z-index:999999;top:148.5mm!important;left:0!important;width:210mm!important;border-top:1px dashed #777!important;visibility:visible!important}
         }
       `}</style>
       {printGroup && (
@@ -9834,15 +9833,13 @@ function PurchaseOrders({
             </tbody>
           </table>
           <div className="purchase-print-total">
-            <span>
-              <b>{printGroup.rows.length} {printGroup.rows.length === 1 ? "item" : "itens"}</b>
-              <b>Quantidade total: {printGroup.rows.reduce((total: number, row: any) => total + (Number(row.part.qty) || 0), 0)} peças</b>
-            </span>
-            <span><b>Total do pedido</b><strong>{brl(printGroup.rows.reduce((total: number, row: any) => total + (Number(row.part.qty) || 0) * (Number(row.part.cost) || 0), 0))}</strong></span>
+            <b>Total do pedido</b>
+            <strong>{brl(printGroup.rows.reduce((total: number, row: any) => total + (Number(row.part.qty) || 0) * (Number(row.part.cost) || 0), 0))}</strong>
           </div>
           <div className="purchase-print-note"><b>Observações</b><p>{printGroup.rows.map(({ key }: any) => checks[key]?.note).filter(Boolean).join("\n") || ""}</p></div>
           <div className="purchase-print-signatures"><span>Responsável pela compra</span><span>Conferência / recebimento</span></div>
-          <div className="purchase-print-footer"><span>Impresso em {new Date().toLocaleString("pt-BR")}</span><span>Pedido de compra · A4</span></div>
+          <div className="purchase-print-footer"><span>Impresso em {new Date().toLocaleString("pt-BR")}</span><span>Metade superior da folha A4</span></div>
+          <div className="purchase-print-cut-line" aria-hidden="true" />
         </article>
       )}
       <div className="purchase-summary">
@@ -12015,6 +12012,60 @@ function Reports({
       0,
     ),
     quoteSummaryTotal = quoteSummaryPartsTotal + quoteSummaryServicesTotal;
+  const quoteBudgetTotals = (appointment: Appt) => {
+    const budget: any = appointment.budget ?? {},
+      totals = {
+        parts: 0,
+        tires: 0,
+        labor: 0,
+        gabaritagem: 0,
+        hasParts: false,
+        hasTires: false,
+        hasLabor: false,
+        hasGabaritagem: false,
+      };
+    (budget.parts ?? []).forEach((part: any) => {
+      if (!String(part?.item ?? part?.name ?? "").trim() || Number(part.qty) <= 0)
+        return;
+      const value = (Number(part.qty) || 0) * saleOf(part, 5);
+      if (isTirePart(part)) {
+        totals.tires += value;
+        totals.hasTires = true;
+      } else {
+        totals.parts += value;
+        totals.hasParts = true;
+      }
+    });
+    (budget.selectedServices ?? []).forEach((index: number) => {
+      const value =
+        (Number(budget.serviceQty?.[index]) || 1) *
+        servicePrice(index, budget.servicePrices, budget.serviceCourtesy);
+      if (SERVICE_GROUPS[4].indexes.includes(index)) {
+        totals.gabaritagem += value;
+        totals.hasGabaritagem = true;
+      } else {
+        totals.labor += value;
+        totals.hasLabor = true;
+      }
+    });
+    (budget.manualServices ?? [])
+      .filter((service: any) => String(service?.name ?? "").trim())
+      .forEach((service: any) => {
+        const value =
+          (Number(service.qty) || 1) * (Number(service.value) || 0);
+        if (isGabaritagemManualService(service)) {
+          totals.gabaritagem += value;
+          totals.hasGabaritagem = true;
+        } else {
+          totals.labor += value;
+          totals.hasLabor = true;
+        }
+      });
+    return {
+      ...totals,
+      total: totals.parts + totals.tires + totals.labor + totals.gabaritagem,
+    };
+  };
   const reminderDaysFor = (appointment: Appt) =>
       reminderDayDrafts[appointment.id] ??
       appointment.quoteFollowUpDays ??
@@ -12264,7 +12315,7 @@ function Reports({
             <style>{`
               .compact-quotes-wrap{overflow-x:auto;border:1px solid #d9e1ea;border-radius:10px;background:#fff}
               .compact-quotes-table{min-width:980px}
-              .compact-quotes-head,.compact-quote-row{display:grid;grid-template-columns:minmax(210px,1.55fr) 130px minmax(210px,1.25fr) minmax(225px,1.3fr) 210px;gap:10px;align-items:center}
+              .compact-quotes-head,.compact-quote-row{display:grid;grid-template-columns:minmax(210px,1.35fr) 120px minmax(175px,1.1fr) minmax(210px,1.25fr) minmax(225px,1.3fr) 210px;gap:10px;align-items:center}
               .compact-quotes-head{padding:8px 12px;background:#eef2f6;color:#526274;font-size:10px;font-weight:900;text-transform:uppercase}
               .compact-quote-row{min-height:72px;padding:8px 12px;border-top:1px solid #e4e9ef}
               .compact-quote-row:first-child{border-top:0}
@@ -12272,6 +12323,7 @@ function Reports({
               .compact-quote-client b{overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
               .compact-quote-client small,.compact-quote-age small,.compact-reminder small{color:#64748b;font-size:10px;line-height:1.25}
               .compact-quote-client .quote-scheduled{color:#08783b;font-weight:900}.compact-quote-client .quote-not-scheduled{color:#8a6200;font-weight:800}.compact-quote-client .quote-invalid-link{color:#b54708;font-weight:900}
+              .compact-quote-values{display:grid;gap:2px;align-content:center;min-width:0}.compact-quote-values b{color:#0c4a6e;font-size:12px}.compact-quote-values small{color:#526274;font-size:10px;font-weight:800;line-height:1.22}.compact-quote-values .quote-budget-empty{color:#8a6200}
               .compact-quote-age,.compact-reminder{display:grid;gap:3px}
               .compact-reminder-control{display:flex;align-items:center;gap:5px}
               .compact-reminder-control input{width:56px!important;min-width:56px;padding:5px 6px;text-align:center}
@@ -12345,6 +12397,7 @@ function Reports({
                 <div className="compact-quotes-head">
                   <span>Cliente e veículo</span>
                   <span>Tempo em aberto</span>
+                  <span>Valores do orçamento</span>
                   <span>Próximo lembrete</span>
                   <span>Decisão</span>
                   <span>Ações</span>
@@ -12361,7 +12414,8 @@ function Reports({
                     reminderDays = reminderDaysFor(a),
                     reminderDue =
                       !!a.quoteFollowUpDueDate &&
-                      a.quoteFollowUpDueDate <= iso(new Date());
+                      a.quoteFollowUpDueDate <= iso(new Date()),
+                    budgetTotals = quoteBudgetTotals(a);
                   return (
                     <article className="compact-quote-row" key={a.id}>
                       <span className="compact-quote-client">
@@ -12394,6 +12448,14 @@ function Reports({
                             Enviado por {a.quoteSentBy || "não informado"}
                           </small>
                         )}
+                      </span>
+                      <span className="compact-quote-values">
+                        <b>Total: {brl(budgetTotals.total)}</b>
+                        {budgetTotals.hasParts && <small>Peças: {brl(budgetTotals.parts)}</small>}
+                        {budgetTotals.hasTires && <small>Pneus: {brl(budgetTotals.tires)}</small>}
+                        {budgetTotals.hasLabor && <small>Mão de obra: {brl(budgetTotals.labor)}</small>}
+                        {budgetTotals.hasGabaritagem && <small>Gabaritagem: {brl(budgetTotals.gabaritagem)}</small>}
+                        {!budgetTotals.hasParts && !budgetTotals.hasTires && !budgetTotals.hasLabor && !budgetTotals.hasGabaritagem && <small className="quote-budget-empty">Valores ainda não preenchidos</small>}
                       </span>
                       <span className="compact-reminder">
                         <span className="compact-reminder-control">
