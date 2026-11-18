@@ -8678,6 +8678,16 @@ function PreAttendancePrintSheet({ appointment }: { appointment: Appt | null }) 
         : appointment.type === "garantia"
           ? "Garantia"
           : "Avaliação / orçamento");
+  // Mesmo quando não foi digitado um relato livre, a recepção precisa saber
+  // qual foi o serviço que o cliente solicitou ao fazer o agendamento.
+  const preAttendanceCustomerReport = [
+    `Serviço solicitado: ${plannedService}.`,
+    appointment.note?.trim()
+      ? `Observação do cliente: ${appointment.note.trim()}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   return (
     <section className="pre-attendance-print-sheet" aria-hidden="true">
       <style>{`
@@ -8718,7 +8728,7 @@ function PreAttendancePrintSheet({ appointment }: { appointment: Appt | null }) 
         <div><small>Responsável no recebimento</small><b className="pre-fill-space"></b></div>
       </div>
       <h2>Relato informado pelo cliente</h2>
-      <div className="pre-attendance-note">{appointment.note?.trim() || ""}</div>
+      <div className="pre-attendance-note">{preAttendanceCustomerReport}</div>
       <h2>Anotações na chegada do veículo</h2>
       <div className="pre-attendance-note"><strong>Observações, sintomas relatados, quilometragem e orientações:</strong></div>
       <h2>Conferência inicial</h2>
