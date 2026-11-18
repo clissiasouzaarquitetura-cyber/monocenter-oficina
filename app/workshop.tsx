@@ -6242,7 +6242,15 @@ function Agenda({
         @media(min-width:1600px){.agenda{max-width:1600px!important}.agenda-grid-semana{grid-template-columns:minmax(0,1fr) 460px!important}.week-time-zone,.week-timeline-head button small{font-size:10px}.week-timeline-head button b{font-size:22px}.week-appointment{font-size:10px}.week-appointment>b{font-size:10px}.week-appointment>strong{font-size:12px}.week-appointment>small{font-size:10px}.week-appointment>.week-appointment-status,.week-appointment>.week-budget-type{font-size:9px}.week-time-column span{font-size:11px}.agenda-grid-semana .day article time>b{font-size:12px}.agenda-grid-semana .day article h3{font-size:13px}.agenda-grid-semana .day article p,.agenda-grid-semana .day article span>small{font-size:10px}.agenda-grid-semana .day article .appointment-toggle{font-size:11px!important}}
         @media(max-width:1500px){.agenda-grid-semana .agenda-finalization.compact{padding:6px 7px}.agenda-grid-semana .agenda-finalization.compact>b{display:block;font-size:11px!important;line-height:1.2;letter-spacing:-.04em;white-space:nowrap!important}}
         @media(max-width:1150px){.agenda-grid-semana{grid-template-columns:minmax(0,1fr)!important}.agenda-grid-semana>.day{position:static;max-height:none}.week-timeline,.week-timeline-body{min-width:680px}.week-timeline-head{grid-template-columns:50px repeat(var(--week-days),minmax(100px,1fr))}.week-day-columns{margin-left:50px;grid-template-columns:repeat(var(--week-days),minmax(100px,1fr))}.week-time-column{width:50px}.appointment-search-result{grid-template-columns:90px minmax(170px,1fr) minmax(150px,1fr)}.appointment-search-result .result-actions{grid-column:1/-1}}
-        @media(max-width:700px){.appointment-history-search>label{grid-template-columns:1fr}.appointment-history-search>label>b{white-space:normal}.appointment-history-search .clear-search{justify-self:start}.appointment-search-result{grid-template-columns:1fr}.appointment-search-result .result-actions{grid-column:auto;justify-content:flex-start}}
+        @media(max-width:700px){
+          /* No celular, a "Agenda do dia" já mostra todos os atendimentos em
+             cartões completos. O mini-calendário do modo Dia repetia os mesmos
+             horários em uma área estreita e os textos ficavam sobrepostos. */
+          .agenda-grid-dia{display:block!important;grid-template-columns:minmax(0,1fr)!important}
+          .agenda-grid-dia>.calendar{display:none!important}
+          .agenda-grid-dia>.day{width:100%!important;min-width:0!important;margin-top:0!important}
+          .appointment-history-search>label{grid-template-columns:1fr}.appointment-history-search>label>b{white-space:normal}.appointment-history-search .clear-search{justify-self:start}.appointment-search-result{grid-template-columns:1fr}.appointment-search-result .result-actions{grid-column:auto;justify-content:flex-start}
+        }
       `}</style>
       <section className="calendar-print-sheet" aria-hidden="true">
         <div className="calendar-print-header">
